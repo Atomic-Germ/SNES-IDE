@@ -103,7 +103,7 @@ jobs:
         shell: bash
       - name: Build Windows executable with PyInstaller (spec)
         run: |
-          pyinstaller --clean --noconfirm --log-level=DEBUG build/snes-ide.spec 2>&1 | tee build_pyinstaller.log
+          pyinstaller --clean --noconfirm --log-level=DEBUG snes-ide.spec 2>&1 | tee build_pyinstaller.log
         shell: bash
       - name: Package Windows artifact
         run: |
