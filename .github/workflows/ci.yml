@@ -96,15 +96,16 @@ jobs:
         shell: bash
       - name: Build Windows executable with PyInstaller (spec)
         run: |
-          pyinstaller --clean --noconfirm --log-level=DEBUG build/snes-ide.spec > build_pyinstaller.log 2>&1
+          pyinstaller --clean --noconfirm --log-level=DEBUG build/snes-ide.spec 2>&1 | tee build_pyinstaller.log
         shell: bash
       - name: Package Windows artifact
         run: |
           mkdir -p release
-          if [ -f dist/snes-ide.exe ]; then cp dist/snes-ide.exe release/; fi
-          powershell -Command "Compress-Archive -Path release/* -DestinationPath snes-ide-windows.zip"
+          if [ -f dist/snes-ide.exe ]; then cp dist/snes-ide.exe release/; else echo "No dist/snes-ide.exe found"; fi
+          if [ -n "$(ls -A release 2>/dev/null)" ]; then powershell -Command "Compress-Archive -Path release/* -DestinationPath snes-ide-windows.zip"; else echo "No files to archive"; fi
         shell: bash
       - name: Upload artifacts
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: snes-ide-windows
