@@ -18,6 +18,7 @@ if (-not $pythonCmd) {
 # If build.py exists, run it with passed through args
 if (Test-Path -Path "build.py") {
     & python "./build.py" @args
+    exit $LASTEXITCODE
 } else {
     Write-Host "build.py not found."
     exit 1
