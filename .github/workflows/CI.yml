@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ main, feat/**, devel, bugfix/** ]
+    branches: [ main, feat/**, devel/*, bugfix/** ]
     tags: ['v*']
   pull_request:
     branches: [ main, devel ]
@@ -30,8 +30,17 @@ jobs:
     - name: Run Windows build script
       shell: pwsh
       run: |
-        # Run the existing build.bat under cmd so the batch file runs unchanged
-        # cmd /c '.\\build\\build.ps1'
+        # Prefer the PowerShell build script when available; fall back to the batch script
+        if (Test-Path './build/build.ps1') {
+          Write-Host "Found build.ps1, running with PowerShell..."
+          & './build/build.ps1'
+        } elseif (Test-Path './build/build.bat') {
+          Write-Host "Falling back to build.bat via cmd..."
+          cmd /c '.\\build\\build.bat'
+        } else {
+          Write-Error 'No build script found (build.ps1 or build.bat)'
+          exit 1
+        }
         
 
     - name: Verify build output
@@ -49,7 +58,7 @@ jobs:
       run: |
         if (Test-Path -Path 'SNES-IDE-out') {
           Remove-Item -Path 'SNES-IDE-out.zip' -ErrorAction SilentlyContinue
-          Compress-Archive -Path 'SNES-IDE-out/*' -DestinationPath 'SNES-IDE-out.zip' -Force
+          Compress-Archive -Path 'SNES-IDE-out\*' -DestinationPath 'SNES-IDE-out.zip' -Force
           Write-Host "Created SNES-IDE-out.zip"
         } else {
           Write-Error "SNES-IDE-out directory missing"
