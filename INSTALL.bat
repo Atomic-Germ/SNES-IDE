@@ -56,9 +56,6 @@ if "%is_linux%"=="1" (
 
 :: Success message
 echo SNES-IDE installed successfully! Check the snes-ide folder on your desktop.
-
-:: Wait for the user to exit the prompt
-pause
 exit /b
 
 :CreateShortcut
