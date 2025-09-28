@@ -103,6 +103,7 @@ jobs:
           mkdir -p release
           if [ -f dist/snes-ide.exe ]; then cp dist/snes-ide.exe release/; fi
           powershell -Command "Compress-Archive -Path release/* -DestinationPath snes-ide-windows.zip"
+        shell: bash
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
