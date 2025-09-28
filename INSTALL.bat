@@ -18,6 +18,13 @@ if "%is_linux%"=="1" (
     set "project_exe=%~dp0tools\create-new-project.bat"
     set "compiler_exe=%~dp0tools\automatizer-batch.bat"
     set "snes-ide=%~dp0snes-ide.bat"
+    :: For linux packaging, also create .sh references where applicable
+    set "audio_sh=%~dp0tools\audio-tools.sh"
+    set "gfx_sh=%~dp0tools\gfx-tools.sh"
+    set "other_sh=%~dp0tools\externTools.sh"
+    set "project_sh=%~dp0tools\create-new-project.sh"
+    set "compiler_sh=%~dp0tools\automatizer-batch.sh"
+    set "snes-ide_sh=%~dp0snes-ide.sh"
 ) else (
     set "audio_exe=%~dp0tools\audio-tools.exe"
     set "gfx_exe=%~dp0tools\gfx-tools.exe"

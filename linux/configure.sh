@@ -19,47 +19,57 @@ else
     
 fi
 
-export WINEPREFIX="$USER_HOME/.wine-snes-ide"
-WINE_TARGET_DIR="$USER_HOME/.wine-snes-ide/drive_c/SNES-IDE"
-
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 PROJECT_ROOT="$(realpath "$SCRIPT_DIR/../..")"
 OUT_DIR="$PROJECT_ROOT/SNES-IDE-out"
 
 cd "$SCRIPT_DIR"
 
-echo "Copying pre-built files from $OUT_DIR to $WINE_TARGET_DIR..."
+echo "Copying pre-built files from $OUT_DIR to $USER_HOME/.local/share/snes-ide..."
 
-echo "Write down the password to allow cleaning the previous configuration: "
+TARGET_DIR="$USER_HOME/.local/share/snes-ide"
 
-sudo rm -rf "$WINE_TARGET_DIR"
+read -p "Write down the password to allow cleaning the previous configuration: " -r passwd
 
-mkdir -p "$WINE_TARGET_DIR"
+if [ -d "$TARGET_DIR" ]; then
 
-shopt -s dotglob
-cp -r "$OUT_DIR"/* "$WINE_TARGET_DIR"
-shopt -u dotglob
-
-cd "$WINE_TARGET_DIR"
-
-if [ -f "./SNES-IDE-out/INSTALL.bat" ]; then
-
-    echo "Running ./SNES-IDE-out/INSTALL.bat with Wine..."
-    wine cmd /c "./SNES-IDE-out/INSTALL.bat"
-
-else
-
-    echo "Error: INSTALL.bat not found in $WINE_TARGET_DIR"
-    exit 1
+    echo "Removing previous installation at $TARGET_DIR"
+    rm -rf "$TARGET_DIR"
 
 fi
 
-cd "$SCRIPT_DIR"
+mkdir -p "$TARGET_DIR"
+
+shopt -s dotglob
+cp -r "$OUT_DIR"/* "$TARGET_DIR"
+shopt -u dotglob
+
+echo "Fixing executable permissions in $TARGET_DIR..."
+# Make shell wrappers and obvious emulator binaries executable
+find "$TARGET_DIR" -type f \( -name "*.sh" -o -name "bsnes*" -o -name "higan*" -o -name "retroarch" \) -exec chmod a+x {} + || true
+
+# If there's a native installer script, run it. Else, provide guidance.
+if [ -f "$TARGET_DIR/INSTALL.sh" ]; then
+
+    echo "Running native installer: INSTALL.sh"
+    bash "$TARGET_DIR/INSTALL.sh"
+
+elif [ -f "$TARGET_DIR/INSTALL.bat" ]; then
+
+    echo "Found INSTALL.bat in distribution, but no native installer."
+    echo "Please convert the installer to a native script or run the Python entrypoint directly."
+    echo "You can start the application with: python3 $TARGET_DIR/src/snes-ide.py"
+
+else
+
+    echo "No installer found. You can start the application with: python3 $TARGET_DIR/src/snes-ide.py"
+
+fi
 
 read -p "Do you want to create a desktop shortcut for start.sh? (y/n): " create_shortcut
 if [[ "$create_shortcut" =~ ^[Yy]$ ]]; then
 
-    ICON_PATH="../icons/icon.ico"
+    ICON_PATH="../icons/icon.png"
     START_SH="start.sh"
     DESKTOP_FILE="$USER_HOME/Desktop/SNES-IDE.desktop"
     SYSTEM_DESKTOP_FILE="/usr/share/applications/SNES-IDE.desktop"
