@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 <#
 PowerShell port of initTest.bat
-Attempts to run the corresponding test script (prefers a .ps1 test if available, falls back to calling the .bat if present).
+Attempts to run the test scripts (prefers a .ps1 test if available, falls back to calling the .bat if present).
 #>
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
@@ -19,6 +19,6 @@ if (Test-Path -Path $targetPs1) {
     $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList $argList -NoNewWindow -Wait -PassThru
     exit $proc.ExitCode
 } else {
-    Write-Host ('Target test script not found: {0} or {1}' -f $targetPs1, $targetBat)
+    Write-Host "Target test script not found: $targetPs1 or $targetBat"
     exit 1
 }
