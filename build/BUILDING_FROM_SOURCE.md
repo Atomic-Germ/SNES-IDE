@@ -26,12 +26,18 @@ To build this project in **windows** from source, you follow these steps:
 1. **Install Dependencies:**  
   Ensure all required tools and libraries are installed on your system.
 
-2. **Build the Project:**  
-  Run the [build.bat](./build.bat) to compile the source code:
+2. **Build the Project:**
+  Run the [build.bat](./build.bat) to compile the source code, or use the PowerShell equivalent `build.ps1` when PowerShell is available:
   
   ```bat
   cd C:\\path\\to\\SNES-IDE\\
   cmd /c build\\build.bat
+  ```
+
+  Or with PowerShell on Windows:
+
+  ```powershell
+  pwsh -NoProfile -ExecutionPolicy Bypass -File build\\build.ps1
   ```
 
 ---
