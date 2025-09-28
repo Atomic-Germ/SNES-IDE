@@ -1,5 +1,8 @@
 @echo off
+<<<<<<< HEAD
 
+=======
+>>>>>>> 8f85e6b (Add PyInstaller spec, improve build utils, and update CI to use spec for Windows packaging)
 REM Interactive installer variant for Windows (legacy batch)
 REM Prefer PowerShell installer if available for a friendlier UI.
 SETLOCAL ENABLEDELAYEDEXPANSION
