@@ -94,7 +94,7 @@ jobs:
         run: |
           python build/build.py windows 2>&1 | tee build_buildpy.log
         shell: bash
-      - name: Debug: show build directory
+      - name: Debug - show build directory
         run: |
           echo "PWD: $(pwd)"
           echo "Listing build dir contents:"
