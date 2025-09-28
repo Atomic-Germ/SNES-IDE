@@ -123,6 +123,12 @@ Once installed, you can create and build SNES games easily:
 - The goal is to make pvsneslib easy to use on Windows and Linux, with minimal setup.
 - All-in-one: No need for extra software to create a complete SNES game.
 
+## PowerShell script ports and compatibility
+
+This repository now includes PowerShell ( `.ps1` ) ports for several existing `.bat` launcher scripts. Prefer to run the `.ps1` script via `pwsh` when available and the `.ps1` file exists. Otherwise, callers will fall back to running the original `.bat` file.
+
+This enables a gradual migration to PowerShell without breaking existing automated workflows. The provided `INSTALL.ps1` still creates `.bat` desktop launchers to preserve UI behavior.
+
 ## Contributing
 
 - Read [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) and [PULL_REQUEST_RULES.md](./PULL_REQUEST_RULES.md).

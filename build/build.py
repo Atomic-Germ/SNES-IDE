@@ -116,15 +116,18 @@ def copy_docs() -> None:
 
 def copy_bat() -> None:
     """
-    Copy the bat files to the SNES-IDE-out directory.
+    Copy the tool script files to the SNES-IDE-out directory. Includes both .bat and .ps1 so
+    the distribution contains PowerShell ports alongside original batch files.
     """
 
     (SNESIDEOUT / 'tools').mkdir(exist_ok=True)
 
-    for file in (ROOT / 'src' / 'tools' ).rglob("*.bat"):
+    for file in (ROOT / 'src' / 'tools' ).rglob("*"):
 
         if file.is_dir():
+            continue
 
+        if file.suffix.lower() not in ('.bat', '.ps1'):
             continue
 
         rel_path = file.relative_to(ROOT / 'src' / 'tools')

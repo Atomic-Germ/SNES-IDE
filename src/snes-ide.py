@@ -2,6 +2,7 @@ from pathlib import Path
 from array import array
 import subprocess
 import sys
+import shutil
 
 class SnesIde(object):
 
@@ -42,6 +43,30 @@ class SnesIde(object):
 
         subprocess.run(["cmd", "/c", str(file)], check=True)
 
+    def run_with_compat(self, base_name: str):
+        """
+        Compatibility wrapper: prefer running a PowerShell .ps1 script with pwsh when
+        available and the .ps1 exists; otherwise fall back to running the .bat file via cmd.
+        """
+
+        base_path = self.path / base_name
+        ps1_path = base_path.with_suffix('.ps1')
+        bat_path = base_path.with_suffix('.bat')
+
+        # If pwsh is available and a .ps1 file exists, run it
+        if ps1_path.exists() and shutil.which('pwsh'):
+            cmd = ['pwsh', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(ps1_path)]
+            subprocess.run(cmd, check=True)
+            return
+
+        # Fallback to the original .bat file
+        if bat_path.exists():
+            subprocess.run(['cmd', '/c', str(bat_path)], check=True)
+            return
+
+        # Neither script exists — raise a clear error
+        raise FileNotFoundError(f"No executable found for {base_name}: {ps1_path} or {bat_path}")
+
 
     def execute_bat(self, option: int) -> int:
         """
@@ -66,19 +91,19 @@ class SnesIde(object):
 
         match option:
 
-            case 0:   self.run(self.path / "create-new-project.bat"); return 0
+            case 0:   self.run_with_compat("create-new-project"); return 0
 
-            case 1:   self.run(self.path / "text-editor.bat"); return 0
+            case 1:   self.run_with_compat("text-editor"); return 0
 
-            case 2:   self.run(self.path / "audio-tools.bat"); return 0
+            case 2:   self.run_with_compat("audio-tools"); return 0
 
-            case 3:   self.run(self.path / "graphic-tools.bat"); return 0
+            case 3:   self.run_with_compat("graphic-tools"); return 0
 
-            case 4:   self.run(self.path / "other-tools.bat"); return 0
+            case 4:   self.run_with_compat("other-tools"); return 0
 
-            case 5:   self.run(self.path / "compiler.bat"); return 0
+            case 5:   self.run_with_compat("compiler"); return 0
 
-            case 6:   self.run(self.path / "emulator.bat"); return 0
+            case 6:   self.run_with_compat("emulator"); return 0
 
             case _:   return -1
     

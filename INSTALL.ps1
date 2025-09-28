@@ -1,10 +1,10 @@
 #!/usr/bin/env pwsh
 <#
-PowerShell port of INSTALL.bat
-Preserves original behavior: creates simple .bat launcher files on the user's desktop and copies the snes-ide executable.
+PowerShell version of INSTALL.bat
+creates simple .bat launcher files on the user's desktop and copies the snes-ide executable.
 #>
 
-# Ensure we operate from the script directory like "cd /d "%~dp0""
+# Ensure we operate from the script directory, like `cd /d "%~dp0` in batch
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 Set-Location -Path $scriptDir
 
