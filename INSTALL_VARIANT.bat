@@ -1,6 +1,14 @@
 @echo off
-REM Interactive installer variant for Windows
+REM Interactive installer variant for Windows (legacy batch)
+REM Prefer PowerShell installer if available for a friendlier UI.
 SETLOCAL ENABLEDELAYEDEXPANSION
+
+:: If PowerShell exists, delegate to INSTALL_VARIANT.ps1 for a richer experience.
+where powershell.exe >nul 2>&1
+if %ERRORLEVEL%==0 (
+    powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0INSTALL_VARIANT.ps1"
+    exit /b %ERRORLEVEL%
+)
 
 :: Default install directory on Windows
 set "DEFAULT_TARGET=%USERPROFILE%\AppData\Local\snes-ide"
