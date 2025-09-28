@@ -1,5 +1,5 @@
 @{
     Rules = @{ 
-        'PSUseApprovedVerbs' = @{ Enable = $false }
+        'PSUseApprovedVerbs' = @{ Enable = $true }
     }
 }

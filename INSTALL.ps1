@@ -12,33 +12,30 @@ Set-Location -Path $scriptDir
 $is_linux = $false
 if ($args.Count -ge 1 -and $args[0].ToLower() -eq 'linux') { $is_linux = $true }
 
-# Path helpers
-function Join-PathQuiet([string]$a, [string]$b) { Join-Path -Path $a -ChildPath $b }
-
 # Set the path of the executable files (preserve original layout)
-$text_editor_exe = Join-PathQuiet $scriptDir "libs\notepad++\notepad++.exe"
+$text_editor_exe = Join-Path $scriptDir "libs\notepad++\notepad++.exe"
 
 if ($is_linux) {
-    $audio_exe   = Join-PathQuiet $scriptDir "tools\audio-tools.bat"
-    $gfx_exe     = Join-PathQuiet $scriptDir "tools\gfx-tools.bat"
-    $other_exe   = Join-PathQuiet $scriptDir "tools\externTools.bat"
-    $project_exe = Join-PathQuiet $scriptDir "tools\create-new-project.bat"
-    $compiler_exe= Join-PathQuiet $scriptDir "tools\automatizer-batch.bat"
-    $snes_ide    = Join-PathQuiet $scriptDir "snes-ide.bat"
+    $audio_exe   = Join-Path $scriptDir "tools\audio-tools.bat"
+    $gfx_exe     = Join-Path $scriptDir "tools\gfx-tools.bat"
+    $other_exe   = Join-Path $scriptDir "tools\externTools.bat"
+    $project_exe = Join-Path $scriptDir "tools\create-new-project.bat"
+    $compiler_exe= Join-Path $scriptDir "tools\automatizer-batch.bat"
+    $snes_ide    = Join-Path $scriptDir "snes-ide.bat"
 } else {
-    $audio_exe   = Join-PathQuiet $scriptDir "tools\audio-tools.exe"
-    $gfx_exe     = Join-PathQuiet $scriptDir "tools\gfx-tools.exe"
-    $other_exe   = Join-PathQuiet $scriptDir "tools\externTools.exe"
-    $project_exe = Join-PathQuiet $scriptDir "tools\create-new-project.exe"
-    $compiler_exe= Join-PathQuiet $scriptDir "tools\automatizer-batch.bat"
-    $snes_ide    = Join-PathQuiet $scriptDir "snes-ide.exe"
+    $audio_exe   = Join-Path $scriptDir "tools\audio-tools.exe"
+    $gfx_exe     = Join-Path $scriptDir "tools\gfx-tools.exe"
+    $other_exe   = Join-Path $scriptDir "tools\externTools.exe"
+    $project_exe = Join-Path $scriptDir "tools\create-new-project.exe"
+    $compiler_exe= Join-Path $scriptDir "tools\automatizer-batch.bat"
+    $snes_ide    = Join-Path $scriptDir "snes-ide.exe"
 }
 
-$emulator_exe = Join-PathQuiet $scriptDir "libs\bsnes\bsnes.exe"
+$emulator_exe = Join-Path $scriptDir "libs\bsnes\bsnes.exe"
 
 # Determine desktop shortcut directory, prefer USERPROFILE on Windows, fallback to HOME
 $profileRoot = if ($env:USERPROFILE) { $env:USERPROFILE } else { $env:HOME }
-$shortcut_dir = Join-PathQuiet $profileRoot "Desktop\snes-ide"
+$shortcut_dir = Join-Path $profileRoot "Desktop\snes-ide"
 
 if (-not (Test-Path -Path $shortcut_dir)) {
     New-Item -ItemType Directory -Path $shortcut_dir -Force | Out-Null
