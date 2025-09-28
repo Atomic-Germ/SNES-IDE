@@ -28,13 +28,20 @@ jobs:
         python -m pip install PyInstaller
 
     - name: Run Windows build script
-      shell: cmd
-      run: .\build\build.bat
+      shell: pwsh
+      run: |
+        # Run the existing build.bat under cmd so the batch file runs unchanged
+        cmd /c '.\\build\\build.bat'
 
     - name: Verify build output
+      shell: pwsh
       run: |
-        echo "Listing SNES-IDE-out contents"
-        dir /b /s SNES-IDE-out || echo "SNES-IDE-out not found"
+        Write-Host "Listing SNES-IDE-out contents"
+        if (Test-Path -Path 'SNES-IDE-out') {
+          Get-ChildItem -Path 'SNES-IDE-out' -Recurse -Name
+        } else {
+          Write-Host "SNES-IDE-out not found"
+        }
 
     - name: Compress SNES-IDE-out
       shell: pwsh
@@ -86,9 +93,10 @@ jobs:
     - name: Run test script (runs INSTALL.bat if present)
       shell: pwsh
       run: |
-        python -u tests/test.py > tests.log 2>&1 || $LASTEXITCODE = $LASTEXITCODE
-        Write-Host "Test run finished with exit code $LASTEXITCODE"
-        if ($LASTEXITCODE -ne 0) { Write-Host 'Tests failed' ; exit $LASTEXITCODE }
+        python -u tests/test.py > tests.log 2>&1
+        $exitCode = $LASTEXITCODE
+        Write-Host "Test run finished with exit code $exitCode"
+        if ($exitCode -ne 0) { Write-Host 'Tests failed' ; exit $exitCode }
 
     - name: Upload test logs (on failure or success)
       if: always()
