@@ -7,22 +7,22 @@ Prompts the user for inputs and executes automatizer.exe with the same arguments
 # Work from the script directory
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 
-# Interactive prompts (simplified)
-$userDirectory = Read-Host 'Enter desired directory'
-$MemoryMap = Read-Host 'Memory map: HIROM or LOROM'
-$Speed = Read-Host 'Speed: FAST or SLOW'
+# Interactive prompts (explicit -Prompt usage)
+$userDirectory = Read-Host -Prompt 'Enter desired directory (e.g. C:\Users\anonymous\Desktop\game_folder)'
+$MemoryMap = Read-Host -Prompt 'Memory map (HIROM or LOROM)'
+$Speed = Read-Host -Prompt 'Speed (FAST or SLOW)'
 
 # Determine toolsDirectory as the parent of the script directory
-$toolsDirectory = (Join-Path -Path $scriptDir -ChildPath '..' | Resolve-Path).ProviderPath
+$toolsDirectory = (Resolve-Path (Join-Path -Path $scriptDir -ChildPath '..')).ProviderPath
 
-# Set the full path to automatizer.exe
-$automatizerPath = Join-Path -Path $toolsDirectory -ChildPath 'libs\\pvsneslib\\devkitsnes\\automatizer.exe'
+# Build the path to automatizer.exe using Path.Combine to avoid escaping issues
+$automatizerPath = [System.IO.Path]::Combine($toolsDirectory, 'libs', 'pvsneslib', 'devkitsnes', 'automatizer.exe')
 
 if (Test-Path -Path $automatizerPath) {
     # Change to the user-specified directory
     Set-Location -Path $userDirectory
 
-    # Execute automatizer.exe with the same arguments using Start-Process
+    # Execute automatizer.exe with the same arguments; use Start-Process for deterministic exit codes
     $proc = Start-Process -FilePath $automatizerPath -ArgumentList @($userDirectory, $MemoryMap, $Speed) -NoNewWindow -Wait -PassThru
     if ($proc.ExitCode -eq 0) {
         Write-Host 'Execution successful!'

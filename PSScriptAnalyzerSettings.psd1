@@ -1,0 +1,5 @@
+@{
+    Rules = @{ 
+        'PSUseApprovedVerbs' = @{ Enable = $false }
+    }
+}
