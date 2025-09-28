@@ -1,0 +1,17 @@
+# SNES-IDE Python runtime / build dependencies
+# These are minimal, best-effort entries required for building and CI tasks.
+# - Install with: python -m pip install -r requirements.txt
+
+pyinstaller
+wheel
+
+# Optional / developer dependencies (uncomment to install):
+pytest
+pyyaml
+
+# Notes:
+# - tkinter is part of the Python standard library on most platforms but
+#   requires system Tcl/Tk (not installed via pip). Keep that in mind for GUI
+#   features and CI runners.
+# - We intentionally left versions unpinned here; follow-up task will pin and
+#   audit versions for reproducible builds and security.
