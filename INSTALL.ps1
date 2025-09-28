@@ -47,20 +47,23 @@ if (-not (Test-Path -Path $shortcut_dir)) {
     Write-Host "installing... $shortcut_dir"
 }
 
-function New-Shortcut([string]$shortcutName, [string]$targetPath) {
-    $shortcut_path = Join-Path $shortcut_dir "$shortcutName.bat"
-    # Create a tiny launcher .bat file to preserve original behavior
+# Inline shortcut creation to avoid defining a custom cmdlet with a potentially unapproved verb
+$shortcuts = @{
+    'text-editor' = $text_editor_exe
+    'audio-tools'  = $audio_exe
+    'graphic-tools' = $gfx_exe
+    'other-tools'   = $other_exe
+    'create-new-project' = $project_exe
+    'compiler' = $compiler_exe
+    'emulator' = $emulator_exe
+}
+
+foreach ($name in $shortcuts.Keys) {
+    $targetPath = $shortcuts[$name]
+    $shortcut_path = Join-Path $shortcut_dir "$name.bat"
     $content = "@echo off`r`n`"$targetPath`""
     Set-Content -Path $shortcut_path -Value $content -Encoding ASCII
 }
-
-New-Shortcut -shortcutName "text-editor" -targetPath $text_editor_exe
-New-Shortcut -shortcutName "audio-tools" -targetPath $audio_exe
-New-Shortcut -shortcutName "graphic-tools" -targetPath $gfx_exe
-New-Shortcut -shortcutName "other-tools" -targetPath $other_exe
-New-Shortcut -shortcutName "create-new-project" -targetPath $project_exe
-New-Shortcut -shortcutName "compiler" -targetPath $compiler_exe
-New-Shortcut -shortcutName "emulator" -targetPath $emulator_exe
 
 if ($is_linux) {
     Copy-Item -Path $snes_ide -Destination (Join-Path $shortcut_dir "snes-ide.bat") -Force
