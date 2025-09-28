@@ -12,36 +12,36 @@ else
     
 fi
 
-export WINEPREFIX="$USER_HOME/.wine-snes-ide"
+SCRIPT_DIR="$(dirname "$(realpath "$0")")"
+PROJECT_ROOT="$(realpath "$SCRIPT_DIR/../..")"
 
-WINE_USER="$(whoami)"
+# Prefer a native executable or shell wrapper in the installed location
+INSTALL_DIR="$USER_HOME/.local/share/snes-ide"
 
-SHORTCUT="$WINEPREFIX/drive_c/users/$WINE_USER/Desktop/snes-ide/snes-ide.exe"
-SHORTCUT2="$WINEPREFIX/drive_c/users/$WINE_USER/Desktop/snes-ide/snes-ide.bat"
+if [ -f "$INSTALL_DIR/snes-ide.sh" ]; then
 
-SHORTCUTDIR="$WINEPREFIX/drive_c/users/$WINE_USER/Desktop/snes-ide/"
-
-cd "$SHORTCUTDIR"
-
-if [ -f "$SHORTCUT" ]; then
-
-    echo "Starting SNES-IDE via shortcut..."
-    wine cmd /c "./snes-ide.exe"
-
-else
-
-    if [ -f "$SHORTCUT2" ]; then
-
-        echo "Starting SNES-IDE via shortcut..."
-        wine cmd /c "./snes-ide.bat"
-
-    else
-
-        echo "SNES IDE not found!"
-        exit 1
-
-    fi
+    echo "Starting SNES-IDE via native shell wrapper..."
+    bash "$INSTALL_DIR/snes-ide.sh"
+    exit 0
 
 fi
 
-exit 0
+if [ -f "$INSTALL_DIR/src/snes-ide.py" ]; then
+
+    echo "Starting SNES-IDE via Python script..."
+    python3 "$INSTALL_DIR/src/snes-ide.py"
+    exit 0
+
+fi
+
+# As a fallback, look for installed binaries in the current project layout
+if [ -f "$PROJECT_ROOT/SNES-IDE-out/src/snes-ide.py" ]; then
+
+    echo "Starting local SNES-IDE development copy via Python script..."
+    python3 "$PROJECT_ROOT/SNES-IDE-out/src/snes-ide.py"
+    exit 0
+
+fi
+
+echo "SNES IDE not found! Please run ./linux/configure.sh to install or run the Python entrypoint directly."
+exit 1

@@ -4,6 +4,8 @@ from pathlib import Path
 import subprocess
 import traceback
 import sys
+import os
+import stat
 
 class shutil:
     """Reimplementation of class shutil to avoid errors in Wine"""
@@ -176,17 +178,29 @@ def compile() -> None:
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
         if len(sys.argv) > 1 and sys.argv[1] == "linux":
-            # On Linux, copy the .py file and create a .bat file to call it with python
+            # On Linux/macOS, copy the .py file and create a POSIX shell wrapper to call it with python
 
             py_out = SNESIDEOUT / rel_path
             py_out.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(file, py_out)
 
-            bat_path = out_path.with_suffix(".bat")
+            # Create a .sh wrapper
+            sh_path = out_path.with_suffix("")
+            sh_path = sh_path.with_suffix(".sh")
 
-            with open(bat_path, "w") as bat_file:
+            with open(sh_path, "w") as sh_file:
 
-                bat_file.write(f'@echo off\npython "{Path(py_out).resolve().absolute()}" %*\n')
+                sh_file.write(f'#!/usr/bin/env bash\nexec python3 "{Path(py_out).resolve().absolute()}" "$@"\n')
+
+            # Ensure wrapper is executable when unpacked on POSIX systems
+            try:
+
+                st = os.stat(sh_path)
+                os.chmod(sh_path, st.st_mode | 0o111)
+
+            except Exception:
+
+                pass
 
         else:
 
@@ -207,6 +221,66 @@ def copyTracker() -> None:
     dest_dir = ROOT / "SNES-IDE-out" / "tools" / "soundsnes" / "tracker"
     
     shutil.copytree(src_dir, dest_dir)
+
+
+def copy_emulators() -> None:
+    """
+    Copy emulator binaries and libretro cores into the distribution and
+    ensure executable bits are set for runnable files and shell wrappers.
+    """
+
+    # Copy bsnes directory if present
+    src_bsnes = ROOT / 'libs' / 'bsnes'
+    dest_bsnes = SNESIDEOUT / 'libs' / 'bsnes'
+
+    if src_bsnes.exists():
+
+        dest_bsnes.mkdir(parents=True, exist_ok=True)
+
+        for file in src_bsnes.rglob('*'):
+
+            if file.is_dir():
+                continue
+
+            rel_path = file.relative_to(src_bsnes)
+            dest_path = dest_bsnes / rel_path
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(file, dest_path)
+
+            # Make native emulator binaries executable (likely no suffix)
+            if dest_path.suffix == '' or dest_path.suffix == '.sh' or dest_path.name.lower().startswith(('bsnes', 'higan')):
+
+                try:
+                    st = os.stat(dest_path)
+                    os.chmod(dest_path, st.st_mode | 0o111)
+                except Exception:
+                    pass
+
+    # Copy libretro cores (.so files) if present
+    src_libretro = ROOT / 'libs' / 'libretro'
+    dest_libretro = SNESIDEOUT / 'libs' / 'libretro'
+
+    if src_libretro.exists():
+
+        dest_libretro.mkdir(parents=True, exist_ok=True)
+
+        for file in src_libretro.rglob('*'):
+
+            if file.is_dir():
+                continue
+
+            rel_path = file.relative_to(src_libretro)
+            dest_path = dest_libretro / rel_path
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(file, dest_path)
+
+            # libretro cores are shared objects; they don't need exec bit
+            # but keep permissions readable
+            try:
+                st = os.stat(dest_path)
+                os.chmod(dest_path, st.st_mode | stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)
+            except Exception:
+                pass
 
 
 def main() -> int:
@@ -239,6 +313,9 @@ def main() -> int:
 
         sys.stdout.write("Compiling python files...\n")
         compile()
+        
+        sys.stdout.write("Copying emulators and cores...\n")
+        copy_emulators()
 
 
     except subprocess.CalledProcessError as e:

@@ -1,0 +1,144 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, feat/** ]
+    tags: ['v*']
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+      - name: Build distribution (POSIX wrappers)
+        run: |
+          python3 build/build.py linux 2>&1 | tee build_buildpy.log
+      - name: Compile python sources
+        run: |
+          python3 -m py_compile $(find src -name "*.py")
+      - name: Smoke test launcher (dry-run)
+        env:
+          SNESIDE_ROOT: ${{ github.workspace }}
+        run: |
+          python3 src/snes-ide.py --option 1 --dry-run 2>&1 | tee smoke_linux.log
+      - name: Package distribution artifact
+        run: |
+          tar -czf snes-ide-linux.tar.gz SNES-IDE-out || true
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: snes-ide-linux
+          path: |
+            snes-ide-linux.tar.gz
+            build_buildpy.log
+            smoke_linux.log
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install build deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install py2app
+      - name: Build distribution (POSIX wrappers)
+        run: |
+          python3 build/build.py linux 2>&1 | tee build_buildpy.log
+      - name: Build macOS .app with py2app
+        run: |
+          python3 setup.py py2app 2>&1 | tee build_py2app.log
+      - name: Package .app
+        run: |
+          if [ -d dist/SNES-IDE.app ]; then zip -r snes-ide-macos.zip dist/SNES-IDE.app; fi
+      - name: Smoke test launcher (dry-run)
+        env:
+          SNESIDE_ROOT: ${{ github.workspace }}
+        run: |
+          python3 src/snes-ide.py --option 1 --dry-run 2>&1 | tee smoke_macos.log
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: snes-ide-macos
+          path: |
+            snes-ide-macos.zip
+            build_py2app.log
+            build_buildpy.log
+            smoke_macos.log
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install pyinstaller
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+      - name: Build distribution (generate wrappers)
+        run: |
+          python build/build.py windows 2>&1 | tee build_buildpy.log
+        shell: bash
+      - name: Build Windows executable with PyInstaller
+        run: |
+          pyinstaller --onefile --name snes-ide src/snes-ide.py > build_pyinstaller.log 2>&1
+        shell: bash
+      - name: Package Windows artifact
+        run: |
+          mkdir -p release
+          if [ -f dist/snes-ide.exe ]; then cp dist/snes-ide.exe release/; fi
+          powershell -Command "Compress-Archive -Path release/* -DestinationPath snes-ide-windows.zip"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: snes-ide-windows
+          path: |
+            snes-ide-windows.zip
+            build_pyinstaller.log
+            build_buildpy.log
+
+  publish:
+    needs: [build-linux, build-macos, build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: snes-ide-linux
+          path: artifacts/linux
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: snes-ide-macos
+          path: artifacts/macos
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: snes-ide-windows
+          path: artifacts/windows
+      - name: Create GitHub release and upload assets
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          files: |
+            artifacts/linux/snes-ide-linux.tar.gz
+            artifacts/macos/snes-ide-macos.zip
+            artifacts/windows/snes-ide-windows.zip
