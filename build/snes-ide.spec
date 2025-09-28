@@ -20,7 +20,7 @@ def collect_dir(src_dir, target_dir):
 # Collect resources
 datas = []
 datas += collect_dir('src/tools', 'tools')
-datas += collect_dir('libs', 'libs')
+datas += collect_dir('src/libs', 'libs')
 datas += collect_dir('assets/icons', 'icons')
 
 # Add top-level useful files
