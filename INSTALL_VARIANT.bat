@@ -1,4 +1,5 @@
 @echo off
+
 REM Interactive installer variant for Windows (legacy batch)
 REM Prefer PowerShell installer if available for a friendlier UI.
 SETLOCAL ENABLEDELAYEDEXPANSION
