@@ -146,6 +146,9 @@ jobs:
           exit 1
         }
 
+        # Ensure tests run from repository root so tests-pwsh.log is created at the workspace root
+        Set-Location -Path $env:GITHUB_WORKSPACE
+
         # Run test harness which prefers INSTALL.ps1 when pwsh is available
         python -u tests/test.py > tests-pwsh.log 2>&1
         $exitCode = $LASTEXITCODE
