@@ -94,6 +94,13 @@ jobs:
         run: |
           python build/build.py windows 2>&1 | tee build_buildpy.log
         shell: bash
+      - name: Debug: show build directory
+        run: |
+          echo "PWD: $(pwd)"
+          echo "Listing build dir contents:"
+          ls -la build || true
+          if [ -f build/snes-ide.spec ]; then echo "Found build/snes-ide.spec"; cp build/snes-ide.spec .; else echo "build/snes-ide.spec NOT found"; fi
+        shell: bash
       - name: Build Windows executable with PyInstaller (spec)
         run: |
           pyinstaller --clean --noconfirm --log-level=DEBUG build/snes-ide.spec 2>&1 | tee build_pyinstaller.log
