@@ -70,14 +70,4 @@ if ($is_linux) {
 
 Write-Host "SNES-IDE installed successfully! Check the snes-ide folder on your desktop."
 
-# Pause behavior similar to "pause" in batch
-Write-Host "Press any key to continue . . ."
-# Read a single key (no echo)
-try {
-    $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
-} catch {
-    # Fallback for consoles that don't implement ReadKey
-    Read-Host -Prompt 'Press Enter to continue'
-}
-
 exit 0
