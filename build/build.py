@@ -6,42 +6,51 @@ import traceback
 import sys
 import os
 import stat
+import shutil as pyshutil
 
 class shutil:
-    """Reimplementation of class shutil to avoid errors in Wine"""
+    """
+    Platform-aware file utilities.
+
+    On Windows, keep using the original shell commands to preserve behaviour.
+    On POSIX, prefer Python's standard library functions (pyshutil) to copy/move/rmtree.
+    """
 
     @staticmethod
-    def copy(src: str|Path, dst: str|Path) -> None:
-        """Reimplementation of method copy using copy command"""
-
+    def copy(src: str | Path, dst: str | Path) -> None:
         src, dst = map(lambda x: Path(x).resolve(), (src, dst))
-
-        subprocess.run(f'copy "{src}" "{dst}"', shell=True, check=True)
+        if os.name == 'nt':
+            subprocess.run(f'copy "{src}" "{dst}"', shell=True, check=True)
+        else:
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            pyshutil.copy2(src, dst)
 
     @staticmethod
-    def copytree(src: str|Path, dst: str|Path) -> None:
-        """Reimplementation of method copytree using xcopy"""
-
+    def copytree(src: str | Path, dst: str | Path) -> None:
         src, dst = map(lambda x: Path(x).resolve(), (src, dst))
-
-        cmd = f'xcopy "{src}" "{dst}" /E /I /Y /Q /H'
-        subprocess.run(cmd, shell=True, check=True)
+        if os.name == 'nt':
+            cmd = f'xcopy "{src}" "{dst}" /E /I /Y /Q /H'
+            subprocess.run(cmd, shell=True, check=True)
+        else:
+            pyshutil.copytree(src, dst, dirs_exist_ok=True)
 
     @staticmethod
-    def rmtree(path: str|Path) -> None:
-        """Reimplementation of method rmtree using rmdir"""
-
+    def rmtree(path: str | Path) -> None:
         path = Path(path).resolve()
-
-        subprocess.run(f'rmdir /S /Q "{path}"', shell=True, check=True)
+        if os.name == 'nt':
+            subprocess.run(f'rmdir /S /Q "{path}"', shell=True, check=True)
+        else:
+            if path.exists():
+                pyshutil.rmtree(path)
 
     @staticmethod
-    def move(src: str|Path, dst: str|Path) -> None:
-        """Reimplementation of method move using move command"""
-
+    def move(src: str | Path, dst: str | Path) -> None:
         src, dst = map(lambda x: Path(x).resolve(), (src, dst))
-
-        subprocess.run(f'move "{src}" "{dst}"', shell=True, check=True)
+        if os.name == 'nt':
+            subprocess.run(f'move "{src}" "{dst}"', shell=True, check=True)
+        else:
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            pyshutil.move(src, dst)
 
 # Copy all files from root to the SNES-IDE-out directory
 
