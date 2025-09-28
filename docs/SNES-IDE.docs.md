@@ -70,6 +70,9 @@ Welcome to the official documentation for **SNES-IDE** – an open-source, cross
     - Create a `snes-ide` folder on your Desktop with shortcuts to all tools and scripts.
     - Copy the main executable and all required files.
     - Set up batch files for launching editors, tools, and the emulator.
+
+> **Note:** If you have PowerShell (pwsh) installed on Windows, you may prefer to run `INSTALL.ps1` instead.
+
 4. **Check** your Desktop for the new `snes-ide` folder. All shortcuts are inside.
 
 > **Note:** If you want to move the installation, delete the `snes-ide` folder and repeat the process.
@@ -160,6 +163,7 @@ snes-ide/
 │   └── ...
 ├── snes-ide.exe
 ├── INSTALL.bat
+├── INSTALL.ps1
 ├── ...
 ```
 

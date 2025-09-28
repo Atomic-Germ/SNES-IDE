@@ -43,7 +43,7 @@ It works natively on Windows and is fully supported on Linux via Wine, with scri
 - **Windows:**
   1. Download the latest release from [GitHub Releases](https://github.com/BrunoRNS/SNES-IDE/releases/latest).
   2. Decompress the .zip to a folder of your choice.
-  3. Double-click `INSTALL.bat` to set up SNES-IDE and create shortcuts on your Desktop.
+  3. Double-click `INSTALL.bat` to set up SNES-IDE and create shortcuts on your Desktop — or, if you have PowerShell (pwsh) installed, you may prefer to run `INSTALL.ps1`.
 
 - **Linux:**
   1. Download the .deb package from the latest release: [GitHub Releases](https://github.com/BrunoRNS/SNES-IDE/releases/latest).
