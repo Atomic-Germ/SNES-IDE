@@ -20,6 +20,19 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Ensure Homebrew is available
+        run: |
+          # macOS runners typically have Homebrew; ensure it's healthy
+          which brew || /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          brew update || true
+
+      - name: Install macOS system deps (tcl-tk, powershell where possible)
+        run: |
+          # Install tcl-tk to support tkinter-based tests and GUI
+          brew list tcl-tk || brew install tcl-tk
+          # Install PowerShell (pwsh) to allow .ps1 script execution on macOS
+          brew list powershell || brew install powershell || true
+
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
@@ -27,6 +40,22 @@ jobs:
           python -m pip install -r requirements.txt || true
           # Install pytest explicitly for CI tests
           python -m pip install pytest
+
+      - name: Download native bsnes macOS binary
+        id: bsnes_download
+        run: |
+          set -e
+          mkdir -p libs/bsnes/mac
+          # Download the nightly macOS build directly from the bsnes releases 'nightly' tag.
+          # This avoids API parsing and ensures we fetch the known macOS artifact.
+          URL="https://github.com/bsnes-emu/bsnes/releases/download/nightly/bsnes-macos.zip"
+          echo "Downloading $URL"
+          curl -fLS -o libs/bsnes/mac/bsnes-macos.zip "$URL"
+          echo "Downloaded to libs/bsnes/mac/bsnes-macos.zip"
+
+      - name: Unpack bsnes (mac)
+        run: |
+          cd libs/bsnes/mac && if [ -f bsnes-macos.zip ]; then unzip -o bsnes-macos.zip || true; fi
 
       - name: Run tests (red-light)
         run: |

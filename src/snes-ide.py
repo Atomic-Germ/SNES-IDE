@@ -3,6 +3,7 @@ from array import array
 import subprocess
 import sys
 import shutil
+import platform_bridge
 
 class SnesIde(object):
 
@@ -52,6 +53,35 @@ class SnesIde(object):
         base_path = self.path / base_name
         ps1_path = base_path.with_suffix('.ps1')
         bat_path = base_path.with_suffix('.bat')
+
+        # Special-case: text-editor -> prefer launching a native editor if available
+        if base_name == 'text-editor':
+            editor = platform_bridge.detect_editor()
+            if editor:
+                try:
+                    # Open the project folder in the detected editor
+                    if editor == 'code' or editor == 'subl' or editor == 'mate':
+                        subprocess.run([editor, str(self.path)], check=True)
+                    elif editor == 'open':
+                        subprocess.run(['open', str(self.path)], check=True)
+                    else:
+                        # generic fallback: try to launch the command without args
+                        subprocess.run([editor], check=True)
+                    return
+                except subprocess.CalledProcessError:
+                    # Fall back to scripted behavior if launch fails
+                    pass
+
+        # Special-case: emulator -> prefer a native bsnes binary if present
+        if base_name == 'emulator':
+            try:
+                emulator_path = platform_bridge.find_emulator()
+                if emulator_path:
+                    subprocess.run([str(emulator_path)], check=True)
+                    return
+            except Exception:
+                # If anything goes wrong, fall back to existing script behavior
+                pass
 
         # If pwsh is available and a .ps1 file exists, run it
         if ps1_path.exists() and shutil.which('pwsh'):
