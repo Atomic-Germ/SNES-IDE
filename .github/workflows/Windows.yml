@@ -1,0 +1,49 @@
+name: Windows Build and Test
+on:
+  push:
+    branches: [ develop , main , windows/* ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+        cache: 'pip'
+
+    - name: Windows Build
+      shell: cmd  
+      run: .\build\build.bat
+
+    - name: Verify Build
+      shell: cmd
+      run: |
+        dir /b /s SNES-IDE-out || echo "SNES-IDE-out not found"
+
+    - name: Compress SNES-IDE-out
+      shell: pwsh
+      run: |
+        if (Test-Path -Path 'SNES-IDE-out') {
+          Remove-Item -Path 'SNES-IDE-out.zip' -ErrorAction SilentlyContinue
+          Compress-Archive -Path 'SNES-IDE-out/*' -DestinationPath 'SNES-IDE-out.zip' -Force
+          Write-Host "Created SNES-IDE-out.zip"
+        } else {
+          Write-Error "SNES-IDE-out directory missing"
+        }
+
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: sneside-out
+        path: SNES-IDE-out.zip
+        retention-days: 7
+

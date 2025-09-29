@@ -1,0 +1,24 @@
+name: MacOS Build and Test
+on:
+  push:
+    branches: [ develop , main , macos/*]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Do Nothing Yet - Placeholder Step
+      run: echo "This is a placeholder step."
+
+    - name: Archive build artifacts
+      if: success()
+      uses: actions/upload-artifact@v3
+      with:
+        name: build-artifacts
