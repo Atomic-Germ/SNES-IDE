@@ -1,0 +1,100 @@
+name: macOS Build (research proposal)
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [ devel/macOS ]
+
+jobs:
+  build-macos:
+    name: Build and Test on macOS
+    runs-on: macos-latest
+    env:
+      PYTHON_VERSION: '3.11'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Ensure Homebrew is available
+        run: |
+          # macOS runners typically have Homebrew; ensure it's healthy
+          which brew || /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          brew update || true
+
+      - name: Install macOS system deps (tcl-tk, powershell where possible)
+        run: |
+          # Install tcl-tk to support tkinter-based tests and GUI
+          brew list tcl-tk || brew install tcl-tk
+          # Install PowerShell (pwsh) to allow .ps1 script execution on macOS
+          brew list powershell || brew install powershell || true
+
+      - name: Create Python venv and install pip deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Download native bsnes macOS binary (research step)
+        id: bsnes_download
+        run: |
+          set -e
+          mkdir -p libs/bsnes/mac
+          python - <<'PY'
+import json,sys,os,urllib.request
+api_url='https://api.github.com/repos/bsnes-emu/bsnes/releases/latest'
+print('Querying', api_url)
+with urllib.request.urlopen(api_url) as r:
+    data=json.load(r)
+# prefer an asset whose name contains 'macos' or 'bsnes-macos'
+assets=data.get('assets',[])
+url=None
+for a in assets:
+    name=a.get('name','').lower()
+    if 'macos' in name or 'bsnes-macos' in name:
+        url=a.get('browser_download_url')
+        break
+if not url:
+    # last-resort: predictable nightly path (may break) -- documented as fallback
+    url='https://github.com/bsnes-emu/bsnes/releases/download/nightly/bsnes-macos.zip'
+print('Downloading', url)
+out='libs/bsnes/mac/bsnes-macos.zip'
+urllib.request.urlretrieve(url,out)
+print('Downloaded to',out)
+PY
+
+      - name: Unpack bsnes (mac)
+        run: |
+          cd libs/bsnes/mac && unzip -o bsnes-macos.zip || true
+
+      - name: Show discovered platform artifacts (debug)
+        run: |
+          ls -la libs/bsnes || true
+          python -c "import shutil,sys; print('pwsh->', shutil.which('pwsh'))"
+
+      - name: Run test suite (expecting intentionally failing tests as red-light)
+        run: |
+          python -m pytest -q
+        continue-on-error: true
+
+      - name: Build macOS .app with PyInstaller (research)
+        run: |
+          # Example build; adjust icon and opts as needed when implementing
+          pyinstaller --noconfirm --clean --onefile --windowed \
+            --name "SNES-IDE" \
+            --add-data "libs/bsnes/mac:libs/bsnes/mac" \
+            --osx-bundle-identifier "org.atomicgerm.snes-ide" \
+            src/snes-ide.py || true
+
+      - name: Upload build artifact (research only)
+        uses: actions/upload-artifact@v4
+        with:
+          name: snes-ide-macos-dist
+          path: dist || .
+
+      - name: Log summary
+        run: |
+          echo 'macOS research job complete — tests may intentionally fail to indicate red-light items.'
