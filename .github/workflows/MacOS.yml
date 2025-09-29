@@ -1,0 +1,127 @@
+name: macOS (Build and Test)
+
+on:
+  push:
+    branches: [ macos/** ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  macos-build:
+  # This section builds and tests SNES-IDE on Windows using GitHub Actions.
+  # It uses the Green-Light phase of TDD. Nothing should fail. For new 
+  # features, use the "Test (Red-Light)" section to write failing tests before
+  # implementation.
+    name: Build (Green-Light)
+    runs-on: macos-latest 
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+
+      - name: Build
+        run: |
+          python build/build.py macos
+
+      - name: Verify
+        run: |
+          if [ ! -d "${{ github.workspace }}/SNES-IDE-out" ]; then
+            echo "Build artifact not found!"
+            exit 1
+          fi
+
+      - name: Compress
+        run: |
+          cd "${{ github.workspace }}"
+          zip -r sneside-macos.zip SNES-IDE-out
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: sneside-macos
+          path: sneside-macos.zip
+          retention-days: 7
+
+  macos-tests-greenlight:
+    name: Tests (Green-Light)
+    runs-on: macos-latest
+    needs: macos-build
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sneside-macos
+
+      - name: Extract sneside-macos.zip
+        run: |
+          unzip -q sneside-macos.zip -d sneside-macos
+
+      - name: Check expected `libs/` folders
+        run: |
+          set -e
+          expected=(
+            "bsnes"
+            "font"
+            "include"
+            "libs"
+            "M8TE"
+            "pvsneslib/devkitsnes"
+            "pvsneslib/lib"
+            "pvsneslib/tools"
+            "template"
+          )
+          missing=()
+          for lib in "${expected[@]}"; do
+            if [ ! -d "sneside-macos/SNES-IDE-out/libs/$lib" ]; then
+              echo "Missing: $lib"
+              missing+=("$lib")
+            fi
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "Missing expected lib files: ${missing[*]}"
+            exit 1
+          else
+            echo "All expected lib files found."
+          fi
+
+      - name: Check expected tools files
+        run: |
+          set -e
+          expected=(
+            "INSTALL.sh"
+            "snes-ide"
+            "tools/audio-tools.sh"
+            "tools/create-new-project.sh"
+            "tools/externTools.sh"
+            "tools/gfx-tools.sh"
+            "tools/soundsnes/tracker/schismtracker.sh"
+          )
+          missing=()
+          for f in "${expected[@]}"; do
+            if [ ! -e "sneside-macos/SNES-IDE-out/$f" ]; then
+              echo "Missing: $f"
+              missing+=("$f")
+            fi
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "Missing expected tool files: ${missing[*]}"
+            exit 1
+          else
+            echo "All expected tool files found."
+          fi
+
+      - name: Run INSTALL.sh
+        run: |
+          set -e
+          chmod +x sneside-macos/SNES-IDE-out/INSTALL.sh || true
+          (cd sneside-macos/SNES-IDE-out && ./INSTALL.sh)

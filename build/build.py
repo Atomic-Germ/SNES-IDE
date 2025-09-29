@@ -152,7 +152,7 @@ def copy_docs() -> None:
 
 def copy_bat() -> None:
     """
-    Copy the bat files to the SNES-IDE-out directory.
+    Copy the bat files to the SNES-IDE-out directory (Windows-only).
     """
 
     (SNESIDEOUT / 'tools').mkdir(exist_ok=True)
@@ -169,6 +169,59 @@ def copy_bat() -> None:
 
         dest_path.parent.mkdir(parents=True, exist_ok=True)
 
+        shutil.copy(file, dest_path)
+    
+    return None
+
+def copy_sh() -> None:
+    """
+    Generate simple shell script wrappers for each .bat file so macOS packaging contains usable placeholders.
+    """
+
+    (SNESIDEOUT / 'tools').mkdir(exist_ok=True)
+
+    for file in (ROOT / 'src' / 'tools').rglob("*.bat"):
+
+        if file.is_dir():
+            continue
+
+        rel_path = file.relative_to(ROOT / 'src' / 'tools')
+        # Create a .sh wrapper with same basename
+        out_name = rel_path.with_suffix('.sh')
+        dest_path = SNESIDEOUT / 'tools' / out_name
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Very small wrapper that warns about platform differences and exits safely.
+        wrapper_content = f"""#!/usr/bin/env bash
+# Generated wrapper for {file.name}
+echo "This is a generated macOS wrapper for {file.name}."
+echo "The original Windows script may call Windows-only binaries; edit this script to adapt it for macOS."
+exit 0
+"""
+
+        with open(dest_path, 'w') as f:
+            f.write(wrapper_content)
+
+        # Make executable
+        os.chmod(dest_path, 0o755)
+
+    return None
+
+def copy_dylibs() -> None:
+    """
+    Copy macOS dynamic libraries (.dylib) from tools if present. This is a no-op if none exist.
+    """
+
+    (SNESIDEOUT / 'tools').mkdir(exist_ok=True)
+
+    for file in (ROOT / 'tools').rglob("*.dylib"):
+
+        if file.is_dir():
+            continue
+
+        rel_path = file.relative_to(ROOT / 'tools')
+        dest_path = SNESIDEOUT / 'tools' / rel_path
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(file, dest_path)
     
     return None
@@ -211,29 +264,38 @@ def compile() -> None:
         out_path = SNESIDEOUT / rel_path.with_suffix(".exe")
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
-        if len(sys.argv) > 1 and sys.argv[1] == "linux":
+        # On Linux and macOS, don't build Windows .exe; instead copy the .py file and create an executable wrapper
+        if PLATFORM_MODE in ("linux", "mac", "macos"):
             # On Linux, copy the .py file and create a .bat file to call it with python
 
             py_out = SNESIDEOUT / rel_path
             py_out.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(file, py_out)
 
-            bat_path = out_path.with_suffix(".bat")
+            if PLATFORM_MODE in ("linux",):
+                # Create a .bat-like shell wrapper for linux called .sh
+                wrapper_path = out_path.with_suffix(".sh")
+                with open(wrapper_path, "w") as wrapper_file:
+                    wrapper_file.write(f'#!/usr/bin/env bash\npython3 "{Path(py_out).resolve().absolute()}" "$@"\n')
+                os.chmod(wrapper_path, 0o755)
 
-            with open(bat_path, "w") as bat_file:
-
-                bat_file.write(f'@echo off\npython "{Path(py_out).resolve().absolute()}" %*\n')
-
+            else:
+                # macOS: create a no-extension executable wrapper that calls python3
+                wrapper_path = out_path.with_suffix("")
+                with open(wrapper_path, "w") as wrapper_file:
+                    wrapper_file.write(f'#!/usr/bin/env bash\npython3 "{Path(py_out).resolve().absolute()}" "$@"\n')
+                os.chmod(wrapper_path, 0o755)
+ 
         else:
 
-            from buildModules.buildPy import main as mpy
+             from buildModules.buildPy import main as mpy
 
-            out: int = mpy(file, out_path.parent)
+             out: int = mpy(file, out_path.parent)
 
-            if out != 0:
-                
-                raise Exception(f"ERROR while compiling python files: -{abs(out)}")
-            
+             if out != 0:
+                 
+                 raise Exception(f"ERROR while compiling python files: -{abs(out)}")
+             
 
     sys.stdout.write("Success compiling Python files.\n")
     
@@ -260,16 +322,29 @@ def main() -> int:
     """
     Main function to run the build process.
     """
+    # Choose platform-specific steps
     steps = [
         ("Cleaning SNES-IDE-out", clean_all),
         ("Copying root files", copy_root),
         ("Copying libs", copy_lib),
         ("Copying docs", copy_docs),
-        ("Copying bat files", copy_bat),
-        ("Copying dlls", copy_dlls),
         ("Copying tracker", copyTracker),
-        ("Compiling python files", compile),
     ]
+
+    # Append platform-specific copy steps
+    if PLATFORM_MODE in ("mac", "macos"):
+        steps += [
+            ("Generating shell wrappers for tools", copy_sh),
+            ("Copying macOS dynamic libraries", copy_dylibs),
+        ]
+    else:
+        steps += [
+            ("Copying bat files", copy_bat),
+            ("Copying dlls", copy_dlls),
+        ]
+
+    # Always compile (compile() will branch itself for linux/mac)
+    steps.append(("Compiling python files", compile))
     failed_steps = []
     for name, func in steps:
         if not run_step(name, func):
