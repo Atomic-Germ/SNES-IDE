@@ -26,6 +26,22 @@ jobs:
           which brew || /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
           brew update || true
 
+      - name: Debug Homebrew environment
+        run: |
+          echo "Initial PATH: $PATH"
+          echo "Checking common brew locations"
+          if [ -x "/opt/homebrew/bin/brew" ]; then
+            echo "Found brew in /opt/homebrew/bin"
+            eval "$(/opt/homebrew/bin/brew shellenv)"
+          fi
+          if [ -x "/usr/local/bin/brew" ]; then
+            echo "Found brew in /usr/local/bin"
+            eval "$(/usr/local/bin/brew shellenv)"
+          fi
+          echo "After shellenv PATH: $PATH"
+          which brew || true
+          brew --version || true
+
       - name: Install macOS system deps (tcl-tk, powershell where possible)
         run: |
           # Install tcl-tk to support tkinter-based tests and GUI
@@ -66,9 +82,16 @@ jobs:
           URL="https://github.com/alekmaul/pvsneslib/releases/download/4.4.0/pvsneslib_440_64b_darwin.zip"
           echo "Downloading prebuilt pvsneslib from $URL"
           curl -fLS -o /tmp/pvsneslib-4.4.0-bin.zip "$URL"
-          unzip -q /tmp/pvsneslib-4.4.0-bin.zip -d /tmp
-          # Locate any extracted devkitsnes directory under /tmp and copy it into libs/
-          DEVKIT_SRC=$(find /tmp -type d -name devkitsnes -print -quit || true)
+          # Extract into a dedicated directory to avoid polluting /tmp root and make detection reliable
+          EXTRACT_DIR=/tmp/pvsneslib-extract
+          rm -rf "$EXTRACT_DIR" || true
+          mkdir -p "$EXTRACT_DIR"
+          unzip -q /tmp/pvsneslib-4.4.0-bin.zip -d "$EXTRACT_DIR"
+          echo "Listing extracted tree (first 200 lines):"
+          find "$EXTRACT_DIR" -maxdepth 3 -print | sed -n '1,200p'
+
+          # Locate any extracted devkitsnes directory under the extraction dir and copy it into libs/
+          DEVKIT_SRC=$(find "$EXTRACT_DIR" -type d -name devkitsnes -print -quit || true)
           if [ -n "$DEVKIT_SRC" ]; then
             echo "Found devkitsnes at $DEVKIT_SRC; copying to libs/pvsneslib/devkitsnes"
             rm -rf libs/pvsneslib/devkitsnes || true
@@ -76,8 +99,21 @@ jobs:
             cp -R "$DEVKIT_SRC" libs/pvsneslib/
             echo "Copied devkitsnes to libs/pvsneslib/devkitsnes"
           else
-            echo "devkitsnes directory not found in the prebuilt archive; please verify the prebuilt release contains devkitsnes"
-            exit 1
+            # Fallback: search for known devkit executables anywhere in the archive and copy their containing directory
+            echo "devkitsnes directory not found in the prebuilt archive under $EXTRACT_DIR; attempting a file-based fallback search"
+            FOUND_FILE=$(find "$EXTRACT_DIR" -type f \( -iname 'wla-65816*' -o -iname 'wlalink*' -o -iname '816-tcc*' \) -print -quit || true)
+            if [ -n "$FOUND_FILE" ]; then
+              PARENT_DIR=$(dirname "$FOUND_FILE")
+              echo "Found devkit file $FOUND_FILE; copying parent dir $PARENT_DIR to libs/pvsneslib/devkitsnes"
+              rm -rf libs/pvsneslib/devkitsnes || true
+              mkdir -p libs/pvsneslib
+              cp -R "$PARENT_DIR" libs/pvsneslib/devkitsnes || true
+              echo "Copied fallback devkits into libs/pvsneslib/devkitsnes"
+            else
+              echo "devkitsnes directory not found in the prebuilt archive under $EXTRACT_DIR; listing full contents for debug:" 
+              find "$EXTRACT_DIR" -type f -print | sed -n '1,500p'
+              exit 1
+            fi
           fi
 
       - name: Verify devkitsnes executables or build from source
@@ -97,44 +133,49 @@ jobs:
             echo "Found devkit executable: $FOUND"
             chmod -R +x "$DEVKIT_DIR" || true
           else
-            echo "No devkit executables found — attempting to build devkitsnes from source"
-            # Try common build strategies inside the extracted tmp directory
-            if [ -d /tmp/pvsneslib-4.4.0/devkitsnes ]; then
-              cd /tmp/pvsneslib-4.4.0/devkitsnes
-              # Try waf-based build
-              if [ -f waf ]; then
-                echo "Building with waf"
-                python3 waf configure --prefix=/tmp/pvsneslib-install || true
-                python3 waf build || true
-                python3 waf install --destdir=/tmp/pvsneslib-install || true
-                # Copy any produced binaries into libs path
-                mkdir -p libs/pvsneslib/devkitsnes
-                cp -R /tmp/pvsneslib-install/* libs/pvsneslib/devkitsnes/ || true
-              elif [ -f Makefile ]; then
-                echo "Building with make"
-                make || true
-                mkdir -p libs/pvsneslib/devkitsnes
-                # heuristically copy likely binaries
-                find . -type f \( -iname 'wla-65816*' -o -iname 'wlalink*' -o -iname '816-tcc*' \) -exec cp {} libs/pvsneslib/devkitsnes/ \; || true
-              elif [ -f configure ]; then
-                echo "Configuring + make"
-                ./configure --prefix=/tmp/pvsneslib-install || true
-                make || true
-                make install DESTDIR=/tmp/pvsneslib-install || true
-                mkdir -p libs/pvsneslib/devkitsnes
-                cp -R /tmp/pvsneslib-install/* libs/pvsneslib/devkitsnes/ || true
-              else
-                echo "No known build system found in devkitsnes; cannot build automatically"
-                exit 1
-              fi
+            echo "No devkit executables found — attempting to build devkitsnes from extracted source tree"
+            # Try build under the same extraction dir used earlier
+            EXTRACT_DIR=/tmp/pvsneslib-extract
+            if [ -d "$EXTRACT_DIR" ] && [ -d "$EXTRACT_DIR"/pvsneslib* ]; then
+              # Find the top-level extracted subdir
+              TOPDIR=$(find "$EXTRACT_DIR" -maxdepth 1 -type d -name "pvsneslib*" -print -quit || true)
+              if [ -n "$TOPDIR" ] && [ -d "$TOPDIR/devkitsnes" ]; then
+                cd "$TOPDIR/devkitsnes"
+                # Try waf-based build
+                if [ -f waf ]; then
+                  echo "Building with waf"
+                  python3 waf configure --prefix=/tmp/pvsneslib-install || true
+                  python3 waf build || true
+                  python3 waf install --destdir=/tmp/pvsneslib-install || true
+                  mkdir -p libs/pvsneslib/devkitsnes
+                  cp -R /tmp/pvsneslib-install/* libs/pvsneslib/devkitsnes/ || true
+                elif [ -f Makefile ]; then
+                  echo "Building with make"
+                  make || true
+                  mkdir -p libs/pvsneslib/devkitsnes
+                  find . -type f \( -iname 'wla-65816*' -o -iname 'wlalink*' -o -iname '816-tcc*' \) -exec cp {} libs/pvsneslib/devkitsnes/ \; || true
+                elif [ -f configure ]; then
+                  echo "Configuring + make"
+                  ./configure --prefix=/tmp/pvsneslib-install || true
+                  make || true
+                  make install DESTDIR=/tmp/pvsneslib-install || true
+                  mkdir -p libs/pvsneslib/devkitsnes
+                  cp -R /tmp/pvsneslib-install/* libs/pvsneslib/devkitsnes/ || true
+                else
+                  echo "No known build system found in devkitsnes; cannot build automatically"
+                  exit 1
+                fi
 
-              # Final check for executables after build attempts
-              FOUND2=$(find "libs/pvsneslib/devkitsnes" -type f \( -iname 'wla-65816*' -o -iname 'wlalink*' -o -iname '816-tcc*' \) -print -quit || true)
-              if [ -n "$FOUND2" ]; then
-                echo "Build produced devkit executable: $FOUND2"
-                chmod -R +x libs/pvsneslib/devkitsnes || true
+                FOUND2=$(find "libs/pvsneslib/devkitsnes" -type f \( -iname 'wla-65816*' -o -iname 'wlalink*' -o -iname '816-tcc*' \) -print -quit || true)
+                if [ -n "$FOUND2" ]; then
+                  echo "Build/Copy produced devkit executable: $FOUND2"
+                  chmod -R +x libs/pvsneslib/devkitsnes || true
+                else
+                  echo "Build did not produce expected executables; red-light remains"
+                  exit 1
+                fi
               else
-                echo "Build did not produce expected executables; red-light remains"
+                echo "No devkitsnes source tree found under $EXTRACT_DIR; cannot build"
                 exit 1
               fi
             else
