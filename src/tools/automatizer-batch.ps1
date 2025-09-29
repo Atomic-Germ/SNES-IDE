@@ -19,6 +19,7 @@ $toolsDirectory = (Resolve-Path (Join-Path -Path $scriptDir -ChildPath '..')).Pr
 $automatizerPath = [System.IO.Path]::Combine($toolsDirectory, 'libs', 'pvsneslib', 'devkitsnes', 'automatizer.exe')
 $pyScript = [System.IO.Path]::Combine($toolsDirectory, 'libs', 'pvsneslib', 'devkitsnes', 'automatizer.py')
 
+
 if (Test-Path -Path $automatizerPath) {
     # Change to the user-specified directory
     Set-Location -Path $userDirectory
