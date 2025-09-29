@@ -99,20 +99,41 @@ jobs:
             cp -R "$DEVKIT_SRC" libs/pvsneslib/
             echo "Copied devkitsnes to libs/pvsneslib/devkitsnes"
           else
-            # Fallback: search for known devkit executables anywhere in the archive and copy their containing directory
-            echo "devkitsnes directory not found in the prebuilt archive under $EXTRACT_DIR; attempting a file-based fallback search"
-            FOUND_FILE=$(find "$EXTRACT_DIR" -type f \( -iname 'wla-65816*' -o -iname 'wlalink*' -o -iname '816-tcc*' \) -print -quit || true)
-            if [ -n "$FOUND_FILE" ]; then
-              PARENT_DIR=$(dirname "$FOUND_FILE")
-              echo "Found devkit file $FOUND_FILE; copying parent dir $PARENT_DIR to libs/pvsneslib/devkitsnes"
+            # First check for the canonical path produced by the release: EXTRACT_DIR/pvsneslib/devkitsnes
+            if [ -d "$EXTRACT_DIR/pvsneslib/devkitsnes" ]; then
+              DEVKIT_SRC="$EXTRACT_DIR/pvsneslib/devkitsnes"
+              echo "Found canonical devkitsnes at $DEVKIT_SRC; copying to libs/pvsneslib/devkitsnes"
               rm -rf libs/pvsneslib/devkitsnes || true
               mkdir -p libs/pvsneslib
-              cp -R "$PARENT_DIR" libs/pvsneslib/devkitsnes || true
-              echo "Copied fallback devkits into libs/pvsneslib/devkitsnes"
+              cp -R "$DEVKIT_SRC" libs/pvsneslib/
+              echo "Copied devkitsnes to libs/pvsneslib/devkitsnes"
             else
-              echo "devkitsnes directory not found in the prebuilt archive under $EXTRACT_DIR; listing full contents for debug:" 
-              find "$EXTRACT_DIR" -type f -print | sed -n '1,500p'
-              exit 1
+              # If canonical path not present, look for any top-level directory named 'pvsneslib*' and use its devkitsnes
+              TOP_PVSNSLIB_DIR=$(find "$EXTRACT_DIR" -maxdepth 1 -type d -name 'pvsneslib*' -print -quit || true)
+              if [ -n "$TOP_PVSNSLIB_DIR" ] && [ -d "$TOP_PVSNSLIB_DIR/devkitsnes" ]; then
+                DEVKIT_SRC="$TOP_PVSNSLIB_DIR/devkitsnes"
+                echo "Found devkitsnes under top-level $TOP_PVSNSLIB_DIR; copying to libs/pvsneslib/devkitsnes"
+                rm -rf libs/pvsneslib/devkitsnes || true
+                mkdir -p libs/pvsneslib
+                cp -R "$DEVKIT_SRC" libs/pvsneslib/
+                echo "Copied devkitsnes to libs/pvsneslib/devkitsnes"
+              else
+                # Fallback: previous file-based search if layout is unexpected
+                echo "Canonical pvsneslib/devkitsnes not found — attempting file-based fallback search"
+                FOUND_FILE=$(find "$EXTRACT_DIR" -type f \( -iname 'wla-65816*' -o -iname 'wlalink*' -o -iname '816-tcc*' \) -print -quit || true)
+                if [ -n "$FOUND_FILE" ]; then
+                  PARENT_DIR=$(dirname "$FOUND_FILE")
+                  echo "Found devkit file $FOUND_FILE; copying parent dir $PARENT_DIR to libs/pvsneslib/devkitsnes"
+                  rm -rf libs/pvsneslib/devkitsnes || true
+                  mkdir -p libs/pvsneslib
+                  cp -R "$PARENT_DIR" libs/pvsneslib/devkitsnes || true
+                  echo "Copied fallback devkits into libs/pvsneslib/devkitsnes"
+                else
+                  echo "devkitsnes directory not found in the prebuilt archive under $EXTRACT_DIR; listing full contents for debug:"
+                  find "$EXTRACT_DIR" -type f -print | sed -n '1,500p'
+                  exit 1
+                fi
+              fi
             fi
           fi
 
