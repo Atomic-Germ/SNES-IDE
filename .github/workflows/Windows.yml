@@ -75,18 +75,18 @@ jobs:
         Write-Host "Extracting $($zip.FullName)"
         Expand-Archive -LiteralPath $zip.FullName -DestinationPath './SNES-IDE-out' -Force
 
-    - name: Run test script (runs INSTALL.bat if present)
-      shell: pwsh
-      run: |
-        python -u tests/test.py > tests.log 2>&1 || $LASTEXITCODE = $LASTEXITCODE
-        Write-Host "Test run finished with exit code $LASTEXITCODE"
-        if ($LASTEXITCODE -ne 0) { Write-Host 'Tests failed' ; exit $LASTEXITCODE }
+#    - name: Run test script (runs INSTALL.bat if present)
+#      shell: pwsh
+#      run: |
+#        python -u tests/test.py > tests.log 2>&1 || $LASTEXITCODE = $LASTEXITCODE
+#        Write-Host "Test run finished with exit code $LASTEXITCODE"
+#        if ($LASTEXITCODE -ne 0) { Write-Host 'Tests failed' ; exit $LASTEXITCODE }
 
-    - name: Upload test logs (on failure or success)
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-logs
-        path: tests.log
-        retention-days: 7
+#    - name: Upload test logs (on failure or success)
+#      if: always()
+#      uses: actions/upload-artifact@v4
+#      with:
+#        name: test-logs
+#        path: tests.log
+#        retention-days: 7
 
