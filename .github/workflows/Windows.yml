@@ -1,10 +1,10 @@
 name: Windows Build and Test
 on:
   push:
-    branches: [ develop , main , windows/* ]
+    branches: [ windows/* ]
     tags: [ 'v*' ]
   pull_request:
-    branches: [ main ]
+    branches: [ main , develop ]
 
 jobs:
   build:
