@@ -3,6 +3,7 @@ from pathlib import Path
 import tkinter as tk
 import subprocess
 import sys
+import platform_bridge
 
 def get_executable_path():
     """
@@ -184,11 +185,21 @@ class SNESAutomatizer:
         self.asm_files: list[Path] = []
         self.c_files: list[Path] = []
 
-        self.cc = self.devkit_dir / 'bin' / '816-tcc.exe'
-        self.assembler = self.devkit_dir / 'bin' / 'wla-65816.exe'
-        self.linker = self.devkit_dir / 'bin' / 'wlalink.exe'
-        self.opt = self.tools_dir / '816-opt.exe'
-        self.ctf = self.tools_dir / 'constify.exe'
+        # Prefer platform-discovered tools (may be non-.exe on macOS/Linux)
+        cc_tool = platform_bridge.find_tool('816-tcc') or platform_bridge.find_tool('816-tcc.exe')
+        self.cc = Path(cc_tool) if cc_tool else self.devkit_dir / 'bin' / '816-tcc.exe'
+
+        assembler_tool = platform_bridge.find_tool('wla-65816') or platform_bridge.find_tool('wla-65816.exe')
+        self.assembler = Path(assembler_tool) if assembler_tool else self.devkit_dir / 'bin' / 'wla-65816.exe'
+
+        linker_tool = platform_bridge.find_tool('wlalink') or platform_bridge.find_tool('wlalink.exe')
+        self.linker = Path(linker_tool) if linker_tool else self.devkit_dir / 'bin' / 'wlalink.exe'
+
+        opt_tool = platform_bridge.find_tool('816-opt') or platform_bridge.find_tool('816-opt.exe')
+        self.opt = Path(opt_tool) if opt_tool else self.tools_dir / '816-opt.exe'
+
+        ctf_tool = platform_bridge.find_tool('constify') or platform_bridge.find_tool('constify.exe')
+        self.ctf = Path(ctf_tool) if ctf_tool else self.tools_dir / 'constify.exe'
 
     def _get_lib_dir(self):
         """Return the library directory based on memory map and speed."""
