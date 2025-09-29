@@ -57,6 +57,27 @@ jobs:
         run: |
           cd libs/bsnes/mac && if [ -f bsnes-macos.zip ]; then unzip -o bsnes-macos.zip || true; fi
 
+      - name: Download pvsneslib devkitsnes (release 4.4.0)
+        id: pvsnes_download
+        run: |
+          set -e
+          mkdir -p libs/pvsneslib
+          # Download the source archive for tag 4.4.0 and extract devkitsnes
+          URL="https://github.com/alekmaul/pvsneslib/archive/refs/tags/4.4.0.zip"
+          echo "Downloading pvsneslib from $URL"
+          curl -fLS -o /tmp/pvsneslib-4.4.0.zip "$URL"
+          unzip -q /tmp/pvsneslib-4.4.0.zip -d /tmp
+          # The extracted folder will be pvsneslib-4.4.0/ ; copy devkitsnes if present
+          if [ -d /tmp/pvsneslib-4.4.0/devkitsnes ]; then
+            rm -rf libs/pvsneslib/devkitsnes || true
+            mkdir -p libs/pvsneslib
+            cp -R /tmp/pvsneslib-4.4.0/devkitsnes libs/pvsneslib/
+            echo "Copied devkitsnes to libs/pvsneslib/devkitsnes"
+          else
+            echo "devkitsnes not found inside release artifact; please verify release contents"
+            exit 1
+          fi
+
       - name: Run tests (red-light)
         run: |
           echo "Running intentionally-failing red-light tests for macOS port"

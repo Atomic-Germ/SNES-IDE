@@ -183,6 +183,46 @@ def ci_fetch_latest_bsnes_mac(dest_dir: Path) -> Optional[Path]:
     return None
 
 
+def find_tool(name: str) -> Optional[Path]:
+    """Locate a devkitsnes tool or other binary by name.
+
+    Search order:
+    1. Environment override via `SNES_IDE_DEVKIT_PATH` (a directory or file path).
+    2. System PATH.
+    3. `libs/pvsneslib/devkitsnes/` tree for executables matching the name.
+
+    Returns a Path if found or None.
+    """
+    env_override = os.environ.get("SNES_IDE_DEVKIT_PATH")
+    if env_override:
+        p = Path(env_override)
+        if p.exists():
+            if p.is_dir():
+                candidate = p / name
+                if _is_executable_file(candidate):
+                    return candidate
+                # try any file matching name pattern
+                for f in p.rglob(name + "*"):
+                    if _is_executable_file(f):
+                        return f
+            elif _is_executable_file(p):
+                return p
+
+    which_path = shutil.which(name)
+    if which_path:
+        return Path(which_path)
+
+    # Look under libs/pvsneslib/devkitsnes
+    base = Path("libs") / "pvsneslib" / "devkitsnes"
+    if base.exists():
+        # common locations: bin/* or tools/*
+        for candidate in list(base.rglob(name)) + list(base.rglob(name + "*")):
+            if _is_executable_file(candidate):
+                return candidate
+
+    return None
+
+
 if __name__ == "__main__":
     # Quick manual smoke tests when run directly
     print("Platform:", platform_name())
