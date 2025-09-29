@@ -41,19 +41,54 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
+      - name: Prepare Homebrew Python and Tcl/Tk
+        run: |
+          set -e
+          # Ensure Homebrew environment is available
+          if [ -x "/opt/homebrew/bin/brew" ]; then
+            eval "$(/opt/homebrew/bin/brew shellenv)"
+          elif [ -x "/usr/local/bin/brew" ]; then
+            eval "$(/usr/local/bin/brew shellenv)"
+          fi
+
+          brew update || true
+          # Install python@3.11 and tcl-tk so tkinter is available for packaging
+          brew list python@3.11 || brew install python@3.11
+          brew list tcl-tk || brew install tcl-tk
+
+          # Resolve installed tcl-tk cellar path and set TCL/TK env vars for PyInstaller helper
+          TB=$(brew --cellar tcl-tk 2>/dev/null | head -n1 || true)
+          if [ -n "$TB" ]; then
+            # pick the latest version under cellar if multiple
+            VER=$(ls "$TB" | sort -V | tail -n1)
+            TCL_DIR="$TB/$VER/lib/tcl8"
+            TK_DIR="$TB/$VER/lib/tk8"
+            if [ -d "$TCL_DIR" ]; then
+              echo "TCL_LIBRARY=$TCL_DIR" >> $GITHUB_ENV
+            fi
+            if [ -d "$TK_DIR" ]; then
+              echo "TK_LIBRARY=$TK_DIR" >> $GITHUB_ENV
+            fi
+          fi
+
+          # Expose the Homebrew python binary to the workflow so we use a Python build that has tkinter
+          PY_BIN=$(brew --prefix python@3.11 2>/dev/null)/bin/python3
+          if [ -x "$PY_BIN" ]; then
+            echo "PYTHON_BIN=$PY_BIN" >> $GITHUB_ENV
+          else
+            # Fall back to system python3 if brew python not found
+            echo "PYTHON_BIN=$(which python3)" >> $GITHUB_ENV
+          fi
 
       - name: Install build dependencies
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install pyinstaller
+          # Use the brew-provided python when available to install PyInstaller for packaging
+          $PYTHON_BIN -m pip install --upgrade pip
+          $PYTHON_BIN -m pip install pyinstaller
 
       - name: Build with PyInstaller (onefile)
         run: |
-          python3 scripts/pyinstaller_build_helper.py --src src/libs/pvsneslib/devkitsnes/automatizer.py --name automatizer --onefile || exit 1
+          $PYTHON_BIN scripts/pyinstaller_build_helper.py --src src/libs/pvsneslib/devkitsnes/automatizer.py --name automatizer --onefile || exit 1
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
