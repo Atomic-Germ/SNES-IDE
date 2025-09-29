@@ -119,7 +119,7 @@ def copy_lib() -> None:
     Copy all files from the lib directory to the SNES-IDE-out directory.
     Also downloads and unpacks the correct pvsneslib release for the platform into libs/pvsneslib/.
     Extracts full directories: lib, devkitsnes/bin, devkitsnes/include, devkitsnes/tools.
-    Also copies pvsneslib/pvsneslib_license.txt to libs/pvsneskit/LICENSE.
+    Also copies pvsneslib/pvsneslib_license.txt to libs/pvsneslib/LICENSE.
     Prints debug info for every extracted and copied file.
     Handles double pvsneslib prefix in zip members.
     """
@@ -187,7 +187,7 @@ def copy_lib() -> None:
                     continue
                 # Extract license
                 if member.endswith("pvsneslib_license.txt"):
-                    dest_path = SNESIDEOUT / "libs" / "pvsneskit" / "LICENSE"
+                    dest_path = SNESIDEOUT / "libs" / "pvsneslib" / "LICENSE"
                     dest_path.parent.mkdir(parents=True, exist_ok=True)
                     with z.open(member) as src, open(dest_path, "wb") as dst:
                         dst.write(src.read())
