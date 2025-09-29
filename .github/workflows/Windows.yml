@@ -14,15 +14,18 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
- #   - name: Set up Python
- #     uses: actions/setup-python@v4
- #     with:
- #       python-version: '3.x'
- #       cache: 'pip'
+   - name: Set up Python
+     uses: actions/setup-python@v4
+     with:
+       python-version: '3.11'
+       cache: 'pip'
 
     - name: Windows Build
       shell: cmd  
-      run: .\build\build.bat
+      run: |
+        python3 -m venv .venv
+        cmd /c build\\build.bat
+
 
     - name: Verify Build
       shell: cmd
@@ -46,47 +49,4 @@ jobs:
         name: sneside-out
         path: SNES-IDE-out.zip
         retention-days: 7
-
-  test:
-    runs-on: windows-latest
-    needs: build
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.x'
-        cache: 'pip'
-
-    - name: Download build artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: sneside-out
-        path: .
-
-    - name: Extract build artifact
-      shell: pwsh
-      run: |
-        $zip = Get-ChildItem -Path . -Filter '*.zip' -Recurse | Select-Object -First 1
-        if ($null -eq $zip) { Write-Error "No zip artifact found"; exit 1 }
-        Write-Host "Extracting $($zip.FullName)"
-        Expand-Archive -LiteralPath $zip.FullName -DestinationPath './SNES-IDE-out' -Force
-
-#    - name: Run test script (runs INSTALL.bat if present)
-#      shell: pwsh
-#      run: |
-#        python -u tests/test.py > tests.log 2>&1 || $LASTEXITCODE = $LASTEXITCODE
-#        Write-Host "Test run finished with exit code $LASTEXITCODE"
-#        if ($LASTEXITCODE -ne 0) { Write-Host 'Tests failed' ; exit $LASTEXITCODE }
-
-#    - name: Upload test logs (on failure or success)
-#      if: always()
-#      uses: actions/upload-artifact@v4
-#      with:
-#        name: test-logs
-#        path: tests.log
-#        retention-days: 7
 

@@ -1,272 +1,76 @@
-# This script is used to build the project.
-
-from pathlib import Path
+#!/usr/bin/env python3
+import os
+import platform
 import subprocess
-import traceback
-import sys
+import shlex
+from pathlib import Path
+from shutil import copy2
 
-class shutil:
-    """Reimplementation of class shutil to avoid errors in Wine"""
-
-    @staticmethod
-    def copy(src: str|Path, dst: str|Path) -> None:
-        """Reimplementation of method copy using copy command"""
-
-        src, dst = map(lambda x: Path(x).resolve(), (src, dst))
-
-        subprocess.run(f'copy "{src}" "{dst}"', shell=True, check=True)
-
-    @staticmethod
-    def copytree(src: str|Path, dst: str|Path) -> None:
-        """Reimplementation of method copytree using xcopy"""
-
-        src, dst = map(lambda x: Path(x).resolve(), (src, dst))
-
-        cmd = f'xcopy "{src}" "{dst}" /E /I /Y /Q /H'
-        subprocess.run(cmd, shell=True, check=True)
-
-    @staticmethod
-    def rmtree(path: str|Path) -> None:
-        """Reimplementation of method rmtree using rmdir"""
-
-        path = Path(path).resolve()
-
-        subprocess.run(f'rmdir /S /Q "{path}"', shell=True, check=True)
-
-    @staticmethod
-    def move(src: str|Path, dst: str|Path) -> None:
-        """Reimplementation of method move using move command"""
-
-        src, dst = map(lambda x: Path(x).resolve(), (src, dst))
-
-        subprocess.run(f'move "{src}" "{dst}"', shell=True, check=True)
-
-# Copy all files from root to the SNES-IDE-out directory
-
-ROOT = Path(__file__).parent.parent.resolve().absolute()
-
-SNESIDEOUT = ROOT / "SNES-IDE-out"
-
-def clean_all() -> None:
+def list_directory(path: str = ".") -> list[str]:
     """
-    Clean the SNES-IDE-out directory.
+    Platform‑agnostic directory listing.
+    Returns a list of entry names in *path*.
     """
+    return [entry.name for entry in Path(path).iterdir()]
 
-    if SNESIDEOUT.exists():
-        shutil.rmtree(SNESIDEOUT)
-
-    return None
-
-
-def copy_root() -> None:
+def open_file(path: str) -> None:
     """
-    Copy all files from the root directory to the SNES-IDE-out directory.
+    Open *path* with the default application on any OS.
     """
-    SNESIDEOUT.mkdir(exist_ok=True)
+    system = platform.system()
+    if system == "Windows":
+        os.startfile(path)                     # Windows‑only builtin
+    elif system == "Darwin":                   # macOS
+        subprocess.run(["open", path], check=True)
+    else:                                      # Linux / other Unix‑like
+        subprocess.run(["xdg-open", path], check=True)
 
-    for file in ROOT.glob("*"):
-
-        if file.is_dir():
-
-            continue
-
-        shutil.copy(file, SNESIDEOUT / file.name)
-    
-    return None
-
-
-def copy_lib() -> None:
+def ping(host: str, count: int = 4) -> str:
     """
-    Copy all files from the lib directory to the SNES-IDE-out directory.
+    Cross‑platform ping wrapper.
+    Returns the raw stdout of the ping command.
     """
+    param = "-n" if platform.system().lower() == "windows" else "-c"
+    result = subprocess.run(
+        ["ping", param, str(count), host],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.stdout
 
-    (SNESIDEOUT / 'libs').mkdir(exist_ok=True)
-
-    for file in (ROOT / 'libs').rglob("*"):
-
-        if file.is_dir():
-            continue
-
-        rel_path = file.relative_to(ROOT / 'libs')
-        dest_path = SNESIDEOUT / 'libs' / rel_path
-        dest_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy(file, dest_path)
-    
-    return None
-
-
-def copy_docs() -> None:
+def copy_file(src: str, dst: str) -> None:
     """
-    Copy the docs directory to the SNES-IDE-out directory.
+    Copy a file using a pure‑Python implementation.
     """
+    copy2(src, dst)   # preserves metadata and works everywhere
 
-    (SNESIDEOUT / 'docs').mkdir(exist_ok=True)
-
-    for file in (ROOT / 'docs').rglob("*"):
-
-        if file.is_dir():
-            continue
-
-        rel_path = file.relative_to(ROOT / 'docs')
-        dest_path = SNESIDEOUT / 'docs' / rel_path
-        dest_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy(file, dest_path)
-    
-    return None
-
-def copy_bat() -> None:
+def get_environment() -> dict[str, str]:
     """
-    Copy the bat files to the SNES-IDE-out directory.
+    Return a dictionary of the current process environment variables.
     """
+    return dict(os.environ)
 
-    (SNESIDEOUT / 'tools').mkdir(exist_ok=True)
-
-    for file in (ROOT / 'src' / 'tools' ).rglob("*.bat"):
-
-        if file.is_dir():
-
-            continue
-
-        rel_path = file.relative_to(ROOT / 'src' / 'tools')
-
-        dest_path = SNESIDEOUT / 'tools' / rel_path
-
-        dest_path.parent.mkdir(parents=True, exist_ok=True)
-
-        shutil.copy(file, dest_path)
-    
-    return None
-
-def copy_dlls() -> None:
+def run_command(command: str | list[str]) -> tuple[str, str, int]:
     """
-    Copy the dlls from tools dir
+    Execute *command* (string or list) safely on any platform.
+    Returns (stdout, stderr, returncode).
     """
+    args = shlex.split(command) if isinstance(command, str) else command
+    result = subprocess.run(
+        args,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.stdout, result.stderr, result.returncode
 
-    (SNESIDEOUT / 'tools').mkdir(exist_ok=True)
-
-    for file in (ROOT / 'tools').rglob("*.dll"):
-
-        if file.is_dir():
-
-            continue
-
-        rel_path = file.relative_to(ROOT / 'tools')
-
-        dest_path = SNESIDEOUT / 'tools' / rel_path
-
-        dest_path.parent.mkdir(parents=True, exist_ok=True)
-
-        shutil.copy(file, dest_path)
-    
-    return None
-
-def compile() -> None:
-    """
-    Compile the project.
-    """
-
-    src_dir = ROOT / "src"
-
-    # Compile Python files
-
-    for file in src_dir.rglob("*.py"):
-
-        rel_path = file.relative_to(src_dir)
-        out_path = SNESIDEOUT / rel_path.with_suffix(".exe")
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-
-        if len(sys.argv) > 1 and sys.argv[1] == "linux":
-            # On Linux, copy the .py file and create a .bat file to call it with python
-
-            py_out = SNESIDEOUT / rel_path
-            py_out.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy(file, py_out)
-
-            bat_path = out_path.with_suffix(".bat")
-
-            with open(bat_path, "w") as bat_file:
-
-                bat_file.write(f'@echo off\npython "{Path(py_out).resolve().absolute()}" %*\n')
-
-        else:
-
-            from buildModules.buildPy import main as mpy
-
-            out: int = mpy(file, out_path.parent)
-
-            if out != 0:
-                
-                raise Exception(f"ERROR while compiling python files: -{abs(out)}")
-            
-
-    sys.stdout.write("Success compiling Python files.\n")
-    
-def copyTracker() -> None:
-    
-    src_dir = ROOT / "src" / "tools" / "soundsnes" / "tracker"
-    dest_dir = ROOT / "SNES-IDE-out" / "tools" / "soundsnes" / "tracker"
-    
-    shutil.copytree(src_dir, dest_dir)
-
-
-def main() -> int:
-    """
-    Main function to run the build process.
-    """
-
-    try:
-
-        sys.stdout.write("Cleaning SNES-IDE-out...\n")
-        clean_all()
-
-        sys.stdout.write("Copying root files...\n")
-        copy_root()
-
-        sys.stdout.write("Copying libs...\n")
-        copy_lib()
-
-        sys.stdout.write("Copying docs...\n")
-        copy_docs()
-
-        sys.stdout.write("Copying bat files...\n")
-        copy_bat()
-
-        sys.stdout.write("Copying dlls...\n")
-        copy_dlls()
-        
-        sys.stdout.write("Copying tracker...\n")
-        copyTracker()
-
-        sys.stdout.write("Compiling python files...\n")
-        compile()
-
-
-    except subprocess.CalledProcessError as e:
-
-        print("Error while executing command: ", e.__str__(), e.__repr__(), sep="\n\n")
-
-        if e.stdout:
-
-            print("STDOUT:", e.stdout.decode())
-
-        if e.stderr:
-
-            print("STDERR:", e.stderr.decode())
-
-        traceback.print_exception(e)
-        return -1
-    
-
-    except Exception as e:
-
-        traceback.print_exception(e)
-        return -1
-    
-    return 0
-
+# Example usage -------------------------------------------------------
 if __name__ == "__main__":
-    """
-    Run the main function.
-    """
-
-    sys.exit(main())
+    print("Current directory contents:", list_directory())
+    # open_file("example.pdf")               # Uncomment to test opening a file
+    print("Ping google.com:\n", ping("google.com"))
+    # copy_file("src.txt", "dst.txt")        # Uncomment to test copying
+    print("Environment variables:", get_environment())
+    out, err, rc = run_command("python --version")
+    print("Command output:", out.strip(), "Return code:", rc)
