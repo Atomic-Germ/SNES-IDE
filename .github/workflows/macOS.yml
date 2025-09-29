@@ -49,6 +49,19 @@ jobs:
           # Install PowerShell (pwsh) to allow .ps1 script execution on macOS
           brew list powershell || brew install powershell || true
 
+      - name: Install VS Code (CLI) for editor detection
+        run: |
+          # Install the VS Code cask so the 'code' CLI is available for editor integration tests
+          brew list --cask visual-studio-code || brew install --cask visual-studio-code || true
+          # If 'code' isn't on PATH after install, create a safe symlink
+          if ! command -v code >/dev/null 2>&1; then
+            if [ -f "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" ]; then
+              sudo ln -sf "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" /usr/local/bin/code || true
+            fi
+          fi
+          # Show version for debug purposes
+          code --version || true
+
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
