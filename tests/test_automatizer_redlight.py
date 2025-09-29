@@ -12,7 +12,7 @@ def test_automatizer_available_on_macos_linux():
     assert path.exists() or py.exists(), (
         'automatizer not staged for POSIX: CI must place a Python wrapper (automatizer.py) into libs/pvsneslib/devkitsnes/'
     )
-    # Optional smoke-run of the Python script's help
+    # Verify the Python script is syntactically valid (compile-only) to avoid executing GUI/interactive code in CI
     if py.exists():
-        res = subprocess.run(['python3', str(py), '--help'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        assert res.returncode in (0, 2), 'automatizer --help returned unexpected status'
+        res = subprocess.run(['python3', '-m', 'py_compile', str(py)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        assert res.returncode == 0, f"automatizer.py failed to compile: {res.stderr.decode('utf-8', errors='replace')}"
