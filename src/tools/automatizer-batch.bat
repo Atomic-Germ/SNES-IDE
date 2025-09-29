@@ -6,43 +6,66 @@ set /p Speed=Speed: use all SNES speed (FAST) or use the recommended one (SLOW)?
 :: Set the path to the directory above "tools"
 set "toolsDirectory=%~dp0.."
 
-:: Set the full path to automatizer.exe
+:: Candidate paths for automatizer executable/script
 set "automatizerPath=%toolsDirectory%\libs\pvsneslib\devkitsnes\automatizer.exe"
-
-:: Set the path to Python automatizer script
+set "binAutomatizerPath=%toolsDirectory%\libs\pvsneslib\devkitsnes\bin\automatizer.exe"
 set "pyScript=%toolsDirectory%\libs\pvsneslib\devkitsnes\automatizer.py"
 
-:: Check if automatizer.exe exists
-if exist "%automatizerPath%" (
-    :: Change to the user-specified directory
-    cd /d "%userDirectory%"
+:: Helper to run the python fallback with the available python launcher
+:run_python_fallback
+where python >nul 2>nul
+if %errorlevel%==0 (
+    if exist "%pyScript%" (
+        cd /d "%userDirectory%"
+        python "%pyScript%" "%userDirectory%" "%MemoryMap%" "%Speed%"
+        echo Execution successful!
+        goto :eof
+    )
+)
+where py >nul 2>nul
+if %errorlevel%==0 (
+    if exist "%pyScript%" (
+        cd /d "%userDirectory%"
+        py "%pyScript%" "%userDirectory%" "%MemoryMap%" "%Speed%"
+        echo Execution successful!
+        goto :eof
+    )
+)
+:: No python fallback found
+echo Error: automatizer.exe not found and no Python fallback available.
+pause
+goto :eof
 
-    :: Execute automatizer.exe with the userDirectory as an argument
+:: Try explicit automatizer.exe locations first
+if exist "%automatizerPath%" (
+    cd /d "%userDirectory%"
     "%automatizerPath%" "%userDirectory%" "%MemoryMap%" "%Speed%"
     echo Execution successful!
+    goto :eof
+)
 
+if exist "%binAutomatizerPath%" (
+    cd /d "%userDirectory%"
+    "%binAutomatizerPath%" "%userDirectory%" "%MemoryMap%" "%Speed%"
+    echo Execution successful!
+    goto :eof
+)
+
+:: If an 'automatizer' binary/executable is on PATH, try to execute it
+where automatizer >nul 2>nul
+if %errorlevel%==0 (
+    cd /d "%userDirectory%"
+    automatizer "%userDirectory%" "%MemoryMap%" "%Speed%"
+    echo Execution successful!
+    goto :eof
+)
+
+:: Fall back to Python-based script if available
+if exist "%pyScript%" (
+    call :run_python_fallback
 ) else (
-    :: Attempt Python fallback if automatizer.exe not found
-    where python >nul 2>nul
-    if %errorlevel%==0 (
-        if exist "%pyScript%" (
-            cd /d "%userDirectory%"
-            python "%pyScript%" "%userDirectory%" "%MemoryMap%" "%Speed%"
-            echo Execution successful!
-            goto :eof
-        )
-    )
-    where py >nul 2>nul
-    if %errorlevel%==0 (
-        if exist "%pyScript%" (
-            cd /d "%userDirectory%"
-            py "%pyScript%" "%userDirectory%" "%MemoryMap%" "%Speed%"
-            echo Execution successful!
-            goto :eof
-        )
-    )
-
-    echo Error: automatizer.exe not found and no Python fallback available.
+    echo Error: automatizer not found in expected locations.
+    pause
 )
 
 :: Pause at the end of the script
