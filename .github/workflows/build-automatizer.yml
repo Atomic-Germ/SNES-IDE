@@ -26,8 +26,7 @@ jobs:
 
       - name: Build with PyInstaller (onefile)
         run: |
-          mkdir -p build
-          pyinstaller --onefile --name automatizer src/libs/pvsneslib/devkitsnes/automatizer.py
+          python3 scripts/pyinstaller_build_helper.py --src src/libs/pvsneslib/devkitsnes/automatizer.py --name automatizer --onefile || exit 1
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
@@ -54,8 +53,7 @@ jobs:
 
       - name: Build with PyInstaller (onefile)
         run: |
-          mkdir -p build
-          pyinstaller --onefile --name automatizer src/libs/pvsneslib/devkitsnes/automatizer.py
+          python3 scripts/pyinstaller_build_helper.py --src src/libs/pvsneslib/devkitsnes/automatizer.py --name automatizer --onefile || exit 1
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
@@ -82,8 +80,7 @@ jobs:
 
       - name: Build with PyInstaller (onefile)
         run: |
-          mkdir -p build
-          pyinstaller --onefile --name automatizer src/libs/pvsneslib/devkitsnes/automatizer.py
+          python3 scripts/pyinstaller_build_helper.py --src src/libs/pvsneslib/devkitsnes/automatizer.py --name automatizer --onefile || exit 1
 
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4

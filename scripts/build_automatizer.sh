@@ -3,14 +3,11 @@
 # Local helper to build the automatizer using PyInstaller (platform-specific).
 set -euo pipefail
 
-if ! command -v pyinstaller >/dev/null 2>&1; then
-  echo "pyinstaller not found; installing into virtualenv or user site-packages"
-  python3 -m pip install --user pyinstaller
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "python3 not found; aborting"
+  exit 1
 fi
 
-SRC=src/libs/pvsneslib/devkitsnes/automatizer.py
-OUT_DIR=dist
+python3 scripts/pyinstaller_build_helper.py --src src/libs/pvsneslib/devkitsnes/automatizer.py --name automatizer --onefile
 
-pyinstaller --onefile --name automatizer "$SRC"
-
-echo "Build complete; output in $OUT_DIR/"
+echo "Build helper finished; check dist/ for the output binary"
