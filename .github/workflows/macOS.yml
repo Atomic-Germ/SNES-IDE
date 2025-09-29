@@ -218,6 +218,30 @@ jobs:
             fi
           fi
 
+      - name: Stage Python automatizer for POSIX
+        run: |
+          set -e
+          # Ensure the libs path exists
+          mkdir -p libs/pvsneslib/devkitsnes
+          # Copy the Python automatizer implementation from the source tree into the libs area
+          if [ -f src/libs/pvsneslib/devkitsnes/automatizer.py ]; then
+            cp src/libs/pvsneslib/devkitsnes/automatizer.py libs/pvsneslib/devkitsnes/ || true
+            echo "Copied automatizer.py into libs/pvsneslib/devkitsnes/"
+          else
+            echo "Warning: src/libs/pvsneslib/devkitsnes/automatizer.py not found in source tree"
+          fi
+
+          # Copy POSIX wrapper if present in the source tree and make it executable
+          if [ -f src/libs/pvsneslib/devkitsnes/bin/automatizer.sh ]; then
+            mkdir -p libs/pvsneslib/devkitsnes/bin
+            cp src/libs/pvsneslib/devkitsnes/bin/automatizer.sh libs/pvsneslib/devkitsnes/bin/automatizer || true
+            chmod +x libs/pvsneslib/devkitsnes/bin/automatizer || true
+            echo "Staged POSIX wrapper to libs/pvsneslib/devkitsnes/bin/automatizer"
+          fi
+
+          # Ensure python3 is available for the automatizer to run in CI
+          python3 --version || true
+
       - name: Run tests (red-light)
         run: |
           echo "Running intentionally-failing red-light tests for macOS port"

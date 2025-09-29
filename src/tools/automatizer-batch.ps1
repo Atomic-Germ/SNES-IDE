@@ -8,7 +8,7 @@ Prompts the user for inputs and executes automatizer.exe with the same arguments
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 
 # Interactive prompts (explicit -Prompt usage)
-$userDirectory = Read-Host -Prompt 'Enter desired directory (e.g. C:\Users\anonymous\Desktop\game_folder)'
+$userDirectory = Read-Host -Prompt 'Enter desired directory (e.g. C:\\Users\\anonymous\\Desktop\\game_folder)'
 $MemoryMap = Read-Host -Prompt 'Memory map (HIROM or LOROM)'
 $Speed = Read-Host -Prompt 'Speed (FAST or SLOW)'
 
@@ -17,6 +17,7 @@ $toolsDirectory = (Resolve-Path (Join-Path -Path $scriptDir -ChildPath '..')).Pr
 
 # Build the path to automatizer.exe using Path.Combine to avoid escaping issues
 $automatizerPath = [System.IO.Path]::Combine($toolsDirectory, 'libs', 'pvsneslib', 'devkitsnes', 'automatizer.exe')
+$pyScript = [System.IO.Path]::Combine($toolsDirectory, 'libs', 'pvsneslib', 'devkitsnes', 'automatizer.py')
 
 if (Test-Path -Path $automatizerPath) {
     # Change to the user-specified directory
@@ -30,8 +31,25 @@ if (Test-Path -Path $automatizerPath) {
         Write-Host "automatizer exited with code $($proc.ExitCode)"
         exit $proc.ExitCode
     }
+} elseif (Test-Path -Path $pyScript) {
+    # Try to find python or python3
+    $pythonCmd = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $pythonCmd) { $pythonCmd = Get-Command python3 -ErrorAction SilentlyContinue }
+    if ($pythonCmd) {
+        Set-Location -Path $userDirectory
+        $proc = Start-Process -FilePath $pythonCmd.Source -ArgumentList @($pyScript, $userDirectory, $MemoryMap, $Speed) -NoNewWindow -Wait -PassThru
+        if ($proc.ExitCode -eq 0) {
+            Write-Host 'Execution successful!'
+        } else {
+            Write-Host "automatizer (python) exited with code $($proc.ExitCode)"
+            exit $proc.ExitCode
+        }
+    } else {
+        Write-Host 'Error: Python not found to run automatizer.py'
+        exit 1
+    }
 } else {
-    Write-Host 'Error: automatizer.exe not found.'
+    Write-Host 'Error: automatizer.exe not found and no Python fallback available.'
 }
 
 # Pause at the end similar to 'pause' in batch

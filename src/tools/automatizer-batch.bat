@@ -9,6 +9,9 @@ set "toolsDirectory=%~dp0.."
 :: Set the full path to automatizer.exe
 set "automatizerPath=%toolsDirectory%\libs\pvsneslib\devkitsnes\automatizer.exe"
 
+:: Set the path to Python automatizer script
+set "pyScript=%toolsDirectory%\libs\pvsneslib\devkitsnes\automatizer.py"
+
 :: Check if automatizer.exe exists
 if exist "%automatizerPath%" (
     :: Change to the user-specified directory
@@ -19,9 +22,27 @@ if exist "%automatizerPath%" (
     echo Execution successful!
 
 ) else (
+    :: Attempt Python fallback if automatizer.exe not found
+    where python >nul 2>nul
+    if %errorlevel%==0 (
+        if exist "%pyScript%" (
+            cd /d "%userDirectory%"
+            python "%pyScript%" "%userDirectory%" "%MemoryMap%" "%Speed%"
+            echo Execution successful!
+            goto :eof
+        )
+    )
+    where py >nul 2>nul
+    if %errorlevel%==0 (
+        if exist "%pyScript%" (
+            cd /d "%userDirectory%"
+            py "%pyScript%" "%userDirectory%" "%MemoryMap%" "%Speed%"
+            echo Execution successful!
+            goto :eof
+        )
+    )
 
-    echo Error: automatizer.exe not found.
-    
+    echo Error: automatizer.exe not found and no Python fallback available.
 )
 
 :: Pause at the end of the script
