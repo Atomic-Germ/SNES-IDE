@@ -6,6 +6,9 @@ import sys
 import shutil as pyshutil
 import os
 import locale
+import platform
+import urllib.request
+import zipfile
 
 # This is just to make the CI prettier
 try:
@@ -114,20 +117,93 @@ def copy_root() -> None:
 def copy_lib() -> None:
     """
     Copy all files from the lib directory to the SNES-IDE-out directory.
+    Also downloads and unpacks the correct pvsneslib release for the platform into libs/pvsneslib/.
+    Extracts full directories: lib, devkitsnes/bin, devkitsnes/include, devkitsnes/tools.
+    Also copies pvsneslib/pvsneslib_license.txt to libs/pvsneskit/LICENSE.
+    Prints debug info for every extracted and copied file.
+    Handles double pvsneslib prefix in zip members.
     """
+    def strip_prefix(member, prefixes):
+        for prefix in prefixes:
+            if member.startswith(prefix):
+                return Path(member[len(prefix):])
+        return None
 
+    sys_platform = platform.system().lower()
+    if sys_platform == "darwin":
+        url = "https://github.com/alekmaul/pvsneslib/releases/download/4.4.0/pvsneslib_440_64b_darwin.zip"
+    elif sys_platform == "linux":
+        url = "https://github.com/alekmaul/pvsneslib/releases/download/4.4.0/pvsneslib_440_64b_linux.zip"
+    elif sys_platform == "windows":
+        url = "https://github.com/alekmaul/pvsneslib/releases/download/4.4.0/pvsneslib_440_64b_windows.zip"
+    else:
+        print_fail(f"Unsupported platform: {sys_platform}")
+        return None
+
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmpdir:
+        zip_path = Path(tmpdir) / "pvsneslib.zip"
+        print_step(f"Downloading pvsneslib for {sys_platform}...")
+        urllib.request.urlretrieve(url, zip_path)
+        print_ok(f"Downloaded {url}")
+        # Extract full directories and license
+        with zipfile.ZipFile(zip_path, 'r') as z:
+            for member in z.namelist():
+                # Extract lib/
+                rel_lib = strip_prefix(member, ["pvsneslib/lib/", "pvsneslib/pvsneslib/lib/"])
+                if rel_lib is not None and not member.endswith("/"):
+                    dest_path = SNESIDEOUT / "libs" / "pvsneslib" / "lib" / rel_lib
+                    dest_path.parent.mkdir(parents=True, exist_ok=True)
+                    with z.open(member) as src, open(dest_path, "wb") as dst:
+                        dst.write(src.read())
+                    print_step(f"Extracted from zip: {dest_path}")
+                    continue
+                # Extract devkitsnes/bin
+                rel_bin = strip_prefix(member, ["pvsneslib/devkitsnes/bin/", "pvsneslib/pvsneslib/devkitsnes/bin/"])
+                if rel_bin is not None and not member.endswith("/"):
+                    dest_path = SNESIDEOUT / "libs" / "pvsneslib" / "devkitsnes" / "bin" / rel_bin
+                    dest_path.parent.mkdir(parents=True, exist_ok=True)
+                    with z.open(member) as src, open(dest_path, "wb") as dst:
+                        dst.write(src.read())
+                    print_step(f"Extracted from zip: {dest_path}")
+                    continue
+                # Extract devkitsnes/include
+                rel_inc = strip_prefix(member, ["pvsneslib/devkitsnes/include/", "pvsneslib/pvsneslib/devkitsnes/include/"])
+                if rel_inc is not None and not member.endswith("/"):
+                    dest_path = SNESIDEOUT / "libs" / "pvsneslib" / "devkitsnes" / "include" / rel_inc
+                    dest_path.parent.mkdir(parents=True, exist_ok=True)
+                    with z.open(member) as src, open(dest_path, "wb") as dst:
+                        dst.write(src.read())
+                    print_step(f"Extracted from zip: {dest_path}")
+                    continue
+                # Extract devkitsnes/tools
+                rel_tools = strip_prefix(member, ["pvsneslib/devkitsnes/tools/", "pvsneslib/pvsneslib/devkitsnes/tools/"])
+                if rel_tools is not None and not member.endswith("/"):
+                    dest_path = SNESIDEOUT / "libs" / "pvsneslib" / "tools" / rel_tools
+                    dest_path.parent.mkdir(parents=True, exist_ok=True)
+                    with z.open(member) as src, open(dest_path, "wb") as dst:
+                        dst.write(src.read())
+                    print_step(f"Extracted from zip: {dest_path}")
+                    continue
+                # Extract license
+                if member.endswith("pvsneslib_license.txt"):
+                    dest_path = SNESIDEOUT / "libs" / "pvsneskit" / "LICENSE"
+                    dest_path.parent.mkdir(parents=True, exist_ok=True)
+                    with z.open(member) as src, open(dest_path, "wb") as dst:
+                        dst.write(src.read())
+                    print_step(f"Extracted from zip: {dest_path}")
+        print_ok("Unpacked pvsneslib lib, devkitsnes/bin, devkitsnes/include, devkitsnes/tools, and LICENSE into SNES-IDE-out/libs/pvsneslib/ and SNES-IDE-out/libs/pvsneskit/")
+
+    # Also copy any local files from libs as before
     (SNESIDEOUT / 'libs').mkdir(exist_ok=True)
-
     for file in (ROOT / 'libs').rglob("*"):
-
         if file.is_dir():
             continue
-
         rel_path = file.relative_to(ROOT / 'libs')
         dest_path = SNESIDEOUT / 'libs' / rel_path
         dest_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(file, dest_path)
-    
+        print_step(f"Copied local file: {file} -> {dest_path}")
     return None
 
 
@@ -152,7 +228,7 @@ def copy_docs() -> None:
 
 def copy_bat() -> None:
     """
-    Copy the bat files to the SNES-IDE-out directory (Windows-only).
+    Copy the bat files to the SNES-IDE-out directory.
     """
 
     (SNESIDEOUT / 'tools').mkdir(exist_ok=True)
@@ -169,59 +245,6 @@ def copy_bat() -> None:
 
         dest_path.parent.mkdir(parents=True, exist_ok=True)
 
-        shutil.copy(file, dest_path)
-    
-    return None
-
-def copy_sh() -> None:
-    """
-    Generate simple shell script wrappers for each .bat file so macOS packaging contains usable placeholders.
-    """
-
-    (SNESIDEOUT / 'tools').mkdir(exist_ok=True)
-
-    for file in (ROOT / 'src' / 'tools').rglob("*.bat"):
-
-        if file.is_dir():
-            continue
-
-        rel_path = file.relative_to(ROOT / 'src' / 'tools')
-        # Create a .sh wrapper with same basename
-        out_name = rel_path.with_suffix('.sh')
-        dest_path = SNESIDEOUT / 'tools' / out_name
-        dest_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Very small wrapper that warns about platform differences and exits safely.
-        wrapper_content = f"""#!/usr/bin/env bash
-# Generated wrapper for {file.name}
-echo "This is a generated macOS wrapper for {file.name}."
-echo "The original Windows script may call Windows-only binaries; edit this script to adapt it for macOS."
-exit 0
-"""
-
-        with open(dest_path, 'w') as f:
-            f.write(wrapper_content)
-
-        # Make executable
-        os.chmod(dest_path, 0o755)
-
-    return None
-
-def copy_dylibs() -> None:
-    """
-    Copy macOS dynamic libraries (.dylib) from tools if present. This is a no-op if none exist.
-    """
-
-    (SNESIDEOUT / 'tools').mkdir(exist_ok=True)
-
-    for file in (ROOT / 'tools').rglob("*.dylib"):
-
-        if file.is_dir():
-            continue
-
-        rel_path = file.relative_to(ROOT / 'tools')
-        dest_path = SNESIDEOUT / 'tools' / rel_path
-        dest_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(file, dest_path)
     
     return None
@@ -264,38 +287,29 @@ def compile() -> None:
         out_path = SNESIDEOUT / rel_path.with_suffix(".exe")
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # On Linux and macOS, don't build Windows .exe; instead copy the .py file and create an executable wrapper
-        if PLATFORM_MODE in ("linux", "mac", "macos"):
+        if len(sys.argv) > 1 and sys.argv[1] == "linux":
             # On Linux, copy the .py file and create a .bat file to call it with python
 
             py_out = SNESIDEOUT / rel_path
             py_out.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(file, py_out)
 
-            if PLATFORM_MODE in ("linux",):
-                # Create a .bat-like shell wrapper for linux called .sh
-                wrapper_path = out_path.with_suffix(".sh")
-                with open(wrapper_path, "w") as wrapper_file:
-                    wrapper_file.write(f'#!/usr/bin/env bash\npython3 "{Path(py_out).resolve().absolute()}" "$@"\n')
-                os.chmod(wrapper_path, 0o755)
+            bat_path = out_path.with_suffix(".bat")
 
-            else:
-                # macOS: create a no-extension executable wrapper that calls python3
-                wrapper_path = out_path.with_suffix("")
-                with open(wrapper_path, "w") as wrapper_file:
-                    wrapper_file.write(f'#!/usr/bin/env bash\npython3 "{Path(py_out).resolve().absolute()}" "$@"\n')
-                os.chmod(wrapper_path, 0o755)
- 
+            with open(bat_path, "w") as bat_file:
+
+                bat_file.write(f'@echo off\npython "{Path(py_out).resolve().absolute()}" %*\n')
+
         else:
 
-             from buildModules.buildPy import main as mpy
+            from buildModules.buildPy import main as mpy
 
-             out: int = mpy(file, out_path.parent)
+            out: int = mpy(file, out_path.parent)
 
-             if out != 0:
-                 
-                 raise Exception(f"ERROR while compiling python files: -{abs(out)}")
-             
+            if out != 0:
+                
+                raise Exception(f"ERROR while compiling python files: -{abs(out)}")
+            
 
     sys.stdout.write("Success compiling Python files.\n")
     
@@ -322,29 +336,16 @@ def main() -> int:
     """
     Main function to run the build process.
     """
-    # Choose platform-specific steps
     steps = [
         ("Cleaning SNES-IDE-out", clean_all),
         ("Copying root files", copy_root),
         ("Copying libs", copy_lib),
         ("Copying docs", copy_docs),
+        ("Copying bat files", copy_bat),
+        ("Copying dlls", copy_dlls),
         ("Copying tracker", copyTracker),
+        ("Compiling python files", compile),
     ]
-
-    # Append platform-specific copy steps
-    if PLATFORM_MODE in ("mac", "macos"):
-        steps += [
-            ("Generating shell wrappers for tools", copy_sh),
-            ("Copying macOS dynamic libraries", copy_dylibs),
-        ]
-    else:
-        steps += [
-            ("Copying bat files", copy_bat),
-            ("Copying dlls", copy_dlls),
-        ]
-
-    # Always compile (compile() will branch itself for linux/mac)
-    steps.append(("Compiling python files", compile))
     failed_steps = []
     for name, func in steps:
         if not run_step(name, func):
