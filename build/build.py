@@ -505,3 +505,7 @@ def main() -> int:
     print_summary(success, failed_steps)
 
     return 0 if success else 1
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(main())
