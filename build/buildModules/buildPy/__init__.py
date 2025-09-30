@@ -3,33 +3,53 @@ import subprocess
 import sys
 
 class shutil:
-    """Reimplementation of class shutil to avoid errors in Wine"""
+    """A small cross-platform wrapper that uses the Python stdlib for file operations.
+
+    This replaces previous implementations which invoked Windows commands (copy,
+    xcopy, rmdir) and fails on POSIX systems. Using the stdlib guarantees the
+    same behavior on macOS/Linux and Windows where Python is available.
+    """
 
     @staticmethod
-    def copy(src: str|Path, dst: str|Path) -> None:
-        """Reimplementation of method copy using copy command"""
-
-        subprocess.run(f'copy "{src}" "{dst}"', shell=True, check=True)
-
-    @staticmethod
-    def copytree(src: str|Path, dst: str|Path) -> None:
-        """Reimplementation of method copytree using xcopy"""
-
-        cmd = f'xcopy "{src}" "{dst}" /E /I /Y /Q /H'
-        subprocess.run(cmd, shell=True, check=True)
+    def copy(src: str | Path, dst: str | Path) -> None:
+        import shutil as _pyshutil
+        src, dst = map(lambda x: str(Path(x)), (src, dst))
+        # Ensure parent exists for destination
+        Path(dst).parent.mkdir(parents=True, exist_ok=True)
+        _pyshutil.copy2(src, dst)
 
     @staticmethod
-    def rmtree(path: str|Path) -> None:
-        """Reimplementation of method rmtree using rmdir"""
-
-        subprocess.run(f'rmdir /S /Q "{path}"', shell=True, check=True)
+    def copytree(src: str | Path, dst: str | Path) -> None:
+        import shutil as _pyshutil
+        src, dst = map(lambda x: str(Path(x)), (src, dst))
+        # Use dirs_exist_ok where available (Py3.8+); emulate otherwise
+        try:
+            _pyshutil.copytree(src, dst, dirs_exist_ok=True)
+        except TypeError:
+            # Fallback for older Python versions: create dst then copy files
+            Path(dst).mkdir(parents=True, exist_ok=True)
+            for p in Path(src).rglob('*'):
+                rel = p.relative_to(src)
+                dest = Path(dst) / rel
+                if p.is_dir():
+                    dest.mkdir(parents=True, exist_ok=True)
+                else:
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    _pyshutil.copy2(str(p), str(dest))
 
     @staticmethod
-    def move(src: str|Path, dst: str|Path) -> None:
-        """Cross-platform move using Python's shutil.move"""
-        import shutil as pyshutil
-        src, dst = map(str, (src, dst))
-        pyshutil.move(src, dst)
+    def rmtree(path: str | Path) -> None:
+        import shutil as _pyshutil
+        p = Path(path)
+        if p.exists():
+            _pyshutil.rmtree(str(p))
+
+    @staticmethod
+    def move(src: str | Path, dst: str | Path) -> None:
+        import shutil as _pyshutil
+        src, dst = map(lambda x: str(Path(x)), (src, dst))
+        Path(dst).parent.mkdir(parents=True, exist_ok=True)
+        _pyshutil.move(src, dst)
 
 def ensure_pip() -> bool:
     """

@@ -6,24 +6,24 @@ import webbrowser
 import atexit
 import sys
 import os
+import shutil as _pyshutil
 
 class shutil:
-    """Cross-platform shutil wrapper used by the gfx tools.
+    """Platform-aware minimal shutil replacement used by the small tools.
 
-    Avoid invoking Windows shell commands; use the Python stdlib so tools are
-    portable across macOS/Linux/Windows.
+    Uses os.name at runtime to select Windows shell commands or Python stdlib
+    behaviors so that the release works reliably on macOS.
     """
+    import os as _os
 
     @staticmethod
-    def copy(src: str | Path, dst: str | Path) -> None:
-        import shutil as _pyshutil
+    def copy(src: str|Path, dst: str|Path) -> None:
         src, dst = map(lambda x: Path(x).resolve(), (src, dst))
         Path(dst).parent.mkdir(parents=True, exist_ok=True)
         _pyshutil.copy2(str(src), str(dst))
 
     @staticmethod
-    def copytree(src: str | Path, dst: str | Path) -> None:
-        import shutil as _pyshutil
+    def copytree(src: str|Path, dst: str|Path) -> None:
         src, dst = map(lambda x: Path(x).resolve(), (src, dst))
         try:
             _pyshutil.copytree(str(src), str(dst), dirs_exist_ok=True)
@@ -39,15 +39,13 @@ class shutil:
                     _pyshutil.copy2(str(p), str(dest))
 
     @staticmethod
-    def rmtree(path: str | Path) -> None:
-        import shutil as _pyshutil
+    def rmtree(path: str|Path) -> None:
         p = Path(path).resolve()
         if p.exists():
             _pyshutil.rmtree(str(p))
 
     @staticmethod
-    def move(src: str | Path, dst: str | Path) -> None:
-        import shutil as _pyshutil
+    def move(src: str|Path, dst: str|Path) -> None:
         src, dst = map(lambda x: Path(x).resolve(), (src, dst))
         Path(dst).parent.mkdir(parents=True, exist_ok=True)
         _pyshutil.move(str(src), str(dst))

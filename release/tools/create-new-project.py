@@ -5,19 +5,13 @@ import subprocess
 import sys
 
 class shutil:
-    """Cross-platform shutil wrapper for the small tools.
-
-    Previously this module invoked Windows-specific shell commands (copy, xcopy,
-    rmdir, move) which fails on POSIX. Use the Python stdlib implementations so
-    the same tool works when run on macOS or Linux.
-    """
+    """Cross-platform shutil wrapper for the release copy of create-new-project."""
 
     @staticmethod
     def copy(src: str | Path, dst: str | Path) -> None:
         import shutil as _pyshutil
         src, dst = map(lambda x: Path(x).resolve(), (src, dst))
-        dst_parent = Path(dst).parent
-        dst_parent.mkdir(parents=True, exist_ok=True)
+        Path(dst).parent.mkdir(parents=True, exist_ok=True)
         _pyshutil.copy2(str(src), str(dst))
 
     @staticmethod
@@ -27,7 +21,6 @@ class shutil:
         try:
             _pyshutil.copytree(str(src), str(dst), dirs_exist_ok=True)
         except TypeError:
-            # Fallback for older Python versions
             Path(dst).mkdir(parents=True, exist_ok=True)
             for p in Path(src).rglob('*'):
                 rel = p.relative_to(src)
