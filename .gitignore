@@ -48,3 +48,4 @@ vs_build_tools/*
 .installed
 *.desktop
 *.deb
+release

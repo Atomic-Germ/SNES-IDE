@@ -8,40 +8,48 @@ import sys
 import os
 
 class shutil:
-    """Reimplementation of class shutil to avoid errors in Wine"""
+    """Platform-aware minimal shutil replacement used by the small tools.
+
+    On Windows the original implementation used external commands (copy, xcopy,
+    rmdir, move). For POSIX systems we prefer the cross-platform Python
+    stdlib `shutil` functions so the tools work in macOS/Linux releases.
+    """
+
+    import platform as _platform
+    import shutil as _pyshutil
 
     @staticmethod
     def copy(src: str|Path, dst: str|Path) -> None:
-        """Reimplementation of method copy using copy command"""
-
         src, dst = map(lambda x: Path(x).resolve(), (src, dst))
-
-        subprocess.run(f'copy "{src}" "{dst}"', shell=True, check=True)
+        if _platform.system().lower() == "windows":
+            subprocess.run(f'copy "{src}" "{dst}"', shell=True, check=True)
+        else:
+            _pyshutil.copy2(src, dst)
 
     @staticmethod
     def copytree(src: str|Path, dst: str|Path) -> None:
-        """Reimplementation of method copytree using xcopy"""
-
         src, dst = map(lambda x: Path(x).resolve(), (src, dst))
-
-        cmd = f'xcopy "{src}" "{dst}" /E /I /Y /Q /H'
-        subprocess.run(cmd, shell=True, check=True)
+        if _platform.system().lower() == "windows":
+            cmd = f'xcopy "{src}" "{dst}" /E /I /Y /Q /H'
+            subprocess.run(cmd, shell=True, check=True)
+        else:
+            _pyshutil.copytree(src, dst, dirs_exist_ok=True)
 
     @staticmethod
     def rmtree(path: str|Path) -> None:
-        """Reimplementation of method rmtree using rmdir"""
-
         path = Path(path).resolve()
-
-        subprocess.run(f'rmdir /S /Q "{path}"', shell=True, check=True)
+        if _platform.system().lower() == "windows":
+            subprocess.run(f'rmdir /S /Q "{path}"', shell=True, check=True)
+        else:
+            _pyshutil.rmtree(path)
 
     @staticmethod
     def move(src: str|Path, dst: str|Path) -> None:
-        """Reimplementation of method move using move command"""
-
         src, dst = map(lambda x: Path(x).resolve(), (src, dst))
-
-        subprocess.run(f'move "{src}" "{dst}"', shell=True, check=True)
+        if _platform.system().lower() == "windows":
+            subprocess.run(f'move "{src}" "{dst}"', shell=True, check=True)
+        else:
+            _pyshutil.move(src, dst)
 
 
 class PathManager:
