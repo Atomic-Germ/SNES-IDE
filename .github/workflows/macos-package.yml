@@ -13,6 +13,7 @@ jobs:
     name: Build for ${{ matrix.arch }}
     runs-on: macos-latest
     strategy:
+      fail-fast: false
       matrix:
         arch: [arm64, x86_64]
     env:
@@ -53,13 +54,33 @@ jobs:
             python3 build/build.py mac
           fi
 
+      - name: Debug SNES-IDE-out contents
+        run: |
+          echo "PWD: $(pwd)"
+          echo "Listing repo top-level:"; ls -la
+          if [ -d SNES-IDE-out ]; then
+            echo "SNES-IDE-out exists. Permissions and top-level listing:";
+            find SNES-IDE-out -maxdepth 2 -ls || true
+          else
+            echo "SNES-IDE-out is missing. Build step may have failed or created the output in a different location.";
+            echo "Listing current dir for debugging:"; ls -la || true
+            exit 1
+          fi
+
       - name: Create artifact archive
         run: |
           TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
           ART="sneside-macos-${{ matrix.arch }}-${TIMESTAMP}.zip"
-          cd SNES-IDE-out
-          zip -r "../${ART}" .
-          cd ..
+          if [ -d SNES-IDE-out ]; then
+            cd SNES-IDE-out
+            echo "Creating archive ${ART} from SNES-IDE-out"
+            zip -r "../${ART}" .
+            cd ..
+            ls -lah "${ART}" || true
+          else
+            echo "SNES-IDE-out missing; cannot create artifact archive"
+            exit 1
+          fi
           ls -lah
 
       - name: Try bsnes-plus build (non-fatal)
