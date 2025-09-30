@@ -2,6 +2,8 @@ from pathlib import Path
 from array import array
 import subprocess
 import sys
+import platform
+import shutil as _shutil
 
 class SnesIde(object):
 
@@ -19,7 +21,14 @@ class SnesIde(object):
             **kwargs: Arbitrary keyword arguments.
         """
 
-        self.path: Path = Path.home() / "Desktop" / "snes-ide"
+        # Prefer the packaged tools directory when running from the bundle.
+        base = self.get_executable_path()
+        packaged_tools = base / "tools"
+        if packaged_tools.exists():
+            self.path: Path = packaged_tools
+        else:
+            # Fallback for development mode / manual installs
+            self.path: Path = Path.home() / "Desktop" / "snes-ide"
 
         self.options: array = array("B", (0, 1, 2, 3, 4, 5, 6))
 
@@ -40,7 +49,45 @@ class SnesIde(object):
             subprocess.CalledProcessError: If the command returns a non-zero exit status.
         """
 
-        subprocess.run(["cmd", "/c", str(file)], check=True)
+        system = platform.system().lower()
+        p = Path(file)
+        # Windows: use cmd
+        if system == 'windows':
+            subprocess.run(["cmd", "/c", str(p)], check=True)
+            return
+
+        # Non-Windows: prefer shell scripts (.sh) or native executables
+        # If a .sh counterpart exists, run it. If the target is an .exe,
+        # try to run the native counterpart (same name without .exe) or
+        # use wine if available.
+        if p.suffix == '.bat':
+            sh = p.with_suffix('.sh')
+            if sh.exists():
+                subprocess.run(["sh", str(sh)], check=True)
+                return
+            # try executable without extension
+            native = p.with_suffix('')
+            if native.exists():
+                subprocess.run([str(native)], check=True)
+                return
+            # try wine (disabled for mac builds)
+            # wine = _shutil.which('wine') or _shutil.which('wine64')
+            # if wine:
+            #     subprocess.run([wine, str(p)], check=True)
+            #     return
+            raise FileNotFoundError(f"No macOS/Linux wrapper found for {p}. Create a .sh wrapper or install the macOS native binary. See docs/PORTING_MAC.md.")
+
+        # If file is executable or script, run directly
+        if p.exists():
+            # Make sure it's executable on POSIX
+            try:
+                p.chmod(p.stat().st_mode | 0o111)
+            except Exception:
+                pass
+            subprocess.run([str(p)], check=True)
+            return
+
+        raise FileNotFoundError(f"File to execute not found: {p}")
 
 
     def execute_bat(self, option: int) -> int:
@@ -64,23 +111,36 @@ class SnesIde(object):
             subprocess.CalledProcessError: If the batch file execution fails.
         """
 
-        match option:
+        # Map options to script base names
+        mapping = {
+            0: 'create-new-project',
+            1: 'text-editor',
+            2: 'audio-tools',
+            3: 'graphic-tools',
+            4: 'other-tools',
+            5: 'compiler',
+            6: 'emulator'
+        }
 
-            case 0:   self.run(self.path / "create-new-project.bat"); return 0
+        if option not in mapping:
+            return -1
 
-            case 1:   self.run(self.path / "text-editor.bat"); return 0
+        base_name = mapping[option]
 
-            case 2:   self.run(self.path / "audio-tools.bat"); return 0
+        # Candidates to try, in order: .bat (Windows), .sh (POSIX), no extension (native)
+        candidates = [self.path / (base_name + ext) for ext in ('.bat', '.sh', '')]
 
-            case 3:   self.run(self.path / "graphic-tools.bat"); return 0
+        for candidate in candidates:
+            if candidate.exists():
+                try:
+                    self.run(candidate)
+                    return 0
+                except Exception as e:
+                    print(f"Error executing {candidate}: {e}")
+                    return -1
 
-            case 4:   self.run(self.path / "other-tools.bat"); return 0
-
-            case 5:   self.run(self.path / "compiler.bat"); return 0
-
-            case 6:   self.run(self.path / "emulator.bat"); return 0
-
-            case _:   return -1
+        print(f"No suitable script found for option {option}. Looked for: {', '.join(str(p) for p in candidates)}")
+        return -1
     
 
     def give_options(self) -> int:
