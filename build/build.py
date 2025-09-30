@@ -110,7 +110,26 @@ def copy_root() -> None:
 
             continue
 
-        shutil.copy(file, SNESIDEOUT / file.name)
+        # For POSIX builds, ensure shipped Python scripts are executable and
+        # contain a proper shebang so users can run them directly.
+        if file.suffix == ".py" and platform.system().lower() != "windows":
+            dest = SNESIDEOUT / file.name
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            # Prepend a portable shebang while preserving file contents
+            try:
+                with open(file, "rb") as srcf, open(dest, "wb") as dstf:
+                    dstf.write(b"#!/usr/bin/env python3\n")
+                    dstf.write(srcf.read())
+                try:
+                    dest.chmod(dest.stat().st_mode | 0o111)
+                except Exception:
+                    pass
+                print_step(f"Copied python script with shebang: {file} -> {dest}")
+            except Exception:
+                # Fallback to plain copy on error
+                shutil.copy(file, SNESIDEOUT / file.name)
+        else:
+            shutil.copy(file, SNESIDEOUT / file.name)
     
     return None
 
