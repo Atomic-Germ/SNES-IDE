@@ -35,7 +35,7 @@ Emulator strategy (bsnes replacement)
 SchismTracker
 - macOS builds are available at the official release URL:
   - https://github.com/schismtracker/schismtracker/releases/tag/20250825
-- Place the mac binary in `SNES-IDE-out/tools/soundsnes/tracker/` or `libs/schismtracker/` and the provided `schismtracker.sh` will prefer it.
+- Place the mac binary in `SNES-IDE-out/tools/soundsnes/tracker/` or `libs/schismtracker/` and the `schismtracker.sh` wrapper will prefer it.
 
 Where to place mac-native binaries
 - `libs/<tool>/darwin/` → for vendored mac native libs and binaries.

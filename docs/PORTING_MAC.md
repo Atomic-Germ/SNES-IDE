@@ -30,42 +30,6 @@ What remains manual / follow-ups
 
 - If you want CI to produce real macOS native executables, add a new build module that invokes PyInstaller with macOS targets or uses a proper macOS build pipeline.
 
-# Additions: recommended emulator path and third-party binary instructions
-
-## Emulator recommendation
-- Mednafen is the recommended macOS replacement for bsnes for now. Install via Homebrew:
-
-```sh
-brew install mednafen
-```
-
-- The project also supports experimenting with bsnes-plus patches. Use the helper script `scripts/prepare-bsnes-plus-patch.sh` to prepare a local workspace that clones `devinacker/bsnes-plus` and adds the `Optiroc` repository for reference.
-
-## SchismTracker
-- Official macOS builds are available for SchismTracker. Download from:
-  - https://github.com/schismtracker/schismtracker/releases/tag/20250825
-- Place the binary in `SNES-IDE-out/tools/soundsnes/tracker/` or `libs/schismtracker/darwin/` and the `schismtracker.sh` wrapper will find it.
-
-## Native libraries
-- Use Homebrew for SDL2 and libogg:
-
-```sh
-brew install sdl2 libogg
-```
-
-- For FLAC in a framework form suitable for bundling in an app, consider the libflac-framework bundle:
-  - https://github.com/nbonamy/libflac-framework/releases/tag/1.4.2-2
-
-## Tooling & architecture notes
-- We will not support Wine on macOS. Windows-only binaries must be replaced or have native macOS equivalents.
-- For M8TE we will ship a no-op stub on macOS; the file `src/tools/M8TE.sh` exists and prints an explanatory message.
-
-## Packaging notes
-- The initial macOS distribution will be an unsigned DMG. Users will be instructed how to open unsigned apps via the Finder (right-click -> Open) or `spctl` commands.
-
-## Contributing macOS-native binaries
-- Place built or downloaded mac binaries under `libs/<tool>/darwin/`. The build system will copy them for mac builds and exclude Windows artifacts from mac packages.
-
 How to test locally
 
 1. On macOS with Python 3.13 installed, run:
