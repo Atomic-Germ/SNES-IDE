@@ -26,9 +26,10 @@ class shutil:
 
     @staticmethod
     def move(src: str|Path, dst: str|Path) -> None:
-        """Reimplementation of method move using move command"""
-
-        subprocess.run(f'move "{src}" "{dst}"', shell=True, check=True)
+        """Cross-platform move using Python's shutil.move"""
+        import shutil as pyshutil
+        src, dst = map(str, (src, dst))
+        pyshutil.move(src, dst)
 
 def ensure_pip() -> bool:
     """
@@ -81,7 +82,9 @@ def main(python_file: str | Path, target_dir: str | Path) -> int:
 
         return 1
 
-    exe_name = python_file.stem + ".exe"
+    import platform
+    exe_ext = ".exe" if platform.system().lower() == "windows" else ""
+    exe_name = python_file.stem + exe_ext
     icon_path = (Path(__file__).parent.parent.parent.parent / "assets" / "icons" / "icon.ico").absolute()
 
     print(f"Converting '{python_file}' to '{exe_name}'...")
