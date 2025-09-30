@@ -1,0 +1,95 @@
+name: macOS Packaging
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - macos/**
+
+jobs:
+  build-macos:
+    name: Build for ${{ matrix.arch }}
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [arm64, x86_64]
+    env:
+      BUILD_ARCH: "${{ matrix.arch }}"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f build-requirements.txt ]; then
+            pip install -r build-requirements.txt || true
+          fi
+
+      - name: Install macOS packages via Homebrew
+        run: |
+          brew update
+          brew install sdl2 libogg flac mednafen cmake ninja create-dmg || true
+
+      - name: Make scripts and wrappers executable
+        run: |
+          chmod +x scripts/*.sh || true
+          chmod +x src/tools/*.sh || true
+
+      - name: Run macOS build
+        run: |
+          echo "Building for ARCH=${BUILD_ARCH}"
+          if [ "${BUILD_ARCH}" = "x86_64" ]; then
+            # Try to run under Rosetta if available
+            arch -x86_64 python3 build/build.py mac || python3 build/build.py mac
+          else
+            python3 build/build.py mac
+          fi
+
+      - name: Create artifact archive
+        run: |
+          TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
+          ART="sneside-macos-${{ matrix.arch }}-${TIMESTAMP}.zip"
+          cd SNES-IDE-out
+          zip -r "../${ART}" .
+          cd ..
+          ls -lah
+
+      - name: Try bsnes-plus build (non-fatal)
+        continue-on-error: true
+        run: |
+          chmod +x scripts/try-bsnes-plus-build.sh || true
+          ./scripts/try-bsnes-plus-build.sh || true
+
+      - name: Upload bsnes-plus logs (if any)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bsnes-plus-logs-${{ matrix.arch }}
+          path: |
+            bsnes-plus-build.log
+            bsnes-plus-build/**
+
+      - name: Create unsigned DMG
+        run: |
+          mkdir -p release
+          DMG_NAME="SNES-IDE-${{ matrix.arch }}.dmg"
+          hdiutil create -volname "SNES IDE" -srcfolder SNES-IDE-out -ov -format UDZO "release/${DMG_NAME}"
+          ls -lah release
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sneside-macos-${{ matrix.arch }}
+          path: |
+            sneside-macos-${{ matrix.arch }}-*.zip
+            release/*.dmg
+
+      - name: Show output tree (debug)
+        run: |
+          find SNES-IDE-out -maxdepth 3 -type f -ls | sed -n '1,200p'
