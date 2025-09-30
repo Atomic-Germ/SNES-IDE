@@ -5,6 +5,8 @@ on:
   push:
     branches:
       - macos/**
+      - develop/macos
+      - develop/macos/**
 
 jobs:
   build-macos:

@@ -2,7 +2,7 @@ name: macOS (Build and Test)
 
 on:
   push:
-    branches: [ macos/** ]
+    branches: [ macos/**, develop/macos, develop/macos/** ]
     tags: [ 'v*' ]
   pull_request:
     branches: [ main, develop ]
