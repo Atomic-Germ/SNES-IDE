@@ -1,0 +1,18 @@
+﻿2025-09-30T22:11:36.9521300Z ##[group]Run echo "Building for ARCH=${BUILD_ARCH}"
+2025-09-30T22:11:36.9521790Z [36;1mecho "Building for ARCH=${BUILD_ARCH}"[0m
+2025-09-30T22:11:36.9522120Z [36;1mif [ "${BUILD_ARCH}" = "x86_64" ]; then[0m
+2025-09-30T22:11:36.9522520Z [36;1m  # Try to run under Rosetta if available[0m
+2025-09-30T22:11:36.9522970Z [36;1m  arch -x86_64 python3 build/build.py mac || python3 build/build.py mac[0m
+2025-09-30T22:11:36.9523340Z [36;1melse[0m
+2025-09-30T22:11:36.9523650Z [36;1m  python3 build/build.py mac[0m
+2025-09-30T22:11:36.9523910Z [36;1mfi[0m
+2025-09-30T22:11:36.9564110Z shell: /bin/bash -e {0}
+2025-09-30T22:11:36.9564360Z env:
+2025-09-30T22:11:36.9564560Z   BUILD_ARCH: arm64
+2025-09-30T22:11:36.9565500Z   pythonLocation: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:11:36.9565950Z   PKG_CONFIG_PATH: /Users/runner/hostedtoolcache/Python/3.11.9/arm64/lib/pkgconfig
+2025-09-30T22:11:36.9566480Z   Python_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:11:36.9567060Z   Python2_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:11:36.9567550Z   Python3_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:11:36.9567870Z ##[endgroup]
+2025-09-30T22:11:37.0274680Z Building for ARCH=arm64

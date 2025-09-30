@@ -1,0 +1,395 @@
+﻿2025-09-30T22:10:38.6160530Z Current runner version: '2.328.0'
+2025-09-30T22:10:38.6177940Z ##[group]Runner Image Provisioner
+2025-09-30T22:10:38.6178600Z Hosted Compute Agent
+2025-09-30T22:10:38.6178940Z Version: 20250912.392
+2025-09-30T22:10:38.6179310Z Commit: d921fda672a98b64f4f82364647e2f10b2267d0b
+2025-09-30T22:10:38.6179740Z Build Date: 2025-09-12T15:23:14Z
+2025-09-30T22:10:38.6180110Z ##[endgroup]
+2025-09-30T22:10:38.6180450Z ##[group]Operating System
+2025-09-30T22:10:38.6180840Z macOS
+2025-09-30T22:10:38.6181480Z 15.6.1
+2025-09-30T22:10:38.6181780Z 24G90
+2025-09-30T22:10:38.6182060Z ##[endgroup]
+2025-09-30T22:10:38.6182360Z ##[group]Runner Image
+2025-09-30T22:10:38.6182690Z Image: macos-15-arm64
+2025-09-30T22:10:38.6183010Z Version: 20250922.2357
+2025-09-30T22:10:38.6183680Z Included Software: https://github.com/actions/runner-images/blob/macos-15-arm64/20250922.2357/images/macos/macos-15-arm64-Readme.md
+2025-09-30T22:10:38.6184840Z Image Release: https://github.com/actions/runner-images/releases/tag/macos-15-arm64%2F20250922.2357
+2025-09-30T22:10:38.6185500Z ##[endgroup]
+2025-09-30T22:10:38.6187140Z ##[group]GITHUB_TOKEN Permissions
+2025-09-30T22:10:38.6188550Z Actions: write
+2025-09-30T22:10:38.6188870Z Attestations: write
+2025-09-30T22:10:38.6189180Z Checks: write
+2025-09-30T22:10:38.6189480Z Contents: write
+2025-09-30T22:10:38.6189790Z Deployments: write
+2025-09-30T22:10:38.6190120Z Discussions: write
+2025-09-30T22:10:38.6190510Z Issues: write
+2025-09-30T22:10:38.6190820Z Metadata: read
+2025-09-30T22:10:38.6191120Z Models: read
+2025-09-30T22:10:38.6191420Z Packages: write
+2025-09-30T22:10:38.6191720Z Pages: write
+2025-09-30T22:10:38.6192050Z PullRequests: write
+2025-09-30T22:10:38.6192440Z RepositoryProjects: write
+2025-09-30T22:10:38.6192800Z SecurityEvents: write
+2025-09-30T22:10:38.6193290Z Statuses: write
+2025-09-30T22:10:38.6193650Z ##[endgroup]
+2025-09-30T22:10:38.6195790Z Secret source: Actions
+2025-09-30T22:10:38.6196340Z Prepare workflow directory
+2025-09-30T22:10:38.6812140Z Prepare all required actions
+2025-09-30T22:10:38.6897170Z Getting action download info
+2025-09-30T22:10:39.0458400Z Download action repository 'actions/checkout@v4' (SHA:08eba0b27e820071cde6df949e0beb9ba4906955)
+2025-09-30T22:10:39.5037340Z Download action repository 'actions/setup-python@v4' (SHA:7f4fc3e22c37d6ff65e88745f38bd3157c663f7c)
+2025-09-30T22:10:39.6701430Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2025-09-30T22:10:39.9265300Z Complete job name: Build for x86_64
+2025-09-30T22:10:39.9799600Z ##[group]Run actions/checkout@v4
+2025-09-30T22:10:39.9800140Z with:
+2025-09-30T22:10:39.9800440Z   repository: Atomic-Germ/SNES-IDE
+2025-09-30T22:10:39.9800990Z   token: ***
+2025-09-30T22:10:39.9801260Z   ssh-strict: true
+2025-09-30T22:10:39.9801580Z   ssh-user: git
+2025-09-30T22:10:39.9801880Z   persist-credentials: true
+2025-09-30T22:10:39.9802200Z   clean: true
+2025-09-30T22:10:39.9802490Z   sparse-checkout-cone-mode: true
+2025-09-30T22:10:39.9802840Z   fetch-depth: 1
+2025-09-30T22:10:39.9803190Z   fetch-tags: false
+2025-09-30T22:10:39.9803490Z   show-progress: true
+2025-09-30T22:10:39.9803790Z   lfs: false
+2025-09-30T22:10:39.9804060Z   submodules: false
+2025-09-30T22:10:39.9804360Z   set-safe-directory: true
+2025-09-30T22:10:39.9804830Z env:
+2025-09-30T22:10:39.9805100Z   BUILD_ARCH: x86_64
+2025-09-30T22:10:39.9805390Z ##[endgroup]
+2025-09-30T22:10:40.4043740Z Syncing repository: Atomic-Germ/SNES-IDE
+2025-09-30T22:10:40.4050620Z ##[group]Getting Git version info
+2025-09-30T22:10:40.4053120Z Working directory is '/Users/runner/work/SNES-IDE/SNES-IDE'
+2025-09-30T22:10:40.4055690Z [command]/opt/homebrew/bin/git version
+2025-09-30T22:10:40.4688650Z git version 2.50.1
+2025-09-30T22:10:40.4719910Z ##[endgroup]
+2025-09-30T22:10:40.4732400Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/cdac294b-a792-4c0a-a8be-22f1158a7c1b/.gitconfig'
+2025-09-30T22:10:40.4751690Z Temporarily overriding HOME='/Users/runner/work/_temp/cdac294b-a792-4c0a-a8be-22f1158a7c1b' before making global git config changes
+2025-09-30T22:10:40.4756980Z Adding repository directory to the temporary git global config as a safe directory
+2025-09-30T22:10:40.4760610Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/SNES-IDE/SNES-IDE
+2025-09-30T22:10:40.4926990Z Deleting the contents of '/Users/runner/work/SNES-IDE/SNES-IDE'
+2025-09-30T22:10:40.4990450Z ##[group]Initializing the repository
+2025-09-30T22:10:40.4992470Z [command]/opt/homebrew/bin/git init /Users/runner/work/SNES-IDE/SNES-IDE
+2025-09-30T22:10:40.5232390Z hint: Using 'master' as the name for the initial branch. This default branch name
+2025-09-30T22:10:40.5238610Z hint: is subject to change. To configure the initial branch name to use in all
+2025-09-30T22:10:40.5239240Z hint: of your new repositories, which will suppress this warning, call:
+2025-09-30T22:10:40.5239700Z hint:
+2025-09-30T22:10:40.5240040Z hint: 	git config --global init.defaultBranch <name>
+2025-09-30T22:10:40.5240470Z hint:
+2025-09-30T22:10:40.5240850Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2025-09-30T22:10:40.5241510Z hint: 'development'. The just-created branch can be renamed via this command:
+2025-09-30T22:10:40.5242010Z hint:
+2025-09-30T22:10:40.5242280Z hint: 	git branch -m <name>
+2025-09-30T22:10:40.5242580Z hint:
+2025-09-30T22:10:40.5243020Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2025-09-30T22:10:40.5243690Z Initialized empty Git repository in /Users/runner/work/SNES-IDE/SNES-IDE/.git/
+2025-09-30T22:10:40.5252110Z [command]/opt/homebrew/bin/git remote add origin https://github.com/Atomic-Germ/SNES-IDE
+2025-09-30T22:10:40.5365440Z ##[endgroup]
+2025-09-30T22:10:40.5366630Z ##[group]Disabling automatic garbage collection
+2025-09-30T22:10:40.5370340Z [command]/opt/homebrew/bin/git config --local gc.auto 0
+2025-09-30T22:10:40.5465050Z ##[endgroup]
+2025-09-30T22:10:40.5465800Z ##[group]Setting up auth
+2025-09-30T22:10:40.5470090Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-09-30T22:10:40.5546820Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-09-30T22:10:40.7109400Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2025-09-30T22:10:40.7207120Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2025-09-30T22:10:40.8446580Z [command]/opt/homebrew/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2025-09-30T22:10:40.8453910Z ##[endgroup]
+2025-09-30T22:10:40.8458600Z ##[group]Fetching the repository
+2025-09-30T22:10:40.8474510Z [command]/opt/homebrew/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +ad18e12ffea3748495d5a047088cb0e1b592bd51:refs/remotes/origin/develop/macos
+2025-09-30T22:10:42.1265890Z From https://github.com/Atomic-Germ/SNES-IDE
+2025-09-30T22:10:42.1269280Z  * [new ref]         ad18e12ffea3748495d5a047088cb0e1b592bd51 -> origin/develop/macos
+2025-09-30T22:10:42.1420490Z ##[endgroup]
+2025-09-30T22:10:42.1422450Z ##[group]Determining the checkout info
+2025-09-30T22:10:42.1425080Z ##[endgroup]
+2025-09-30T22:10:42.1430060Z [command]/opt/homebrew/bin/git sparse-checkout disable
+2025-09-30T22:10:42.1555340Z [command]/opt/homebrew/bin/git config --local --unset-all extensions.worktreeConfig
+2025-09-30T22:10:42.1674030Z ##[group]Checking out the ref
+2025-09-30T22:10:42.1676410Z [command]/opt/homebrew/bin/git checkout --progress --force -B develop/macos refs/remotes/origin/develop/macos
+2025-09-30T22:10:42.9299780Z Switched to a new branch 'develop/macos'
+2025-09-30T22:10:42.9315710Z branch 'develop/macos' set up to track 'origin/develop/macos'.
+2025-09-30T22:10:42.9330560Z ##[endgroup]
+2025-09-30T22:10:42.9467340Z [command]/opt/homebrew/bin/git log -1 --format=%H
+2025-09-30T22:10:42.9577150Z ad18e12ffea3748495d5a047088cb0e1b592bd51
+2025-09-30T22:10:42.9996450Z ##[group]Run actions/setup-python@v4
+2025-09-30T22:10:42.9996870Z with:
+2025-09-30T22:10:42.9997140Z   python-version: 3.11
+2025-09-30T22:10:42.9997540Z   check-latest: false
+2025-09-30T22:10:42.9997980Z   token: ***
+2025-09-30T22:10:42.9998340Z   update-environment: true
+2025-09-30T22:10:42.9998580Z   allow-prereleases: false
+2025-09-30T22:10:42.9998840Z env:
+2025-09-30T22:10:42.9999070Z   BUILD_ARCH: x86_64
+2025-09-30T22:10:42.9999280Z ##[endgroup]
+2025-09-30T22:10:43.2403820Z ##[group]Installed versions
+2025-09-30T22:10:43.2640000Z Successfully set up CPython (3.11.9)
+2025-09-30T22:10:43.2661840Z ##[endgroup]
+2025-09-30T22:10:43.2876470Z ##[group]Run python -m pip install --upgrade pip
+2025-09-30T22:10:43.2878350Z [36;1mpython -m pip install --upgrade pip[0m
+2025-09-30T22:10:43.2879940Z [36;1mif [ -f build-requirements.txt ]; then[0m
+2025-09-30T22:10:43.2882080Z [36;1m  pip install -r build-requirements.txt || true[0m
+2025-09-30T22:10:43.2882970Z [36;1mfi[0m
+2025-09-30T22:10:43.3112520Z shell: /bin/bash -e {0}
+2025-09-30T22:10:43.3112820Z env:
+2025-09-30T22:10:43.3113030Z   BUILD_ARCH: x86_64
+2025-09-30T22:10:43.3113410Z   pythonLocation: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:10:43.3114000Z   PKG_CONFIG_PATH: /Users/runner/hostedtoolcache/Python/3.11.9/arm64/lib/pkgconfig
+2025-09-30T22:10:43.3114440Z   Python_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:10:43.3115180Z   Python2_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:10:43.3117070Z   Python3_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:10:43.3118260Z ##[endgroup]
+2025-09-30T22:10:45.1226490Z Requirement already satisfied: pip in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (25.2)
+2025-09-30T22:10:45.9455310Z Collecting pyinstaller (from -r build-requirements.txt (line 1))
+2025-09-30T22:10:46.0177690Z   Downloading pyinstaller-6.16.0-py3-none-macosx_10_13_universal2.whl.metadata (8.5 kB)
+2025-09-30T22:10:46.0559310Z Collecting altgraph (from pyinstaller->-r build-requirements.txt (line 1))
+2025-09-30T22:10:46.0697730Z   Downloading altgraph-0.17.4-py2.py3-none-any.whl.metadata (7.3 kB)
+2025-09-30T22:10:46.1027830Z Collecting macholib>=1.8 (from pyinstaller->-r build-requirements.txt (line 1))
+2025-09-30T22:10:46.1170640Z   Downloading macholib-1.16.3-py2.py3-none-any.whl.metadata (11 kB)
+2025-09-30T22:10:46.1525320Z Collecting packaging>=22.0 (from pyinstaller->-r build-requirements.txt (line 1))
+2025-09-30T22:10:46.1677110Z   Downloading packaging-25.0-py3-none-any.whl.metadata (3.3 kB)
+2025-09-30T22:10:46.2001940Z Collecting pyinstaller-hooks-contrib>=2025.8 (from pyinstaller->-r build-requirements.txt (line 1))
+2025-09-30T22:10:46.2154570Z   Downloading pyinstaller_hooks_contrib-2025.9-py3-none-any.whl.metadata (16 kB)
+2025-09-30T22:10:46.2232140Z Requirement already satisfied: setuptools>=42.0.0 in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (from pyinstaller->-r build-requirements.txt (line 1)) (65.5.0)
+2025-09-30T22:10:46.2428650Z Downloading pyinstaller-6.16.0-py3-none-macosx_10_13_universal2.whl (1.0 MB)
+2025-09-30T22:10:46.3002590Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.0/1.0 MB 26.3 MB/s  0:00:00
+2025-09-30T22:10:46.3157430Z Downloading macholib-1.16.3-py2.py3-none-any.whl (38 kB)
+2025-09-30T22:10:46.3351320Z Downloading altgraph-0.17.4-py2.py3-none-any.whl (21 kB)
+2025-09-30T22:10:46.3532110Z Downloading packaging-25.0-py3-none-any.whl (66 kB)
+2025-09-30T22:10:46.3751900Z Downloading pyinstaller_hooks_contrib-2025.9-py3-none-any.whl (444 kB)
+2025-09-30T22:10:46.4219080Z Installing collected packages: altgraph, packaging, macholib, pyinstaller-hooks-contrib, pyinstaller
+2025-09-30T22:10:47.9092980Z 
+2025-09-30T22:10:47.9118190Z Successfully installed altgraph-0.17.4 macholib-1.16.3 packaging-25.0 pyinstaller-6.16.0 pyinstaller-hooks-contrib-2025.9
+2025-09-30T22:10:47.9814190Z ##[group]Run brew update
+2025-09-30T22:10:47.9814560Z [36;1mbrew update[0m
+2025-09-30T22:10:47.9814890Z [36;1mbrew install sdl2 libogg flac mednafen cmake ninja create-dmg || true[0m
+2025-09-30T22:10:47.9860340Z shell: /bin/bash -e {0}
+2025-09-30T22:10:47.9860640Z env:
+2025-09-30T22:10:47.9860850Z   BUILD_ARCH: x86_64
+2025-09-30T22:10:47.9861250Z   pythonLocation: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:10:47.9861710Z   PKG_CONFIG_PATH: /Users/runner/hostedtoolcache/Python/3.11.9/arm64/lib/pkgconfig
+2025-09-30T22:10:47.9862180Z   Python_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:10:47.9862650Z   Python2_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:10:47.9863080Z   Python3_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:10:47.9863370Z ##[endgroup]
+2025-09-30T22:10:52.4263240Z [34m==>[0m [1mUpdating Homebrew...[0m
+2025-09-30T22:11:12.5017140Z To restore the stashed changes to /opt/homebrew/Library/Taps/homebrew/homebrew-core, run:
+2025-09-30T22:11:12.5119270Z   cd /opt/homebrew/Library/Taps/homebrew/homebrew-core && git stash pop
+2025-09-30T22:11:15.9487780Z [34m==>[0m [1mHomebrew's analytics have entirely moved to our InfluxDB instance in the EU.[0m
+2025-09-30T22:11:15.9588010Z We gather less data than before and have destroyed all Google Analytics data:
+2025-09-30T22:11:15.9691690Z   [4mhttps://docs.brew.sh/Analytics[24m[0m
+2025-09-30T22:11:15.9794100Z Please reconsider re-enabling analytics to help our volunteer maintainers with:
+2025-09-30T22:11:15.9894090Z   brew analytics on
+2025-09-30T22:11:16.0097130Z [34m==>[0m [1mHomebrew is run entirely by unpaid volunteers. Please consider donating:[0m
+2025-09-30T22:11:16.0201830Z   [4mhttps://github.com/Homebrew/brew#donations[24m
+2025-09-30T22:11:16.0301700Z 
+2025-09-30T22:11:17.9624280Z Updated 4 taps (hashicorp/tap, aws/tap, homebrew/core and homebrew/cask).
+2025-09-30T22:11:17.9725350Z [34m==>[0m [1mNew Formulae[0m
+2025-09-30T22:11:18.4788720Z atomic_queue: C++14 lock-free queues
+2025-09-30T22:11:18.4792250Z doge: Command-line DNS client
+2025-09-30T22:11:18.4794820Z fastmcp: Fast, Pythonic way to build MCP servers and clients
+2025-09-30T22:11:18.4796580Z fernflower: Advanced decompiler for Java bytecode
+2025-09-30T22:11:18.4803710Z jiratui: Textual User Interface for interacting with Atlassian Jira from your shell
+2025-09-30T22:11:18.4807620Z libcpucycles: Microlibrary for counting CPU cycles
+2025-09-30T22:11:18.4811150Z libpq@17: Postgres C API library
+2025-09-30T22:11:18.4815470Z lue-reader: Terminal eBook reader with text-to-speech and multi-format support
+2025-09-30T22:11:18.4818800Z mcp-atlassian: MCP server for Atlassian tools (Confluence, Jira)
+2025-09-30T22:11:18.4821680Z mcp-grafana: MCP server for Grafana
+2025-09-30T22:11:18.4824740Z mcp-server-chart: MCP with 25+ @antvis charts for visualization, generation, and analysis
+2025-09-30T22:11:18.4828830Z mlx-lm: Run LLMs with MLX
+2025-09-30T22:11:18.4833460Z msedit: Simple text editor with clickable interface
+2025-09-30T22:11:18.4837770Z nanobot: Build MCP Agents
+2025-09-30T22:11:18.4845090Z php-intl: PHP internationalization extension
+2025-09-30T22:11:18.4851570Z playwright-mcp: MCP server for Playwright
+2025-09-30T22:11:18.4857340Z portable-libffi: Portable Foreign Function Interface library
+2025-09-30T22:11:18.4864970Z portable-libxcrypt: Extended crypt library for descrypt, md5crypt, bcrypt, and others
+2025-09-30T22:11:18.4871600Z portable-libyaml: YAML Parser
+2025-09-30T22:11:18.4878500Z portable-openssl: Cryptography and SSL/TLS Toolkit
+2025-09-30T22:11:18.4948810Z portable-ruby: Powerful, clean, object-oriented scripting language
+2025-09-30T22:11:18.4981700Z portable-zlib: General-purpose lossless data-compression library
+2025-09-30T22:11:18.5023120Z postgresql@18: Object-relational database system
+2025-09-30T22:11:18.5051290Z salesforce-mcp: MCP Server for interacting with Salesforce instances
+2025-09-30T22:11:18.5078410Z sarif-tools: Set of command-line tools and Python library for working with SARIF files
+2025-09-30T22:11:18.5097440Z slack-mcp-server: Powerful MCP Slack Server with multiple transports and smart history fetch logic
+2025-09-30T22:11:18.5111650Z swag: Automatically generate RESTful API documentation with Swagger 2.0 for Go
+2025-09-30T22:11:18.5121830Z termsvg: Record, share and export your terminal as a animated SVG image
+2025-09-30T22:11:18.5134310Z tfstate-lookup: Lookup resource attributes in tfstate
+2025-09-30T22:11:18.5156560Z wuppiefuzz: Coverage-guided REST API fuzzer developed on top of LibAFL
+2025-09-30T22:11:18.5185440Z zuban: Python language server and type checker, written in Rust
+2025-09-30T22:11:18.5232730Z [34m==>[0m [1mNew Casks[0m
+2025-09-30T22:11:18.8659770Z aionui: GUI for Gemini CLI
+2025-09-30T22:11:18.8763790Z cmd: AI assistant for development in Xcode
+2025-09-30T22:11:18.8814530Z coderabbit: AI code review CLI
+2025-09-30T22:11:18.8815190Z dayflow: Generate a timeline of your day, automatically
+2025-09-30T22:11:18.8815870Z droid: AI-powered software engineering agent by Factory
+2025-09-30T22:11:18.8816260Z folder-preview-pro: Quick Look extension for folders
+2025-09-30T22:11:18.8816680Z font-bbh-sans-bartle
+2025-09-30T22:11:18.8816990Z font-bbh-sans-bogle
+2025-09-30T22:11:18.8817250Z font-bbh-sans-hegarty
+2025-09-30T22:11:18.8817530Z handy: Speech to text application
+2025-09-30T22:11:18.8817990Z helium-browser: Chromium-based web browser
+2025-09-30T22:11:18.8818320Z microsoft-openjdk@25: OpenJDK distribution from Microsoft
+2025-09-30T22:11:18.8818660Z rclone-ui: GUI for Rclone
+2025-09-30T22:11:18.8820130Z rewritebar: AI-powered writing assistant
+2025-09-30T22:11:18.8821860Z topaz-gigapixel: AI image upscaler
+2025-09-30T22:11:18.8822130Z topaz-photo: AI image enhancer
+2025-09-30T22:11:18.8822420Z topaz-video: Video upscaler and quality enhancer
+2025-09-30T22:11:18.8823130Z [34m==>[0m [1mDeleted Installed Formulae[0m
+2025-09-30T22:11:18.8823420Z packer
+2025-09-30T22:11:19.7012290Z [34m==>[0m [1mOutdated Formulae[0m
+2025-09-30T22:11:19.7013700Z gcc
+2025-09-30T22:11:19.7014160Z gh
+2025-09-30T22:11:19.7014930Z git
+2025-09-30T22:11:19.7016950Z harfbuzz
+2025-09-30T22:11:19.7018180Z libnghttp3
+2025-09-30T22:11:19.7018640Z libngtcp2
+2025-09-30T22:11:19.7019370Z libpq
+2025-09-30T22:11:19.7020900Z libunistring
+2025-09-30T22:11:19.7021500Z node@22
+2025-09-30T22:11:19.7023040Z openssl@3
+2025-09-30T22:11:19.7024220Z p11-kit
+2025-09-30T22:11:19.7024610Z pipx
+2025-09-30T22:11:19.7025800Z python@3.12
+2025-09-30T22:11:19.7027550Z swiftformat
+2025-09-30T22:11:19.7028020Z 
+2025-09-30T22:11:19.7029940Z You have [1m14[0m outdated formulae installed.
+2025-09-30T22:11:19.7034580Z You can upgrade them with [1mbrew upgrade[0m
+2025-09-30T22:11:19.7038320Z or list them with [1mbrew outdated[0m.
+2025-09-30T22:11:22.7206580Z ##[warning]cmake 4.1.1 is already installed and up-to-date.
+To reinstall 4.1.1, run:
+  brew reinstall cmake
+
+2025-09-30T22:11:22.7232120Z ##[warning]ninja 1.13.1 is already installed and up-to-date.
+To reinstall 1.13.1, run:
+  brew reinstall ninja
+
+2025-09-30T22:11:23.3620950Z [32m==>[0m [1mFetching downloads for: [32msdl2[39m, [32mlibogg[39m, [32mflac[39m, [32mmednafen[39m and [32mcreate-dmg[39m[0m
+2025-09-30T22:11:23.3634250Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/sdl2/manifests/2.32.10[0m
+2025-09-30T22:11:23.8122360Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/libogg/manifests/1.3.6[0m
+2025-09-30T22:11:24.1770710Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/flac/manifests/1.5.0[0m
+2025-09-30T22:11:24.5699940Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/mednafen/manifests/1.32.1_1-1[0m
+2025-09-30T22:11:25.0356790Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/create-dmg/manifests/1.2.2[0m
+2025-09-30T22:11:26.0492260Z [32m==>[0m [1mFetching [32msdl2[39m[0m
+2025-09-30T22:11:26.0603030Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/sdl2/blobs/sha256:702b9e09ac8a7cc8a99ab4e9298803bbfcd3179d7b029883fe760ceecf98e526[0m
+2025-09-30T22:11:26.7313720Z [32m==>[0m [1mFetching [32mlibogg[39m[0m
+2025-09-30T22:11:26.7448790Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/libogg/blobs/sha256:2423ff6b931f0393cd314052a7328a61fdd6f1d8519b65c4dff5ab560f82c52d[0m
+2025-09-30T22:11:27.2060250Z [32m==>[0m [1mFetching [32mflac[39m[0m
+2025-09-30T22:11:27.2162290Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/flac/blobs/sha256:c9698bcebe8e99ab84adf49a347cad5a9f122c45b80622a9fe2acbaeab902545[0m
+2025-09-30T22:11:27.6719100Z [32m==>[0m [1mFetching dependencies for mednafen: [32mlame[39m, [32mlibvorbis[39m, [32mmpg123[39m, [32mopus[39m, [32mlibsndfile[39m, [32mlibcuefile[39m, [32mlibreplaygain[39m and [32mmusepack[39m[0m
+2025-09-30T22:11:27.6722120Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/lame/manifests/3.100[0m
+2025-09-30T22:11:28.1243210Z [32m==>[0m [1mFetching [32mlame[39m[0m
+2025-09-30T22:11:28.1348210Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/lame/blobs/sha256:0ae0dcb09c908b80ffbdb1bb168674e5190d6b9ae006d5282b7ab4f06eac9f36[0m
+2025-09-30T22:11:28.5929680Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/libvorbis/manifests/1.3.7-1[0m
+2025-09-30T22:11:29.0955930Z [32m==>[0m [1mFetching [32mlibvorbis[39m[0m
+2025-09-30T22:11:29.1058230Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/libvorbis/blobs/sha256:c28d1e0b461a4cf6f5aee72e664ac6f5f6f3efaab44f15b91924f08474cfafe1[0m
+2025-09-30T22:11:29.5274640Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/mpg123/manifests/1.33.2[0m
+2025-09-30T22:11:30.0293120Z [32m==>[0m [1mFetching [32mmpg123[39m[0m
+2025-09-30T22:11:30.0395120Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/mpg123/blobs/sha256:ef311cff7f895e6d9833813db551278279d5c9c7ce37635e3fe441c5c8d64928[0m
+2025-09-30T22:11:30.6850360Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/opus/manifests/1.5.2[0m
+2025-09-30T22:11:31.0240530Z [32m==>[0m [1mFetching [32mopus[39m[0m
+2025-09-30T22:11:31.0417370Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/opus/blobs/sha256:564c0c7f19ac41ed22baabf7c1bf2e172f81bad60ec211d03bda8eeb42ce2f1a[0m
+2025-09-30T22:11:31.4763950Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/libsndfile/manifests/1.2.2_1[0m
+2025-09-30T22:11:32.1716360Z [32m==>[0m [1mFetching [32mlibsndfile[39m[0m
+2025-09-30T22:11:32.1852250Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/libsndfile/blobs/sha256:2d6a8173ef41359c3da4c78a5d5eb402846e480c509b868f671b80a17726f9c4[0m
+2025-09-30T22:11:32.6428680Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/libcuefile/manifests/r475-1[0m
+2025-09-30T22:11:33.0979440Z [32m==>[0m [1mFetching [32mlibcuefile[39m[0m
+2025-09-30T22:11:33.0990650Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/libcuefile/blobs/sha256:34a5359939dfb84fbbfff58f7ddfc220c7dde287dcda457facbd29e8fe91f0de[0m
+2025-09-30T22:11:33.5160920Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/libreplaygain/manifests/r475-1[0m
+2025-09-30T22:11:33.9569560Z [32m==>[0m [1mFetching [32mlibreplaygain[39m[0m
+2025-09-30T22:11:33.9606080Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/libreplaygain/blobs/sha256:72f8e66bd85dbe08e01f9aad98d73a4788a030f34a3f8e40e940c6a62a7fbfc7[0m
+2025-09-30T22:11:34.3575000Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/musepack/manifests/r475-1[0m
+2025-09-30T22:11:34.8726690Z [32m==>[0m [1mFetching [32mmusepack[39m[0m
+2025-09-30T22:11:34.8740340Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/musepack/blobs/sha256:d84a9ad759b25d445781d6e1e5af5247431427e00e90bfb0b1014d9c2e6e4bab[0m
+2025-09-30T22:11:35.3616540Z [32m==>[0m [1mFetching [32mmednafen[39m[0m
+2025-09-30T22:11:35.3719320Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/mednafen/blobs/sha256:3ebf9988b2e260b9a1f755f8fcbcc0c9fa3411aae100594a99c03cded175f65c[0m
+2025-09-30T22:11:35.8469690Z [32m==>[0m [1mFetching [32mcreate-dmg[39m[0m
+2025-09-30T22:11:35.8471360Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/create-dmg/blobs/sha256:ed92cefd6df282057e6c1a162eb453d4c8d3b34a4a8637bf292813817badef81[0m
+2025-09-30T22:11:36.3665600Z [34m==>[0m [1mPouring sdl2--2.32.10.arm64_sequoia.bottle.tar.gz[0m
+2025-09-30T22:11:36.7871310Z 🍺  /opt/homebrew/Cellar/sdl2/2.32.10: 94 files, 6.4MB
+2025-09-30T22:11:36.7943290Z [34m==>[0m [1mPouring libogg--1.3.6.arm64_sequoia.bottle.tar.gz[0m
+2025-09-30T22:11:37.0731040Z 🍺  /opt/homebrew/Cellar/libogg/1.3.6: 103 files, 538.2KB
+2025-09-30T22:11:37.0869470Z [34m==>[0m [1mPouring flac--1.5.0.arm64_sequoia.bottle.tar.gz[0m
+2025-09-30T22:11:37.5483840Z 🍺  /opt/homebrew/Cellar/flac/1.5.0: 40 files, 1.9MB
+2025-09-30T22:11:37.6143080Z [32m==>[0m [1mInstalling dependencies for mednafen: [32mlame[39m, [32mlibvorbis[39m, [32mmpg123[39m, [32mopus[39m, [32mlibsndfile[39m, [32mlibcuefile[39m, [32mlibreplaygain[39m and [32mmusepack[39m[0m
+2025-09-30T22:11:37.6145440Z [32m==>[0m [1mInstalling mednafen dependency: [32mlame[39m[0m
+2025-09-30T22:11:37.6152650Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/lame/manifests/3.100[0m
+2025-09-30T22:11:37.6154650Z Already downloaded: /Users/runner/Library/Caches/Homebrew/downloads/31e57f3a54d6908e2c153f5eb435715208f3bd9db71e16470b553d72e051b269--lame-3.100.bottle_manifest.json
+2025-09-30T22:11:37.6242700Z [34m==>[0m [1mPouring lame--3.100.arm64_sequoia.bottle.tar.gz[0m
+2025-09-30T22:11:37.9803920Z 🍺  /opt/homebrew/Cellar/lame/3.100: 28 files, 2.2MB
+2025-09-30T22:11:37.9835700Z [32m==>[0m [1mInstalling mednafen dependency: [32mlibvorbis[39m[0m
+2025-09-30T22:11:37.9844380Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/libvorbis/manifests/1.3.7-1[0m
+2025-09-30T22:11:37.9846610Z Already downloaded: /Users/runner/Library/Caches/Homebrew/downloads/68d211b8805a2fab148645c2ac8e43495e576876d6f50f0c4af5ea890730b7ea--libvorbis-1.3.7-1.bottle_manifest.json
+2025-09-30T22:11:38.0719530Z [34m==>[0m [1mPouring libvorbis--1.3.7.arm64_sequoia.bottle.1.tar.gz[0m
+2025-09-30T22:11:39.3922970Z 🍺  /opt/homebrew/Cellar/libvorbis/1.3.7: 158 files, 2.4MB
+2025-09-30T22:11:39.3954940Z [32m==>[0m [1mInstalling mednafen dependency: [32mmpg123[39m[0m
+2025-09-30T22:11:39.3969880Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/mpg123/manifests/1.33.2[0m
+2025-09-30T22:11:39.3972570Z Already downloaded: /Users/runner/Library/Caches/Homebrew/downloads/a55086cc563ed9c00774ac1ec06e3d55923e6994eddd17574246773c9be897c5--mpg123-1.33.2.bottle_manifest.json
+2025-09-30T22:11:39.4005550Z [34m==>[0m [1mPouring mpg123--1.33.2.arm64_sequoia.bottle.tar.gz[0m
+2025-09-30T22:11:40.1005890Z 🍺  /opt/homebrew/Cellar/mpg123/1.33.2: 34 files, 2.0MB
+2025-09-30T22:11:40.1015960Z [32m==>[0m [1mInstalling mednafen dependency: [32mopus[39m[0m
+2025-09-30T22:11:40.1018740Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/opus/manifests/1.5.2[0m
+2025-09-30T22:11:40.1021230Z Already downloaded: /Users/runner/Library/Caches/Homebrew/downloads/ab70a7e8383f42047a27c0638675dbd9c3229997a01eed45d76f174664a4b607--opus-1.5.2.bottle_manifest.json
+2025-09-30T22:11:40.1036440Z [34m==>[0m [1mPouring opus--1.5.2.arm64_sequoia.bottle.tar.gz[0m
+2025-09-30T22:11:40.2487780Z 🍺  /opt/homebrew/Cellar/opus/1.5.2: 16 files, 1MB
+2025-09-30T22:11:40.2495770Z [32m==>[0m [1mInstalling mednafen dependency: [32mlibsndfile[39m[0m
+2025-09-30T22:11:40.2500220Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/libsndfile/manifests/1.2.2_1[0m
+2025-09-30T22:11:40.2502910Z Already downloaded: /Users/runner/Library/Caches/Homebrew/downloads/2e97439a3a58c856a00043feceb29f382febc8542b8a0c0a31aa202b2c93ea08--libsndfile-1.2.2_1.bottle_manifest.json
+2025-09-30T22:11:40.3208580Z [34m==>[0m [1mPouring libsndfile--1.2.2_1.arm64_sequoia.bottle.tar.gz[0m
+2025-09-30T22:11:40.6340130Z 🍺  /opt/homebrew/Cellar/libsndfile/1.2.2_1: 55 files, 1.8MB
+2025-09-30T22:11:40.6347410Z [32m==>[0m [1mInstalling mednafen dependency: [32mlibcuefile[39m[0m
+2025-09-30T22:11:40.6363460Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/libcuefile/manifests/r475-1[0m
+2025-09-30T22:11:40.6366370Z Already downloaded: /Users/runner/Library/Caches/Homebrew/downloads/bcfd5f9c5e66525827bd2c1024f9dbee05db47868b3077b3e19178fe9e25fd91--libcuefile-r475-1.bottle_manifest.json
+2025-09-30T22:11:40.6464710Z [34m==>[0m [1mPouring libcuefile--r475.arm64_sequoia.bottle.1.tar.gz[0m
+2025-09-30T22:11:40.8136530Z 🍺  /opt/homebrew/Cellar/libcuefile/r475: 13 files, 257.1KB
+2025-09-30T22:11:40.8152030Z [32m==>[0m [1mInstalling mednafen dependency: [32mlibreplaygain[39m[0m
+2025-09-30T22:11:40.8153510Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/libreplaygain/manifests/r475-1[0m
+2025-09-30T22:11:40.8154590Z Already downloaded: /Users/runner/Library/Caches/Homebrew/downloads/c2a362fb72ade5ac1b1d01f398f0b9cc9a1197d1d40629bbd063e5e49ecb1353--libreplaygain-r475-1.bottle_manifest.json
+2025-09-30T22:11:40.8197070Z [34m==>[0m [1mPouring libreplaygain--r475.arm64_sequoia.bottle.1.tar.gz[0m
+2025-09-30T22:11:40.9895640Z 🍺  /opt/homebrew/Cellar/libreplaygain/r475: 8 files, 69.2KB
+2025-09-30T22:11:40.9902690Z [32m==>[0m [1mInstalling mednafen dependency: [32mmusepack[39m[0m
+2025-09-30T22:11:40.9906530Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/musepack/manifests/r475-1[0m
+2025-09-30T22:11:40.9910240Z Already downloaded: /Users/runner/Library/Caches/Homebrew/downloads/38024792b77872be2f125d871addc33da905cbbd9e388df3b01eec29cd6aa4ae--musepack-r475-1.bottle_manifest.json
+2025-09-30T22:11:41.0127390Z [34m==>[0m [1mPouring musepack--r475.arm64_sequoia.bottle.1.tar.gz[0m
+2025-09-30T22:11:41.7818690Z 🍺  /opt/homebrew/Cellar/musepack/r475: 27 files, 758KB
+2025-09-30T22:11:41.7821140Z [32m==>[0m [1mInstalling [32mmednafen[39m[0m
+2025-09-30T22:11:41.7824840Z [34m==>[0m [1mPouring mednafen--1.32.1_1.arm64_sequoia.bottle.1.tar.gz[0m
+2025-09-30T22:11:42.3184250Z 🍺  /opt/homebrew/Cellar/mednafen/1.32.1_1: 11 files, 18MB
+2025-09-30T22:11:42.3318870Z [34m==>[0m [1mPouring create-dmg--1.2.2.all.bottle.tar.gz[0m
+2025-09-30T22:11:42.5098740Z 🍺  /opt/homebrew/Cellar/create-dmg/1.2.2: 13 files, 70.6KB
+2025-09-30T22:11:42.5108840Z [34m==>[0m [1mNo outdated dependents to upgrade![0m
+2025-09-30T22:11:42.6096050Z ##[error]The operation was canceled.
+2025-09-30T22:11:42.6316080Z ##[group]Run actions/upload-artifact@v4
+2025-09-30T22:11:42.6316380Z with:
+2025-09-30T22:11:42.6316650Z   name: bsnes-plus-logs-x86_64
+2025-09-30T22:11:42.6316960Z   path: bsnes-plus-build.log
+bsnes-plus-build/**
+
+2025-09-30T22:11:42.6317290Z   if-no-files-found: warn
+2025-09-30T22:11:42.6317520Z   compression-level: 6
+2025-09-30T22:11:42.6317810Z   overwrite: false
+2025-09-30T22:11:42.6318020Z   include-hidden-files: false
+2025-09-30T22:11:42.6318270Z env:
+2025-09-30T22:11:42.6318500Z   BUILD_ARCH: x86_64
+2025-09-30T22:11:42.6318850Z   pythonLocation: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:11:42.6319320Z   PKG_CONFIG_PATH: /Users/runner/hostedtoolcache/Python/3.11.9/arm64/lib/pkgconfig
+2025-09-30T22:11:42.6319810Z   Python_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:11:42.6320270Z   Python2_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:11:42.6320850Z   Python3_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:11:42.6321140Z ##[endgroup]
+2025-09-30T22:11:43.1965750Z Multiple search paths detected. Calculating the least common ancestor of all paths
+2025-09-30T22:11:43.1971950Z The least common ancestor is /Users/runner/work/SNES-IDE/SNES-IDE. This will be the root directory of the artifact
+2025-09-30T22:11:43.1976440Z ##[warning]No files were found with the provided path: bsnes-plus-build.log
+bsnes-plus-build/**. No artifacts will be uploaded.
+2025-09-30T22:11:43.2291510Z Post job cleanup.
+2025-09-30T22:11:43.3980140Z [command]/opt/homebrew/bin/git version
+2025-09-30T22:11:43.4210320Z git version 2.50.1
+2025-09-30T22:11:43.4283800Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/18e759f1-25ff-479c-bbc4-913955457eca/.gitconfig'
+2025-09-30T22:11:43.4316120Z Temporarily overriding HOME='/Users/runner/work/_temp/18e759f1-25ff-479c-bbc4-913955457eca' before making global git config changes
+2025-09-30T22:11:43.4325920Z Adding repository directory to the temporary git global config as a safe directory
+2025-09-30T22:11:43.4332670Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/SNES-IDE/SNES-IDE
+2025-09-30T22:11:43.4481500Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-09-30T22:11:43.4640820Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-09-30T22:11:43.6298070Z fatal: No url found for submodule path '.github/chatmodes' in .gitmodules
+2025-09-30T22:11:43.6411550Z ##[warning]The process '/opt/homebrew/bin/git' failed with exit code 128
+2025-09-30T22:11:43.6573690Z Cleaning up orphan processes

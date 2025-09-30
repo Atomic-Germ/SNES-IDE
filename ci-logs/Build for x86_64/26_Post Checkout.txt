@@ -1,0 +1,11 @@
+﻿2025-09-30T22:11:43.2291490Z Post job cleanup.
+2025-09-30T22:11:43.3980090Z [command]/opt/homebrew/bin/git version
+2025-09-30T22:11:43.4210290Z git version 2.50.1
+2025-09-30T22:11:43.4283750Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/18e759f1-25ff-479c-bbc4-913955457eca/.gitconfig'
+2025-09-30T22:11:43.4316060Z Temporarily overriding HOME='/Users/runner/work/_temp/18e759f1-25ff-479c-bbc4-913955457eca' before making global git config changes
+2025-09-30T22:11:43.4325910Z Adding repository directory to the temporary git global config as a safe directory
+2025-09-30T22:11:43.4332640Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/SNES-IDE/SNES-IDE
+2025-09-30T22:11:43.4481460Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-09-30T22:11:43.4640570Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-09-30T22:11:43.6297990Z fatal: No url found for submodule path '.github/chatmodes' in .gitmodules
+2025-09-30T22:11:43.6411520Z ##[warning]The process '/opt/homebrew/bin/git' failed with exit code 128

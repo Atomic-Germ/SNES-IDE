@@ -1,0 +1,18 @@
+﻿2025-09-30T22:11:37.2625330Z ##[group]Run TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
+2025-09-30T22:11:37.2625730Z [36;1mTIMESTAMP=$(date +"%Y%m%d-%H%M%S")[0m
+2025-09-30T22:11:37.2626120Z [36;1mART="sneside-macos-arm64-${TIMESTAMP}.zip"[0m
+2025-09-30T22:11:37.2626370Z [36;1mcd SNES-IDE-out[0m
+2025-09-30T22:11:37.2626620Z [36;1mzip -r "../${ART}" .[0m
+2025-09-30T22:11:37.2626830Z [36;1mcd ..[0m
+2025-09-30T22:11:37.2627080Z [36;1mls -lah[0m
+2025-09-30T22:11:37.2698590Z shell: /bin/bash -e {0}
+2025-09-30T22:11:37.2699210Z env:
+2025-09-30T22:11:37.2699790Z   BUILD_ARCH: arm64
+2025-09-30T22:11:37.2700650Z   pythonLocation: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:11:37.2701720Z   PKG_CONFIG_PATH: /Users/runner/hostedtoolcache/Python/3.11.9/arm64/lib/pkgconfig
+2025-09-30T22:11:37.2703980Z   Python_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:11:37.2705210Z   Python2_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:11:37.2706240Z   Python3_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:11:37.2707350Z ##[endgroup]
+2025-09-30T22:11:37.3375970Z /Users/runner/work/_temp/0fc9b064-f753-413f-ab58-46344127becb.sh: line 3: cd: SNES-IDE-out: No such file or directory
+2025-09-30T22:11:37.3384210Z ##[error]Process completed with exit code 1.

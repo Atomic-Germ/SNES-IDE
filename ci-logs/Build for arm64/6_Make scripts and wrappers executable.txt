@@ -1,0 +1,12 @@
+﻿2025-09-30T22:11:36.8450930Z ##[group]Run chmod +x scripts/*.sh || true
+2025-09-30T22:11:36.8451410Z [36;1mchmod +x scripts/*.sh || true[0m
+2025-09-30T22:11:36.8451600Z [36;1mchmod +x src/tools/*.sh || true[0m
+2025-09-30T22:11:36.8635970Z shell: /bin/bash -e {0}
+2025-09-30T22:11:36.8636160Z env:
+2025-09-30T22:11:36.8636390Z   BUILD_ARCH: arm64
+2025-09-30T22:11:36.8636660Z   pythonLocation: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:11:36.8637090Z   PKG_CONFIG_PATH: /Users/runner/hostedtoolcache/Python/3.11.9/arm64/lib/pkgconfig
+2025-09-30T22:11:36.8637580Z   Python_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:11:36.8637970Z   Python2_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:11:36.8638310Z   Python3_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:11:36.8638540Z ##[endgroup]

@@ -1,0 +1,43 @@
+﻿2025-09-30T22:10:38.6159540Z Current runner version: '2.328.0'
+2025-09-30T22:10:38.6177900Z ##[group]Runner Image Provisioner
+2025-09-30T22:10:38.6178590Z Hosted Compute Agent
+2025-09-30T22:10:38.6178940Z Version: 20250912.392
+2025-09-30T22:10:38.6179310Z Commit: d921fda672a98b64f4f82364647e2f10b2267d0b
+2025-09-30T22:10:38.6179740Z Build Date: 2025-09-12T15:23:14Z
+2025-09-30T22:10:38.6180110Z ##[endgroup]
+2025-09-30T22:10:38.6180450Z ##[group]Operating System
+2025-09-30T22:10:38.6180830Z macOS
+2025-09-30T22:10:38.6181480Z 15.6.1
+2025-09-30T22:10:38.6181770Z 24G90
+2025-09-30T22:10:38.6182050Z ##[endgroup]
+2025-09-30T22:10:38.6182360Z ##[group]Runner Image
+2025-09-30T22:10:38.6182690Z Image: macos-15-arm64
+2025-09-30T22:10:38.6183000Z Version: 20250922.2357
+2025-09-30T22:10:38.6183680Z Included Software: https://github.com/actions/runner-images/blob/macos-15-arm64/20250922.2357/images/macos/macos-15-arm64-Readme.md
+2025-09-30T22:10:38.6184720Z Image Release: https://github.com/actions/runner-images/releases/tag/macos-15-arm64%2F20250922.2357
+2025-09-30T22:10:38.6185490Z ##[endgroup]
+2025-09-30T22:10:38.6187130Z ##[group]GITHUB_TOKEN Permissions
+2025-09-30T22:10:38.6188540Z Actions: write
+2025-09-30T22:10:38.6188870Z Attestations: write
+2025-09-30T22:10:38.6189180Z Checks: write
+2025-09-30T22:10:38.6189470Z Contents: write
+2025-09-30T22:10:38.6189780Z Deployments: write
+2025-09-30T22:10:38.6190110Z Discussions: write
+2025-09-30T22:10:38.6190500Z Issues: write
+2025-09-30T22:10:38.6190820Z Metadata: read
+2025-09-30T22:10:38.6191120Z Models: read
+2025-09-30T22:10:38.6191420Z Packages: write
+2025-09-30T22:10:38.6191720Z Pages: write
+2025-09-30T22:10:38.6192050Z PullRequests: write
+2025-09-30T22:10:38.6192430Z RepositoryProjects: write
+2025-09-30T22:10:38.6192800Z SecurityEvents: write
+2025-09-30T22:10:38.6193280Z Statuses: write
+2025-09-30T22:10:38.6193640Z ##[endgroup]
+2025-09-30T22:10:38.6195770Z Secret source: Actions
+2025-09-30T22:10:38.6196340Z Prepare workflow directory
+2025-09-30T22:10:38.6812000Z Prepare all required actions
+2025-09-30T22:10:38.6897070Z Getting action download info
+2025-09-30T22:10:39.0458330Z Download action repository 'actions/checkout@v4' (SHA:08eba0b27e820071cde6df949e0beb9ba4906955)
+2025-09-30T22:10:39.5037250Z Download action repository 'actions/setup-python@v4' (SHA:7f4fc3e22c37d6ff65e88745f38bd3157c663f7c)
+2025-09-30T22:10:39.6701410Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2025-09-30T22:10:39.9265250Z Complete job name: Build for x86_64

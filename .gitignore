@@ -1,1 +1,10 @@
-artifacts
+DS_Store
+._DS_Store
+._*
+.github/chatmodes/
+.github/instructions/
+.github/prompts/
+.vscode/
+artifacts/
+release/
+*.swp

@@ -1,0 +1,197 @@
+﻿2025-09-30T22:10:49.4149390Z ##[group]Run brew update
+2025-09-30T22:10:49.4149650Z [36;1mbrew update[0m
+2025-09-30T22:10:49.4149960Z [36;1mbrew install sdl2 libogg flac mednafen cmake ninja create-dmg || true[0m
+2025-09-30T22:10:49.4247750Z shell: /bin/bash -e {0}
+2025-09-30T22:10:49.4247970Z env:
+2025-09-30T22:10:49.4248230Z   BUILD_ARCH: arm64
+2025-09-30T22:10:49.4248620Z   pythonLocation: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:10:49.4249080Z   PKG_CONFIG_PATH: /Users/runner/hostedtoolcache/Python/3.11.9/arm64/lib/pkgconfig
+2025-09-30T22:10:49.4249520Z   Python_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:10:49.4249940Z   Python2_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:10:49.4250450Z   Python3_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:10:49.4250760Z ##[endgroup]
+2025-09-30T22:10:53.4961780Z [34m==>[0m [1mUpdating Homebrew...[0m
+2025-09-30T22:11:12.6360230Z To restore the stashed changes to /opt/homebrew/Library/Taps/homebrew/homebrew-core, run:
+2025-09-30T22:11:12.6363080Z   cd /opt/homebrew/Library/Taps/homebrew/homebrew-core && git stash pop
+2025-09-30T22:11:15.0455240Z [34m==>[0m [1mHomebrew's analytics have entirely moved to our InfluxDB instance in the EU.[0m
+2025-09-30T22:11:15.0456790Z We gather less data than before and have destroyed all Google Analytics data:
+2025-09-30T22:11:15.0458160Z   [4mhttps://docs.brew.sh/Analytics[24m[0m
+2025-09-30T22:11:15.0459480Z Please reconsider re-enabling analytics to help our volunteer maintainers with:
+2025-09-30T22:11:15.0460500Z   brew analytics on
+2025-09-30T22:11:15.0770790Z [34m==>[0m [1mHomebrew is run entirely by unpaid volunteers. Please consider donating:[0m
+2025-09-30T22:11:15.0776510Z   [4mhttps://github.com/Homebrew/brew#donations[24m
+2025-09-30T22:11:15.0779150Z 
+2025-09-30T22:11:16.6448650Z Updated 4 taps (hashicorp/tap, aws/tap, homebrew/core and homebrew/cask).
+2025-09-30T22:11:16.6473270Z [34m==>[0m [1mNew Formulae[0m
+2025-09-30T22:11:17.1641600Z atomic_queue: C++14 lock-free queues
+2025-09-30T22:11:17.1649810Z doge: Command-line DNS client
+2025-09-30T22:11:17.1655610Z fastmcp: Fast, Pythonic way to build MCP servers and clients
+2025-09-30T22:11:17.1659830Z fernflower: Advanced decompiler for Java bytecode
+2025-09-30T22:11:17.1673880Z jiratui: Textual User Interface for interacting with Atlassian Jira from your shell
+2025-09-30T22:11:17.1690720Z libcpucycles: Microlibrary for counting CPU cycles
+2025-09-30T22:11:17.1711800Z libpq@17: Postgres C API library
+2025-09-30T22:11:17.1737320Z lue-reader: Terminal eBook reader with text-to-speech and multi-format support
+2025-09-30T22:11:17.1757090Z mcp-atlassian: MCP server for Atlassian tools (Confluence, Jira)
+2025-09-30T22:11:17.1766460Z mcp-grafana: MCP server for Grafana
+2025-09-30T22:11:17.1782980Z mcp-server-chart: MCP with 25+ @antvis charts for visualization, generation, and analysis
+2025-09-30T22:11:17.1797450Z mlx-lm: Run LLMs with MLX
+2025-09-30T22:11:17.1820160Z msedit: Simple text editor with clickable interface
+2025-09-30T22:11:17.1848490Z nanobot: Build MCP Agents
+2025-09-30T22:11:17.1879910Z php-intl: PHP internationalization extension
+2025-09-30T22:11:17.1911490Z playwright-mcp: MCP server for Playwright
+2025-09-30T22:11:17.1922920Z portable-libffi: Portable Foreign Function Interface library
+2025-09-30T22:11:17.1939140Z portable-libxcrypt: Extended crypt library for descrypt, md5crypt, bcrypt, and others
+2025-09-30T22:11:17.1951820Z portable-libyaml: YAML Parser
+2025-09-30T22:11:17.1961310Z portable-openssl: Cryptography and SSL/TLS Toolkit
+2025-09-30T22:11:17.1967420Z portable-ruby: Powerful, clean, object-oriented scripting language
+2025-09-30T22:11:17.1973560Z portable-zlib: General-purpose lossless data-compression library
+2025-09-30T22:11:17.1992110Z postgresql@18: Object-relational database system
+2025-09-30T22:11:17.2029180Z salesforce-mcp: MCP Server for interacting with Salesforce instances
+2025-09-30T22:11:17.2054870Z sarif-tools: Set of command-line tools and Python library for working with SARIF files
+2025-09-30T22:11:17.2070570Z slack-mcp-server: Powerful MCP Slack Server with multiple transports and smart history fetch logic
+2025-09-30T22:11:17.2112300Z swag: Automatically generate RESTful API documentation with Swagger 2.0 for Go
+2025-09-30T22:11:17.2154220Z termsvg: Record, share and export your terminal as a animated SVG image
+2025-09-30T22:11:17.2183340Z tfstate-lookup: Lookup resource attributes in tfstate
+2025-09-30T22:11:17.2215280Z wuppiefuzz: Coverage-guided REST API fuzzer developed on top of LibAFL
+2025-09-30T22:11:17.2269710Z zuban: Python language server and type checker, written in Rust
+2025-09-30T22:11:17.2328640Z [34m==>[0m [1mNew Casks[0m
+2025-09-30T22:11:17.4628550Z aionui: GUI for Gemini CLI
+2025-09-30T22:11:17.4629340Z cmd: AI assistant for development in Xcode
+2025-09-30T22:11:17.4630070Z coderabbit: AI code review CLI
+2025-09-30T22:11:17.4630760Z dayflow: Generate a timeline of your day, automatically
+2025-09-30T22:11:17.4632020Z droid: AI-powered software engineering agent by Factory
+2025-09-30T22:11:17.4633400Z folder-preview-pro: Quick Look extension for folders
+2025-09-30T22:11:17.4634820Z font-bbh-sans-bartle
+2025-09-30T22:11:17.4635750Z font-bbh-sans-bogle
+2025-09-30T22:11:17.4637000Z font-bbh-sans-hegarty
+2025-09-30T22:11:17.4643920Z handy: Speech to text application
+2025-09-30T22:11:17.4647120Z helium-browser: Chromium-based web browser
+2025-09-30T22:11:17.4652620Z microsoft-openjdk@25: OpenJDK distribution from Microsoft
+2025-09-30T22:11:17.4659660Z rclone-ui: GUI for Rclone
+2025-09-30T22:11:17.4665730Z rewritebar: AI-powered writing assistant
+2025-09-30T22:11:17.4675360Z topaz-gigapixel: AI image upscaler
+2025-09-30T22:11:17.4682800Z topaz-photo: AI image enhancer
+2025-09-30T22:11:17.4690100Z topaz-video: Video upscaler and quality enhancer
+2025-09-30T22:11:17.4694090Z [34m==>[0m [1mDeleted Installed Formulae[0m
+2025-09-30T22:11:17.4694900Z packer
+2025-09-30T22:11:18.1977060Z [34m==>[0m [1mOutdated Formulae[0m
+2025-09-30T22:11:18.1978130Z gcc
+2025-09-30T22:11:18.1979130Z gh
+2025-09-30T22:11:18.1979830Z git
+2025-09-30T22:11:18.1980460Z harfbuzz
+2025-09-30T22:11:18.1981120Z libnghttp3
+2025-09-30T22:11:18.1981980Z libngtcp2
+2025-09-30T22:11:18.1982790Z libpq
+2025-09-30T22:11:18.1983340Z libunistring
+2025-09-30T22:11:18.1983860Z node@22
+2025-09-30T22:11:18.1984270Z openssl@3
+2025-09-30T22:11:18.1984810Z p11-kit
+2025-09-30T22:11:18.1985270Z pipx
+2025-09-30T22:11:18.1985750Z python@3.12
+2025-09-30T22:11:18.1986210Z swiftformat
+2025-09-30T22:11:18.1986660Z 
+2025-09-30T22:11:18.1987040Z You have [1m14[0m outdated formulae installed.
+2025-09-30T22:11:18.1987990Z You can upgrade them with [1mbrew upgrade[0m
+2025-09-30T22:11:18.1988790Z or list them with [1mbrew outdated[0m.
+2025-09-30T22:11:20.0317220Z ##[warning]cmake 4.1.1 is already installed and up-to-date.
+To reinstall 4.1.1, run:
+  brew reinstall cmake
+
+2025-09-30T22:11:20.0331970Z ##[warning]ninja 1.13.1 is already installed and up-to-date.
+To reinstall 1.13.1, run:
+  brew reinstall ninja
+
+2025-09-30T22:11:20.3598230Z [32m==>[0m [1mFetching downloads for: [32msdl2[39m, [32mlibogg[39m, [32mflac[39m, [32mmednafen[39m and [32mcreate-dmg[39m[0m
+2025-09-30T22:11:20.3612390Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/sdl2/manifests/2.32.10[0m
+2025-09-30T22:11:20.7906140Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/libogg/manifests/1.3.6[0m
+2025-09-30T22:11:21.1681390Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/flac/manifests/1.5.0[0m
+2025-09-30T22:11:21.4991100Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/mednafen/manifests/1.32.1_1-1[0m
+2025-09-30T22:11:21.9969580Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/create-dmg/manifests/1.2.2[0m
+2025-09-30T22:11:22.5374910Z [32m==>[0m [1mFetching [32msdl2[39m[0m
+2025-09-30T22:11:22.5426320Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/sdl2/blobs/sha256:702b9e09ac8a7cc8a99ab4e9298803bbfcd3179d7b029883fe760ceecf98e526[0m
+2025-09-30T22:11:22.9958940Z [32m==>[0m [1mFetching [32mlibogg[39m[0m
+2025-09-30T22:11:23.0015590Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/libogg/blobs/sha256:2423ff6b931f0393cd314052a7328a61fdd6f1d8519b65c4dff5ab560f82c52d[0m
+2025-09-30T22:11:23.8839070Z [32m==>[0m [1mFetching [32mflac[39m[0m
+2025-09-30T22:11:23.8854490Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/flac/blobs/sha256:c9698bcebe8e99ab84adf49a347cad5a9f122c45b80622a9fe2acbaeab902545[0m
+2025-09-30T22:11:24.3611360Z [32m==>[0m [1mFetching dependencies for mednafen: [32mlame[39m, [32mlibvorbis[39m, [32mmpg123[39m, [32mopus[39m, [32mlibsndfile[39m, [32mlibcuefile[39m, [32mlibreplaygain[39m and [32mmusepack[39m[0m
+2025-09-30T22:11:24.3621820Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/lame/manifests/3.100[0m
+2025-09-30T22:11:24.8010320Z [32m==>[0m [1mFetching [32mlame[39m[0m
+2025-09-30T22:11:24.8015260Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/lame/blobs/sha256:0ae0dcb09c908b80ffbdb1bb168674e5190d6b9ae006d5282b7ab4f06eac9f36[0m
+2025-09-30T22:11:25.2649050Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/libvorbis/manifests/1.3.7-1[0m
+2025-09-30T22:11:25.7248540Z [32m==>[0m [1mFetching [32mlibvorbis[39m[0m
+2025-09-30T22:11:25.7253180Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/libvorbis/blobs/sha256:c28d1e0b461a4cf6f5aee72e664ac6f5f6f3efaab44f15b91924f08474cfafe1[0m
+2025-09-30T22:11:26.1715050Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/mpg123/manifests/1.33.2[0m
+2025-09-30T22:11:26.5098390Z [32m==>[0m [1mFetching [32mmpg123[39m[0m
+2025-09-30T22:11:26.5111410Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/mpg123/blobs/sha256:ef311cff7f895e6d9833813db551278279d5c9c7ce37635e3fe441c5c8d64928[0m
+2025-09-30T22:11:27.3668210Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/opus/manifests/1.5.2[0m
+2025-09-30T22:11:27.7219920Z [32m==>[0m [1mFetching [32mopus[39m[0m
+2025-09-30T22:11:27.7232380Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/opus/blobs/sha256:564c0c7f19ac41ed22baabf7c1bf2e172f81bad60ec211d03bda8eeb42ce2f1a[0m
+2025-09-30T22:11:28.1559620Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/libsndfile/manifests/1.2.2_1[0m
+2025-09-30T22:11:28.5931970Z [32m==>[0m [1mFetching [32mlibsndfile[39m[0m
+2025-09-30T22:11:28.5937660Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/libsndfile/blobs/sha256:2d6a8173ef41359c3da4c78a5d5eb402846e480c509b868f671b80a17726f9c4[0m
+2025-09-30T22:11:29.0429430Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/libcuefile/manifests/r475-1[0m
+2025-09-30T22:11:29.4893160Z [32m==>[0m [1mFetching [32mlibcuefile[39m[0m
+2025-09-30T22:11:29.4905130Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/libcuefile/blobs/sha256:34a5359939dfb84fbbfff58f7ddfc220c7dde287dcda457facbd29e8fe91f0de[0m
+2025-09-30T22:11:30.1137120Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/libreplaygain/manifests/r475-1[0m
+2025-09-30T22:11:30.5350170Z [32m==>[0m [1mFetching [32mlibreplaygain[39m[0m
+2025-09-30T22:11:30.5364450Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/libreplaygain/blobs/sha256:72f8e66bd85dbe08e01f9aad98d73a4788a030f34a3f8e40e940c6a62a7fbfc7[0m
+2025-09-30T22:11:30.9755980Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/musepack/manifests/r475-1[0m
+2025-09-30T22:11:31.5881610Z [32m==>[0m [1mFetching [32mmusepack[39m[0m
+2025-09-30T22:11:31.5887580Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/musepack/blobs/sha256:d84a9ad759b25d445781d6e1e5af5247431427e00e90bfb0b1014d9c2e6e4bab[0m
+2025-09-30T22:11:32.0440330Z [32m==>[0m [1mFetching [32mmednafen[39m[0m
+2025-09-30T22:11:32.0456510Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/mednafen/blobs/sha256:3ebf9988b2e260b9a1f755f8fcbcc0c9fa3411aae100594a99c03cded175f65c[0m
+2025-09-30T22:11:32.6467170Z [32m==>[0m [1mFetching [32mcreate-dmg[39m[0m
+2025-09-30T22:11:32.6476050Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/create-dmg/blobs/sha256:ed92cefd6df282057e6c1a162eb453d4c8d3b34a4a8637bf292813817badef81[0m
+2025-09-30T22:11:33.0492190Z [34m==>[0m [1mPouring sdl2--2.32.10.arm64_sequoia.bottle.tar.gz[0m
+2025-09-30T22:11:33.3512900Z 🍺  /opt/homebrew/Cellar/sdl2/2.32.10: 94 files, 6.4MB
+2025-09-30T22:11:33.3548550Z [34m==>[0m [1mPouring libogg--1.3.6.arm64_sequoia.bottle.tar.gz[0m
+2025-09-30T22:11:33.4977220Z 🍺  /opt/homebrew/Cellar/libogg/1.3.6: 103 files, 538.2KB
+2025-09-30T22:11:33.5044890Z [34m==>[0m [1mPouring flac--1.5.0.arm64_sequoia.bottle.tar.gz[0m
+2025-09-30T22:11:33.7972830Z 🍺  /opt/homebrew/Cellar/flac/1.5.0: 40 files, 1.9MB
+2025-09-30T22:11:33.8472220Z [32m==>[0m [1mInstalling dependencies for mednafen: [32mlame[39m, [32mlibvorbis[39m, [32mmpg123[39m, [32mopus[39m, [32mlibsndfile[39m, [32mlibcuefile[39m, [32mlibreplaygain[39m and [32mmusepack[39m[0m
+2025-09-30T22:11:33.8474240Z [32m==>[0m [1mInstalling mednafen dependency: [32mlame[39m[0m
+2025-09-30T22:11:33.8476550Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/lame/manifests/3.100[0m
+2025-09-30T22:11:33.8478570Z Already downloaded: /Users/runner/Library/Caches/Homebrew/downloads/31e57f3a54d6908e2c153f5eb435715208f3bd9db71e16470b553d72e051b269--lame-3.100.bottle_manifest.json
+2025-09-30T22:11:33.8522460Z [34m==>[0m [1mPouring lame--3.100.arm64_sequoia.bottle.tar.gz[0m
+2025-09-30T22:11:34.0765500Z 🍺  /opt/homebrew/Cellar/lame/3.100: 28 files, 2.2MB
+2025-09-30T22:11:34.0784080Z [32m==>[0m [1mInstalling mednafen dependency: [32mlibvorbis[39m[0m
+2025-09-30T22:11:34.0789730Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/libvorbis/manifests/1.3.7-1[0m
+2025-09-30T22:11:34.0792520Z Already downloaded: /Users/runner/Library/Caches/Homebrew/downloads/68d211b8805a2fab148645c2ac8e43495e576876d6f50f0c4af5ea890730b7ea--libvorbis-1.3.7-1.bottle_manifest.json
+2025-09-30T22:11:34.1314710Z [34m==>[0m [1mPouring libvorbis--1.3.7.arm64_sequoia.bottle.1.tar.gz[0m
+2025-09-30T22:11:34.5196230Z 🍺  /opt/homebrew/Cellar/libvorbis/1.3.7: 158 files, 2.4MB
+2025-09-30T22:11:34.5205400Z [32m==>[0m [1mInstalling mednafen dependency: [32mmpg123[39m[0m
+2025-09-30T22:11:34.5211090Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/mpg123/manifests/1.33.2[0m
+2025-09-30T22:11:34.5213080Z Already downloaded: /Users/runner/Library/Caches/Homebrew/downloads/a55086cc563ed9c00774ac1ec06e3d55923e6994eddd17574246773c9be897c5--mpg123-1.33.2.bottle_manifest.json
+2025-09-30T22:11:34.5241500Z [34m==>[0m [1mPouring mpg123--1.33.2.arm64_sequoia.bottle.tar.gz[0m
+2025-09-30T22:11:35.0352500Z 🍺  /opt/homebrew/Cellar/mpg123/1.33.2: 34 files, 2.0MB
+2025-09-30T22:11:35.0359000Z [32m==>[0m [1mInstalling mednafen dependency: [32mopus[39m[0m
+2025-09-30T22:11:35.0364580Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/opus/manifests/1.5.2[0m
+2025-09-30T22:11:35.0366590Z Already downloaded: /Users/runner/Library/Caches/Homebrew/downloads/ab70a7e8383f42047a27c0638675dbd9c3229997a01eed45d76f174664a4b607--opus-1.5.2.bottle_manifest.json
+2025-09-30T22:11:35.0381910Z [34m==>[0m [1mPouring opus--1.5.2.arm64_sequoia.bottle.tar.gz[0m
+2025-09-30T22:11:35.1625480Z 🍺  /opt/homebrew/Cellar/opus/1.5.2: 16 files, 1MB
+2025-09-30T22:11:35.1631320Z [32m==>[0m [1mInstalling mednafen dependency: [32mlibsndfile[39m[0m
+2025-09-30T22:11:35.1634590Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/libsndfile/manifests/1.2.2_1[0m
+2025-09-30T22:11:35.1636750Z Already downloaded: /Users/runner/Library/Caches/Homebrew/downloads/2e97439a3a58c856a00043feceb29f382febc8542b8a0c0a31aa202b2c93ea08--libsndfile-1.2.2_1.bottle_manifest.json
+2025-09-30T22:11:35.2112040Z [34m==>[0m [1mPouring libsndfile--1.2.2_1.arm64_sequoia.bottle.tar.gz[0m
+2025-09-30T22:11:35.4086140Z 🍺  /opt/homebrew/Cellar/libsndfile/1.2.2_1: 55 files, 1.8MB
+2025-09-30T22:11:35.4092320Z [32m==>[0m [1mInstalling mednafen dependency: [32mlibcuefile[39m[0m
+2025-09-30T22:11:35.4102930Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/libcuefile/manifests/r475-1[0m
+2025-09-30T22:11:35.4105420Z Already downloaded: /Users/runner/Library/Caches/Homebrew/downloads/bcfd5f9c5e66525827bd2c1024f9dbee05db47868b3077b3e19178fe9e25fd91--libcuefile-r475-1.bottle_manifest.json
+2025-09-30T22:11:35.4147340Z [34m==>[0m [1mPouring libcuefile--r475.arm64_sequoia.bottle.1.tar.gz[0m
+2025-09-30T22:11:35.6358810Z 🍺  /opt/homebrew/Cellar/libcuefile/r475: 13 files, 257.1KB
+2025-09-30T22:11:35.6366160Z [32m==>[0m [1mInstalling mednafen dependency: [32mlibreplaygain[39m[0m
+2025-09-30T22:11:35.6370980Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/libreplaygain/manifests/r475-1[0m
+2025-09-30T22:11:35.6373320Z Already downloaded: /Users/runner/Library/Caches/Homebrew/downloads/c2a362fb72ade5ac1b1d01f398f0b9cc9a1197d1d40629bbd063e5e49ecb1353--libreplaygain-r475-1.bottle_manifest.json
+2025-09-30T22:11:35.6416720Z [34m==>[0m [1mPouring libreplaygain--r475.arm64_sequoia.bottle.1.tar.gz[0m
+2025-09-30T22:11:35.7651090Z 🍺  /opt/homebrew/Cellar/libreplaygain/r475: 8 files, 69.2KB
+2025-09-30T22:11:35.7659250Z [32m==>[0m [1mInstalling mednafen dependency: [32mmusepack[39m[0m
+2025-09-30T22:11:35.7663650Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/musepack/manifests/r475-1[0m
+2025-09-30T22:11:35.7665750Z Already downloaded: /Users/runner/Library/Caches/Homebrew/downloads/38024792b77872be2f125d871addc33da905cbbd9e388df3b01eec29cd6aa4ae--musepack-r475-1.bottle_manifest.json
+2025-09-30T22:11:35.7943130Z [34m==>[0m [1mPouring musepack--r475.arm64_sequoia.bottle.1.tar.gz[0m
+2025-09-30T22:11:36.2830380Z 🍺  /opt/homebrew/Cellar/musepack/r475: 27 files, 758KB
+2025-09-30T22:11:36.2833940Z [32m==>[0m [1mInstalling [32mmednafen[39m[0m
+2025-09-30T22:11:36.2838580Z [34m==>[0m [1mPouring mednafen--1.32.1_1.arm64_sequoia.bottle.1.tar.gz[0m
+2025-09-30T22:11:36.7246410Z 🍺  /opt/homebrew/Cellar/mednafen/1.32.1_1: 11 files, 18MB
+2025-09-30T22:11:36.7279040Z [34m==>[0m [1mPouring create-dmg--1.2.2.all.bottle.tar.gz[0m
+2025-09-30T22:11:36.8112570Z 🍺  /opt/homebrew/Cellar/create-dmg/1.2.2: 13 files, 70.6KB
+2025-09-30T22:11:36.8119060Z [34m==>[0m [1mNo outdated dependents to upgrade![0m

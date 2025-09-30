@@ -1,0 +1,72 @@
+﻿2025-09-30T22:10:39.9799570Z ##[group]Run actions/checkout@v4
+2025-09-30T22:10:39.9800130Z with:
+2025-09-30T22:10:39.9800440Z   repository: Atomic-Germ/SNES-IDE
+2025-09-30T22:10:39.9800990Z   token: ***
+2025-09-30T22:10:39.9801260Z   ssh-strict: true
+2025-09-30T22:10:39.9801580Z   ssh-user: git
+2025-09-30T22:10:39.9801880Z   persist-credentials: true
+2025-09-30T22:10:39.9802190Z   clean: true
+2025-09-30T22:10:39.9802490Z   sparse-checkout-cone-mode: true
+2025-09-30T22:10:39.9802840Z   fetch-depth: 1
+2025-09-30T22:10:39.9803190Z   fetch-tags: false
+2025-09-30T22:10:39.9803490Z   show-progress: true
+2025-09-30T22:10:39.9803780Z   lfs: false
+2025-09-30T22:10:39.9804060Z   submodules: false
+2025-09-30T22:10:39.9804350Z   set-safe-directory: true
+2025-09-30T22:10:39.9804820Z env:
+2025-09-30T22:10:39.9805090Z   BUILD_ARCH: x86_64
+2025-09-30T22:10:39.9805390Z ##[endgroup]
+2025-09-30T22:10:40.4043480Z Syncing repository: Atomic-Germ/SNES-IDE
+2025-09-30T22:10:40.4050430Z ##[group]Getting Git version info
+2025-09-30T22:10:40.4052860Z Working directory is '/Users/runner/work/SNES-IDE/SNES-IDE'
+2025-09-30T22:10:40.4055670Z [command]/opt/homebrew/bin/git version
+2025-09-30T22:10:40.4688560Z git version 2.50.1
+2025-09-30T22:10:40.4719830Z ##[endgroup]
+2025-09-30T22:10:40.4732380Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/cdac294b-a792-4c0a-a8be-22f1158a7c1b/.gitconfig'
+2025-09-30T22:10:40.4751610Z Temporarily overriding HOME='/Users/runner/work/_temp/cdac294b-a792-4c0a-a8be-22f1158a7c1b' before making global git config changes
+2025-09-30T22:10:40.4756930Z Adding repository directory to the temporary git global config as a safe directory
+2025-09-30T22:10:40.4760560Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/SNES-IDE/SNES-IDE
+2025-09-30T22:10:40.4926870Z Deleting the contents of '/Users/runner/work/SNES-IDE/SNES-IDE'
+2025-09-30T22:10:40.4990310Z ##[group]Initializing the repository
+2025-09-30T22:10:40.4992410Z [command]/opt/homebrew/bin/git init /Users/runner/work/SNES-IDE/SNES-IDE
+2025-09-30T22:10:40.5232310Z hint: Using 'master' as the name for the initial branch. This default branch name
+2025-09-30T22:10:40.5238580Z hint: is subject to change. To configure the initial branch name to use in all
+2025-09-30T22:10:40.5239240Z hint: of your new repositories, which will suppress this warning, call:
+2025-09-30T22:10:40.5239700Z hint:
+2025-09-30T22:10:40.5240040Z hint: 	git config --global init.defaultBranch <name>
+2025-09-30T22:10:40.5240470Z hint:
+2025-09-30T22:10:40.5240850Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2025-09-30T22:10:40.5241510Z hint: 'development'. The just-created branch can be renamed via this command:
+2025-09-30T22:10:40.5241980Z hint:
+2025-09-30T22:10:40.5242280Z hint: 	git branch -m <name>
+2025-09-30T22:10:40.5242580Z hint:
+2025-09-30T22:10:40.5243020Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2025-09-30T22:10:40.5243680Z Initialized empty Git repository in /Users/runner/work/SNES-IDE/SNES-IDE/.git/
+2025-09-30T22:10:40.5252070Z [command]/opt/homebrew/bin/git remote add origin https://github.com/Atomic-Germ/SNES-IDE
+2025-09-30T22:10:40.5365350Z ##[endgroup]
+2025-09-30T22:10:40.5366610Z ##[group]Disabling automatic garbage collection
+2025-09-30T22:10:40.5370260Z [command]/opt/homebrew/bin/git config --local gc.auto 0
+2025-09-30T22:10:40.5464970Z ##[endgroup]
+2025-09-30T22:10:40.5465790Z ##[group]Setting up auth
+2025-09-30T22:10:40.5470070Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-09-30T22:10:40.5546710Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-09-30T22:10:40.7109310Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2025-09-30T22:10:40.7205470Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2025-09-30T22:10:40.8446510Z [command]/opt/homebrew/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2025-09-30T22:10:40.8453880Z ##[endgroup]
+2025-09-30T22:10:40.8458580Z ##[group]Fetching the repository
+2025-09-30T22:10:40.8474410Z [command]/opt/homebrew/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +ad18e12ffea3748495d5a047088cb0e1b592bd51:refs/remotes/origin/develop/macos
+2025-09-30T22:10:42.1265610Z From https://github.com/Atomic-Germ/SNES-IDE
+2025-09-30T22:10:42.1269250Z  * [new ref]         ad18e12ffea3748495d5a047088cb0e1b592bd51 -> origin/develop/macos
+2025-09-30T22:10:42.1420380Z ##[endgroup]
+2025-09-30T22:10:42.1422420Z ##[group]Determining the checkout info
+2025-09-30T22:10:42.1425060Z ##[endgroup]
+2025-09-30T22:10:42.1429940Z [command]/opt/homebrew/bin/git sparse-checkout disable
+2025-09-30T22:10:42.1555250Z [command]/opt/homebrew/bin/git config --local --unset-all extensions.worktreeConfig
+2025-09-30T22:10:42.1673890Z ##[group]Checking out the ref
+2025-09-30T22:10:42.1676390Z [command]/opt/homebrew/bin/git checkout --progress --force -B develop/macos refs/remotes/origin/develop/macos
+2025-09-30T22:10:42.9299580Z Switched to a new branch 'develop/macos'
+2025-09-30T22:10:42.9315540Z branch 'develop/macos' set up to track 'origin/develop/macos'.
+2025-09-30T22:10:42.9330510Z ##[endgroup]
+2025-09-30T22:10:42.9467250Z [command]/opt/homebrew/bin/git log -1 --format=%H
+2025-09-30T22:10:42.9577030Z ad18e12ffea3748495d5a047088cb0e1b592bd51

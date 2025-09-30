@@ -1,0 +1,35 @@
+﻿2025-09-30T22:10:43.9351890Z ##[group]Run python -m pip install --upgrade pip
+2025-09-30T22:10:43.9352330Z [36;1mpython -m pip install --upgrade pip[0m
+2025-09-30T22:10:43.9352600Z [36;1mif [ -f build-requirements.txt ]; then[0m
+2025-09-30T22:10:43.9352980Z [36;1m  pip install -r build-requirements.txt || true[0m
+2025-09-30T22:10:43.9353230Z [36;1mfi[0m
+2025-09-30T22:10:43.9442270Z shell: /bin/bash -e {0}
+2025-09-30T22:10:43.9442630Z env:
+2025-09-30T22:10:43.9442820Z   BUILD_ARCH: arm64
+2025-09-30T22:10:43.9443090Z   pythonLocation: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:10:43.9443500Z   PKG_CONFIG_PATH: /Users/runner/hostedtoolcache/Python/3.11.9/arm64/lib/pkgconfig
+2025-09-30T22:10:43.9444070Z   Python_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:10:43.9444470Z   Python2_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:10:43.9444860Z   Python3_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.11.9/arm64
+2025-09-30T22:10:43.9445130Z ##[endgroup]
+2025-09-30T22:10:46.1584120Z Requirement already satisfied: pip in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (25.2)
+2025-09-30T22:10:47.3376320Z Collecting pyinstaller (from -r build-requirements.txt (line 1))
+2025-09-30T22:10:47.4016190Z   Downloading pyinstaller-6.16.0-py3-none-macosx_10_13_universal2.whl.metadata (8.5 kB)
+2025-09-30T22:10:47.4598700Z Collecting altgraph (from pyinstaller->-r build-requirements.txt (line 1))
+2025-09-30T22:10:47.4837670Z   Downloading altgraph-0.17.4-py2.py3-none-any.whl.metadata (7.3 kB)
+2025-09-30T22:10:47.5141640Z Collecting macholib>=1.8 (from pyinstaller->-r build-requirements.txt (line 1))
+2025-09-30T22:10:47.5558720Z   Downloading macholib-1.16.3-py2.py3-none-any.whl.metadata (11 kB)
+2025-09-30T22:10:47.6309920Z Collecting packaging>=22.0 (from pyinstaller->-r build-requirements.txt (line 1))
+2025-09-30T22:10:47.6510330Z   Downloading packaging-25.0-py3-none-any.whl.metadata (3.3 kB)
+2025-09-30T22:10:47.6813160Z Collecting pyinstaller-hooks-contrib>=2025.8 (from pyinstaller->-r build-requirements.txt (line 1))
+2025-09-30T22:10:47.7015530Z   Downloading pyinstaller_hooks_contrib-2025.9-py3-none-any.whl.metadata (16 kB)
+2025-09-30T22:10:47.7116810Z Requirement already satisfied: setuptools>=42.0.0 in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (from pyinstaller->-r build-requirements.txt (line 1)) (65.5.0)
+2025-09-30T22:10:47.7317950Z Downloading pyinstaller-6.16.0-py3-none-macosx_10_13_universal2.whl (1.0 MB)
+2025-09-30T22:10:47.8138290Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.0/1.0 MB 15.2 MB/s  0:00:00
+2025-09-30T22:10:47.8344030Z Downloading macholib-1.16.3-py2.py3-none-any.whl (38 kB)
+2025-09-30T22:10:47.8646280Z Downloading altgraph-0.17.4-py2.py3-none-any.whl (21 kB)
+2025-09-30T22:10:47.8848260Z Downloading packaging-25.0-py3-none-any.whl (66 kB)
+2025-09-30T22:10:47.9050770Z Downloading pyinstaller_hooks_contrib-2025.9-py3-none-any.whl (444 kB)
+2025-09-30T22:10:47.9633660Z Installing collected packages: altgraph, packaging, macholib, pyinstaller-hooks-contrib, pyinstaller
+2025-09-30T22:10:49.3389960Z 
+2025-09-30T22:10:49.3391760Z Successfully installed altgraph-0.17.4 macholib-1.16.3 packaging-25.0 pyinstaller-6.16.0 pyinstaller-hooks-contrib-2025.9
