@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - develop/macos
+  workflow_dispatch:
+
+# NOTE: LC_ALL=C added to prevent sed illegal byte sequence on macOS; comment added to trigger CI run.
 
 jobs:
   build-and-smoke:
@@ -31,6 +34,8 @@ jobs:
           ls -la SNES-IDE-out | tee sneside-listing.txt
 
       - name: Check top-level scripts for shebang and exec bit
+        env:
+          LC_ALL: C
         run: |
           printf "file,first_line,exec\n" > top-scripts-check.csv
           for f in SNES-IDE-out/*; do
