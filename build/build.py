@@ -354,6 +354,24 @@ def compile() -> None:
             py_out = SNESIDEOUT / rel_path
             py_out.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(file, py_out)
+            # Ensure the copied python file is directly executable on POSIX
+            try:
+                with open(py_out, 'rb') as pf:
+                    first = pf.readline()
+                if not first.startswith(b'#!'):
+                    # Prepend a portable shebang while preserving file contents
+                    with open(py_out, 'rb') as srcf:
+                        data = srcf.read()
+                    with open(py_out, 'wb') as dstf:
+                        dstf.write(b"#!/usr/bin/env python3\n")
+                        dstf.write(data)
+                try:
+                    py_out.chmod(py_out.stat().st_mode | 0o111)
+                except Exception:
+                    pass
+            except Exception:
+                # If anything goes wrong here, continue—shim is the primary runtime entry
+                pass
             # Create shim without extension to behave like an executable
             shim_path = out_path
             shim_path.parent.mkdir(parents=True, exist_ok=True)

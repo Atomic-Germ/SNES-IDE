@@ -3,6 +3,9 @@ from re import match
 from os import path
 import subprocess
 import sys
+import argparse
+import time
+import json
 
 class shutil:
     """Cross-platform shutil wrapper for the release copy of create-new-project."""
@@ -102,6 +105,79 @@ class ProjectCreator:
             input("The specified path does not exist. Press any key to exit...")
 
 
-if __name__ == "__main__":
+# Implement headless variant in the release copy
 
-    ProjectCreator().run()
+def _write_log(log_path: str, payload: dict) -> None:
+    try:
+        with open(log_path, 'w') as lf:
+            json.dump(payload, lf, indent=2)
+    except Exception:
+        pass
+
+
+def headless_create(name: str, parent: str, log_file: str | None = None) -> int:
+    ts = int(time.time())
+    if not log_file:
+        log_file = f"/tmp/create-new-project-ci-{ts}.log"
+
+    entry = {
+        'timestamp': ts,
+        'action': 'create-new-project',
+        'name': name,
+        'parent': parent,
+        'status': 'failed',
+        'message': '',
+        'created_path': None
+    }
+
+    if not path.isdir(parent):
+        entry['message'] = f"Parent path does not exist: {parent}"
+        _write_log(log_file, entry)
+        print(entry['message'], file=sys.stderr)
+        return 2
+
+    if not match(r"^[A-Za-z0-9_-]+$", name):
+        entry['message'] = "Invalid project name. Only alphanumeric, underscore and hyphen allowed."
+        _write_log(log_file, entry)
+        print(entry['message'], file=sys.stderr)
+        return 3
+
+    target_path = path.join(parent, name)
+    try:
+        template_path = path.abspath(path.join(Path(__file__).resolve().parent, '..', 'libs', 'template'))
+        shutil.copytree(template_path, target_path)
+        entry['status'] = 'ok'
+        entry['message'] = 'Project created successfully.'
+        entry['created_path'] = target_path
+        _write_log(log_file, entry)
+        print(entry['message'])
+        return 0
+    except Exception as e:
+        entry['message'] = f'Exception during project creation: {e}'
+        _write_log(log_file, entry)
+        print(entry['message'], file=sys.stderr)
+        return 4
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Create a new SNES-IDE project (interactive or headless).')
+    parser.add_argument('--name', '-n', help='Project name (alphanumeric, underscore, hyphen)')
+    parser.add_argument('--parent', '-p', help='Parent folder where project will be created')
+    parser.add_argument('--headless', action='store_true', help='Run in non-interactive headless/CI mode')
+    parser.add_argument('--ci', action='store_true', help='Alias for --headless')
+    parser.add_argument('--log', help='Path to write a JSON log file when running in headless mode')
+
+    args = parser.parse_args()
+
+    if args.headless or args.ci:
+        if not args.name or not args.parent:
+            print('Error: --name and --parent are required in headless mode', file=sys.stderr)
+            sys.exit(1)
+        rc = headless_create(args.name, args.parent, args.log)
+        sys.exit(rc)
+    else:
+        try:
+            ProjectCreator().run()
+        except EOFError:
+            print('Interactive input not available. Use --headless with --name and --parent for automation.', file=sys.stderr)
+            sys.exit(1)
