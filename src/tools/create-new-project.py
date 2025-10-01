@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from pathlib import Path
 from re import match
 import subprocess
@@ -7,6 +8,23 @@ import time
 import json
 import logging
 import os
+import shutil as _pyshutil
+
+try:
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn
+    from prompt_toolkit import prompt
+    from prompt_toolkit.completion import PathCompleter
+    from prompt_toolkit.validation import Validator, ValidationError
+    HAS_RICH_UI = True
+except ImportError:
+    HAS_RICH_UI = False
+    print("Warning: rich or prompt_toolkit not installed. Using basic CLI interface.")
+
+# Initialize rich console if available
+console = Console() if HAS_RICH_UI else None
+
 
 class CustomShutil:
     """Cross-platform shutil wrapper for the small tools.
@@ -18,47 +36,114 @@ class CustomShutil:
 
     @staticmethod
     def copy(src: str | Path, dst: str | Path) -> None:
-        import shutil as _pyshutil
         src, dst = map(lambda x: Path(x).resolve(), (src, dst))
         dst_parent = dst.parent
         dst_parent.mkdir(parents=True, exist_ok=True)
         _pyshutil.copy2(str(src), str(dst))
 
     @staticmethod
-    def copytree(src: str | Path, dst: str | Path) -> None:
-        import shutil as _pyshutil
+    def copytree(src: str | Path, dst: str | Path, callback=None) -> None:
         src, dst = map(lambda x: Path(x).resolve(), (src, dst))
+        
+        # Count files for progress bar
+        if callback:
+            file_count = sum(1 for _ in Path(src).rglob('*') if _.is_file())
+            copied_files = 0
+        
         try:
-            _pyshutil.copytree(str(src), str(dst), dirs_exist_ok=True)
-        except TypeError:
-            # Fallback for older Python versions
-            Path(dst).mkdir(parents=True, exist_ok=True)
-            for p in Path(src).rglob('*'):
-                rel = p.relative_to(src)
-                dest = Path(dst) / rel
-                if p.is_dir():
-                    dest.mkdir(parents=True, exist_ok=True)
-                else:
-                    dest.parent.mkdir(parents=True, exist_ok=True)
-                    _pyshutil.copy2(str(p), str(dest))
+            if callback:
+                # Manual copy with progress tracking
+                Path(dst).mkdir(parents=True, exist_ok=True)
+                for p in Path(src).rglob('*'):
+                    rel = p.relative_to(src)
+                    dest = Path(dst) / rel
+                    if p.is_dir():
+                        dest.mkdir(parents=True, exist_ok=True)
+                    else:
+                        dest.parent.mkdir(parents=True, exist_ok=True)
+                        _pyshutil.copy2(str(p), str(dest))
+                        copied_files += 1
+                        callback(copied_files, file_count)
+            else:
+                # Standard copy without progress tracking
+                try:
+                    _pyshutil.copytree(str(src), str(dst), dirs_exist_ok=True)
+                except TypeError:
+                    # Fallback for older Python versions
+                    Path(dst).mkdir(parents=True, exist_ok=True)
+                    for p in Path(src).rglob('*'):
+                        rel = p.relative_to(src)
+                        dest = Path(dst) / rel
+                        if p.is_dir():
+                            dest.mkdir(parents=True, exist_ok=True)
+                        else:
+                            dest.parent.mkdir(parents=True, exist_ok=True)
+                            _pyshutil.copy2(str(p), str(dest))
+        except Exception as e:
+            raise Exception(f"Error copying files: {e}")
 
     @staticmethod
     def rmtree(path: str | Path) -> None:
-        import shutil as _pyshutil
         p = Path(path).resolve()
         if p.exists():
             _pyshutil.rmtree(str(p))
 
     @staticmethod
     def move(src: str | Path, dst: str | Path) -> None:
-        import shutil as _pyshutil
         src, dst = map(lambda x: Path(x).resolve(), (src, dst))
         Path(dst).parent.mkdir(parents=True, exist_ok=True)
         _pyshutil.move(str(src), str(dst))
 
 
-class ProjectCreator:
+class ProjectNameValidator(Validator):
+    def validate(self, document):
+        text = document.text
+        if not text:
+            raise ValidationError(message="Project name cannot be empty")
+            
+        if not match(r"^[A-Za-z0-9_-]+$", text):
+            raise ValidationError(
+                message="Invalid project name. Please use only alphanumeric characters, underscores, or hyphens."
+            )
 
+
+class ParentPathValidator(Validator):
+    def validate(self, document):
+        text = document.text
+        if not text:
+            raise ValidationError(message="Path cannot be empty")
+            
+        # Handle ~ for home directory on Unix-like systems
+        if text.startswith('~') and (sys.platform == 'darwin' or sys.platform.startswith('linux')):
+            text = os.path.expanduser(text)
+            
+        try:
+            path_obj = Path(text).expanduser().resolve()
+            
+            # Check if path exists
+            if not path_obj.exists():
+                raise ValidationError(message=f"The path does not exist: {path_obj}")
+                
+            # Check if path is a directory
+            if not path_obj.is_dir():
+                raise ValidationError(message=f"The path is not a directory: {path_obj}")
+                
+            # Check if we have write permission
+            try:
+                # Try to create a temporary file to test write permissions
+                test_file = path_obj / f".write_test_{time.time()}"
+                test_file.touch()
+                test_file.unlink()
+            except (PermissionError, OSError) as e:
+                raise ValidationError(message=f"Cannot write to directory {path_obj}: {e}")
+                
+        except ValidationError:
+            raise
+        except Exception as e:
+            raise ValidationError(message=f"Error validating path: {e}")
+
+
+class ProjectCreator:
     def __init__(self, debug=False, debug_log=None):
         """Initialize the project creator with user input for project name and path."""
         self.debug = debug
@@ -73,7 +158,10 @@ class ProjectCreator:
     def log_debug(self, message, *args):
         """Log debug message if debug mode is enabled."""
         if self.debug:
-            print(f"DEBUG: {message % args}")
+            if HAS_RICH_UI:
+                console.print(f"[dim][DEBUG][/dim] {message % args}")
+            else:
+                print(f"DEBUG: {message % args}")
         self.logger.debug(message, *args)
 
     def _setup_logging(self):
@@ -109,21 +197,63 @@ class ProjectCreator:
         
         return logger
 
-    def prompt_for_input(self):
-        """Prompt the user for project name and path."""
-        print("**Welcome to the SNES-IDE project creator!**")
-        print("This tool will help you create a new SNES-IDE project.")
-        print("Please follow the instructions below to create your project.\n")
-
-        print("Write down the name of your new project:\n")
-        self.project_name = input()
-
-        if sys.platform == 'darwin' or sys.platform.startswith('linux'):
-            print("Write down the full path of the folder you want to create a project: \n(Use /path/to/folder format)\n\n")
+    def show_welcome(self):
+        """Display a welcome message with improved formatting."""
+        if HAS_RICH_UI:
+            console.print(Panel.fit(
+                "[bold yellow]Welcome to the SNES-IDE project creator![/bold yellow]\n\n"
+                "This tool will help you create a new SNES-IDE project.\n"
+                "Please follow the instructions below to create your project.",
+                border_style="green",
+                padding=(1, 2),
+                title="[bold blue]SNES-IDE[/bold blue]"
+            ))
         else:
-            print("Write down the Full path of the folder you want to create a project: \n(Use C:\\\\foo\\\\theFolder structure)\n\n")
+            print("**Welcome to the SNES-IDE project creator!**")
+            print("This tool will help you create a new SNES-IDE project.")
+            print("Please follow the instructions below to create your project.\n")
+
+    def prompt_for_input(self):
+        """Prompt the user for project name and path with improved UI."""
+        self.show_welcome()
+        
+        # Get project name
+        if HAS_RICH_UI:
+            console.print("[bold]Project Name:[/bold]")
+            console.print("[dim]Please enter a name using only alphanumeric characters, underscores, or hyphens.[/dim]")
+            self.project_name = prompt(
+                "\n> ", 
+                validator=ProjectNameValidator()
+            )
             
-        user_input = input()
+            # Get project path
+            console.print("\n[bold]Project Path:[/bold]")
+            if sys.platform == 'darwin' or sys.platform.startswith('linux'):
+                console.print("[dim]Please enter the full path where you want to create the project.[/dim]")
+                console.print("[dim]Example: ~/Projects or /Users/username/Documents[/dim]")
+            else:
+                console.print("[dim]Please enter the full path where you want to create the project.[/dim]")
+                console.print("[dim]Example: C:\\Projects or D:\\Development[/dim]")
+                
+            path_completer = PathCompleter(only_directories=True)
+            user_input = prompt(
+                "\n> ", 
+                completer=path_completer,
+                validator=ParentPathValidator(),
+                complete_while_typing=True
+            )
+        else:
+            # Fallback to standard input
+            print("Write down the name of your new project:\n")
+            self.project_name = input()
+
+            if sys.platform == 'darwin' or sys.platform.startswith('linux'):
+                print("Write down the full path of the folder you want to create a project: \n(Use /path/to/folder format)\n\n")
+            else:
+                print("Write down the Full path of the folder you want to create a project: \n(Use C:\\\\foo\\\\theFolder structure)\n\n")
+                
+            user_input = input()
+            
         self.full_path = self.normalize_path(user_input)
         
         self.log_debug("Project name: %s", self.project_name)
@@ -196,12 +326,18 @@ class ProjectCreator:
         if getattr(sys, 'frozen', False):
             # PyInstaller executable
             exe_path = Path(sys.executable).parent
-            print(f"Executable path mode: {exe_path}")
+            if HAS_RICH_UI:
+                console.print(f"[dim]Executable path mode: {exe_path}[/dim]")
+            else:
+                print(f"Executable path mode: {exe_path}")
             return exe_path
         else:
             # Normal script
             script_path = Path(__file__).resolve().parent
-            print(f"Python script path mode: {script_path}")
+            if HAS_RICH_UI:
+                console.print(f"[dim]Python script path mode: {script_path}[/dim]")
+            else:
+                print(f"Python script path mode: {script_path}")
             return script_path
 
     def find_template_path(self):
@@ -243,6 +379,29 @@ class ProjectCreator:
                          ", ".join(str(p) for p in template_candidates))
         return None
 
+    def copy_with_progress(self, src_path, dst_path):
+        """Copy files with a progress indicator."""
+        if HAS_RICH_UI:
+            with Progress(
+                SpinnerColumn(),
+                "[progress.description]{task.description}",
+                BarColumn(),
+                "[progress.percentage]{task.percentage:>3.0f}%",
+                "[progress.completed]{task.completed} of {task.total} files",
+                console=console
+            ) as progress:
+                task = progress.add_task("[green]Copying files...", total=100)
+                
+                def update_progress(current, total):
+                    progress.update(task, completed=current, total=total, 
+                                   description=f"[green]Copying files ({current}/{total})")
+                    
+                CustomShutil.copytree(src_path, dst_path, callback=update_progress)
+        else:
+            print("Copying files...")
+            CustomShutil.copytree(src_path, dst_path)
+            print("Copy complete!")
+
     def run(self):
         """Run the project creation process."""
         if not self.project_name or not self.full_path:
@@ -252,24 +411,39 @@ class ProjectCreator:
         name_valid, name_msg = self.validate_project_name(self.project_name)
         if not name_valid:
             self.logger.error(name_msg)
-            print(name_msg)
-            input("Press any key to exit...")
+            if HAS_RICH_UI:
+                console.print(f"[bold red]Error:[/bold red] {name_msg}")
+                console.print("\nPress Enter to exit...")
+            else:
+                print(name_msg)
+                print("\nPress any key to exit...")
+            input()
             return 1
 
         # Validate parent path
         path_valid, path_msg = self.validate_parent_path(self.full_path)
         if not path_valid:
             self.logger.error(path_msg)
-            print(path_msg)
-            input("Press any key to exit...")
+            if HAS_RICH_UI:
+                console.print(f"[bold red]Error:[/bold red] {path_msg}")
+                console.print("\nPress Enter to exit...")
+            else:
+                print(path_msg)
+                print("\nPress any key to exit...")
+            input()
             return 1
         
         # Validate target path (doesn't already exist)
         target_valid, target_msg = self.validate_target_path(self.full_path, self.project_name)
         if not target_valid:
             self.logger.error(target_msg)
-            print(target_msg)
-            input("Press any key to exit...")
+            if HAS_RICH_UI:
+                console.print(f"[bold red]Error:[/bold red] {target_msg}")
+                console.print("\nPress Enter to exit...")
+            else:
+                print(target_msg)
+                print("\nPress any key to exit...")
+            input()
             return 1
 
         # All validation passed
@@ -280,22 +454,38 @@ class ProjectCreator:
         template_path = self.find_template_path()
         
         if not template_path:
-            print("Error: Could not find template directory.")
-            input("Press any key to exit...")
+            if HAS_RICH_UI:
+                console.print("[bold red]Error:[/bold red] Could not find template directory.")
+                console.print("\nPress Enter to exit...")
+            else:
+                print("Error: Could not find template directory.")
+                print("\nPress any key to exit...")
+            input()
             return 1
         
         self.log_debug("Copying from template: %s", template_path)
         self.log_debug("Copying to target: %s", target_path)
         
         try:
-            CustomShutil.copytree(template_path, target_path)
-            print(f"Project created successfully at: {target_path}")
-            input("Press any key to exit...")
+            self.copy_with_progress(template_path, target_path)
+            if HAS_RICH_UI:
+                console.print("\n[bold green]Project created successfully! ✓[/bold green]")
+                console.print(f"Location: [bold]{target_path}[/bold]")
+                console.print("\nPress Enter to exit...")
+            else:
+                print(f"\nProject created successfully at: {target_path}")
+                print("\nPress any key to exit...")
+            input()
             return 0
         except Exception as e:
             self.logger.error("Error during project creation: %s", e)
-            print(f"Error creating project: {e}")
-            input("Press any key to exit...")
+            if HAS_RICH_UI:
+                console.print(f"[bold red]Error:[/bold red] {e}")
+                console.print("\nPress Enter to exit...")
+            else:
+                print(f"Error creating project: {e}")
+                print("\nPress any key to exit...")
+            input()
             return 1
 
 
@@ -383,7 +573,9 @@ def headless_create(name: str, parent: str, debug: bool = False, debug_log: str 
             
         creator.log_debug("Found template path: %s", template_path)
         
-        CustomShutil.copytree(template_path, target_path)
+        # Copy template files (with progress bar if running in Rich mode)
+        creator.copy_with_progress(template_path, target_path)
+        
         entry['status'] = 'ok'
         entry['message'] = 'Project created successfully.'
         entry['created_path'] = str(target_path)
@@ -408,8 +600,13 @@ if __name__ == "__main__":
     parser.add_argument('--log', help='Path to write a JSON log file when running in headless mode')
     parser.add_argument('--debug', action='store_true', help='Enable debug output')
     parser.add_argument('--debug-log', help='Path to write debug log JSON')
+    parser.add_argument('--no-color', action='store_true', help='Disable colored output')
 
     args = parser.parse_args()
+
+    # Disable colored output if requested
+    if args.no_color and HAS_RICH_UI and console:
+        console.no_color = True
 
     if args.headless or args.ci:
         if not args.name or not args.parent:
@@ -424,5 +621,9 @@ if __name__ == "__main__":
             sys.exit(creator.run())
         except EOFError:
             # If interactive input is not available, provide a helpful message
-            print('Interactive input not available. Use --headless with --name and --parent for automation.', file=sys.stderr)
+            if HAS_RICH_UI:
+                console.print("[bold red]Error:[/bold red] Interactive input not available.")
+                console.print("Use --headless with --name and --parent for automation.")
+            else:
+                print('Interactive input not available. Use --headless with --name and --parent for automation.', file=sys.stderr)
             sys.exit(1)
