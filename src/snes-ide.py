@@ -1,5 +1,14 @@
 from pathlib import Path
 from array import array
+import argparse
+import json
+import logging
+import os
+import argparse
+from datetime import datetime
+import json
+import logging
+import os
 import subprocess
 import sys
 import platform
@@ -20,9 +29,37 @@ class SnesIde(object):
             *args: Variable length argument list.
             **kwargs: Arbitrary keyword arguments.
         """
+        # Parse command-line arguments if provided
+        self.debug = False
+        self.debug_log_path = None
+        
+        if len(sys.argv) > 1:  # Only parse if args are provided, otherwise stay in basic mode
+            parser = argparse.ArgumentParser(description='SNES-IDE - Super Nintendo Entertainment System IDE')
+            parser.add_argument('--debug', action='store_true', help='Enable debug output')
+            parser.add_argument('--debug-log', help='Path to write debug log JSON')
+            parser.add_argument('--headless', action='store_true', help='Run in headless mode (requires --option)')
+            parser.add_argument('--option', type=int, help='Option to select in headless mode')
+            args = parser.parse_args()
+            
+            self.debug = args.debug or os.environ.get('SNES_IDE_DEBUG') == '1'
+            self.debug_log_path = args.debug_log
+            self.headless = args.headless
+            self.selected_option = args.option
+        else:
+            self.headless = False
+            self.selected_option = None
 
+        # Configure logging
+        log_level = logging.DEBUG if self.debug else logging.INFO
+        logging.basicConfig(level=log_level, format='%(levelname)s: %(message)s')
+        
         # Prefer the packaged tools directory when running from the bundle.
         base = self.get_executable_path()
+        if self.debug:
+            logging.debug(f"Base executable path: {base}")
+            logging.debug(f"Platform: {platform.system()}")
+            logging.debug(f"Python: {sys.version}")
+        
         packaged_tools = base / "tools"
         if packaged_tools.exists():
             self.path: Path = packaged_tools
@@ -30,9 +67,21 @@ class SnesIde(object):
             # Fallback for development mode / manual installs
             self.path: Path = Path.home() / "Desktop" / "snes-ide"
 
+        if self.debug:
+            logging.debug(f"Tools path: {self.path}")
+            logging.debug(f"Tools path exists: {self.path.exists()}")
+
         self.options: array = array("B", (0, 1, 2, 3, 4, 5, 6))
 
-        option = self.give_options()
+        if self.headless and self.selected_option is not None:
+            if self.selected_option not in self.options:
+                logging.error(f"Invalid option: {self.selected_option}")
+                sys.exit(1)
+            option = self.selected_option
+            if self.debug:
+                logging.debug(f"Headless mode, selected option: {option}")
+        else:
+            option = self.give_options()
 
         sys.exit(self.execute_bat(option))
 
@@ -123,23 +172,62 @@ class SnesIde(object):
         }
 
         if option not in mapping:
+            logging.error(f"Invalid option: {option}")
             return -1
 
         base_name = mapping[option]
 
         # Candidates to try, in order: .bat (Windows), .sh (POSIX), no extension (native)
         candidates = [self.path / (base_name + ext) for ext in ('.bat', '.sh', '')]
+        
+        # Python script direct execution - if a .py version exists in the path
+        py_candidate = self.path / f"{base_name}.py"
+        if py_candidate.exists():
+            candidates.insert(0, py_candidate)  # Prioritize Python script if available
+
+        if self.debug:
+            logging.debug(f"Looking for script candidates for option {option} ({base_name}):")
+            for candidate in candidates:
+                logging.debug(f"  {candidate} - exists: {candidate.exists()}")
+
+        # Save debug log if requested
+        if self.debug_log_path:
+            debug_data = {
+                "timestamp": str(datetime.now()),
+                "platform": platform.system(),
+                "python_version": sys.version,
+                "base_path": str(self.path),
+                "option": option,
+                "base_name": base_name,
+                "candidates": [{
+                    "path": str(candidate),
+                    "exists": candidate.exists()
+                } for candidate in candidates]
+            }
+            try:
+                log_path = Path(self.debug_log_path).expanduser()
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(log_path, 'w') as f:
+                    json.dump(debug_data, f, indent=2)
+                if self.debug:
+                    logging.debug(f"Debug log written to {log_path}")
+            except Exception as e:
+                logging.error(f"Failed to write debug log: {e}")
 
         for candidate in candidates:
             if candidate.exists():
                 try:
+                    if self.debug:
+                        logging.debug(f"Executing: {candidate}")
                     self.run(candidate)
                     return 0
                 except Exception as e:
-                    print(f"Error executing {candidate}: {e}")
+                    logging.error(f"Error executing {candidate}: {e}")
                     return -1
 
-        print(f"No suitable script found for option {option}. Looked for: {', '.join(str(p) for p in candidates)}")
+        error_msg = f"No suitable script found for option {option}. Looked for: {', '.join(str(p) for p in candidates)}"
+        logging.error(error_msg)
+        print(error_msg)
         return -1
     
 
@@ -199,13 +287,17 @@ Emulate a Snes project with bsnes -> 6\n "
 
         if getattr(sys, 'frozen', False):
             # PyInstaller executable
-            print("Executable path mode chosen")
+            mode_message = "Executable path mode chosen"
+            logging.info(mode_message)
+            print(mode_message)
 
             return Path(sys.executable).parent
     
         else:
             # Normal script
-            print("Python script path mode chosen")
+            mode_message = "Python script path mode chosen"
+            logging.info(mode_message)
+            print(mode_message)
 
             return Path(__file__).absolute().parent
 
