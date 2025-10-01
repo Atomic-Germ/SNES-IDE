@@ -1,0 +1,65 @@
+name: macOS Regression Tests
+
+on:
+  push:
+    branches:
+      - develop/macos
+
+jobs:
+  build-and-smoke:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install CLI tools
+        run: |
+          brew update || true
+          brew install jq || true
+
+      - name: Run mac build
+        run: |
+          python3 build/build.py mac
+
+      - name: List SNES-IDE-out top-level
+        run: |
+          ls -la SNES-IDE-out | tee sneside-listing.txt
+
+      - name: Check top-level scripts for shebang and exec bit
+        run: |
+          printf "file,first_line,exec\n" > top-scripts-check.csv
+          for f in SNES-IDE-out/*; do
+            if [ -f "$f" ]; then
+              headline=$(head -n 1 "$f" 2>/dev/null | sed -e 's/,/ /g')
+              xbit=N
+              if [ -x "$f" ]; then xbit=Y; fi
+              printf "%s,%s,%s\n" "$(basename $f)" "$headline" "$xbit" >> top-scripts-check.csv
+            fi
+          done
+          cat top-scripts-check.csv
+
+      - name: Run headless create-new-project smoke test
+        run: |
+          mkdir -p /tmp/sneside-ci
+          SNIPPED_LOG="/tmp/create-new-project-ci-$(date +%s).json"
+          python3 SNES-IDE-out/tools/create-new-project.py --headless --name snes-ci-test --parent /tmp --log "$SNIPPED_LOG" || true
+          echo "--- LOG OUTPUT ---"
+          if [ -f "$SNIPPED_LOG" ]; then
+            cat "$SNIPPED_LOG" | jq . || cat "$SNIPPED_LOG"
+          else
+            echo "No log created: $SNIPPED_LOG"
+          fi
+
+      - name: Upload regression logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-regression-logs
+          path: |
+            sneside-listing.txt
+            top-scripts-check.csv
+            /tmp/create-new-project-ci-*.json
