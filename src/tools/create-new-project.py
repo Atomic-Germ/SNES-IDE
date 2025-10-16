@@ -3,6 +3,7 @@ from re import match, sub
 from os import path
 import subprocess
 import shutil
+import sys
 
 class ProjectCreator:
 
@@ -90,7 +91,14 @@ class ProjectCreator:
             print(f"Project name sanitized from '{original_name}' to '{self.project_name}'")
 
         target_path = path.join(self.full_path, self.project_name)
-        template_path = path.abspath(path.join(self.get_executable_path(), "..", "..", "libs", "template"))
+        
+        # Calculate template path based on execution mode
+        if getattr(sys, 'frozen', False):
+            # PyInstaller executable - libs are in the same directory as executable
+            template_path = path.abspath(path.join(self.get_executable_path(), "libs", "template"))
+        else:
+            # Development mode - libs are two levels up from src/tools
+            template_path = path.abspath(path.join(self.get_executable_path(), "..", "..", "libs", "template"))
 
         shutil.copytree(template_path, target_path)
 

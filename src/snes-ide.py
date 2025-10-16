@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from pathlib import Path
 from array import array
 import subprocess
