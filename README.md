@@ -3,18 +3,18 @@
 ## What Is SNES-IDE?
 
 SNES-IDE is an open-source, cross-platform Integrated Development Environment (IDE) designed for creating SNES games using [pvsneslib](https://github.com/alekmaul/pvsneslib).  
-It works natively on Windows and is fully supported on Linux via Wine, with scripts and automation for both platforms.
+It works natively on Windows, macOS, and Linux with dedicated installers and native toolchains for each platform.
 
 - **Languages:** C (main) and some assembly (65816 and spc700).
 - **Compilers:** [816-tcc](https://github.com/alekmaul/tcc) and [wla-dx](https://github.com/vhelin/wla-dx) from pvsneslib.
 - **Main Library:** [pvsneslib](https://github.com/alekmaul/pvsneslib) version 4.3.
 - **Emulator:** [bsnes](https://github.com/bsnes-emu/bsnes) for testing.
-- **Cross-platform:** Native on Windows, works on Linux (via Wine) with dedicated scripts.
+- **Cross-platform:** Native on Windows, macOS, and Linux
 - **Build from Source:** Full support for building all tools and the IDE itself from source.
 
 ## Why Choose SNES-IDE?
 
-- **Cross-Platform:** Develop on Windows or Linux (via Wine).
+- **Cross-Platform:** Develop on Windows, macOS, or Linux.
 - **All-in-One:** Integrated toolchain, asset converters, and project templates.
 - **Easy Start:** One-click project creation and build scripts.
 - **Open Source:** Free, extensible, and community-driven.
@@ -22,9 +22,9 @@ It works natively on Windows and is fully supported on Linux via Wine, with scri
 
 ## Installation Requirements
 
-- **Operating System:** Windows 10+ or Linux Debian/Ubuntu (with Wine 9.0+).
-- **Architecture:** x64, x86_64, or amd64 (not compatible with ARM).
-- **Minimum Resources:** 2 GB RAM, 200 MB disk space.
+- **Operating System:** Windows 10+, macOS 10.12+, or Linux (Ubuntu 18.04+, Debian 9+, etc.)
+- **Architecture:** x64, x86_64, or amd64 (ARM not yet supported)
+- **Minimum Resources:** 2 GB RAM, 200 MB disk space
 
 ### Dependencies
 
@@ -34,44 +34,47 @@ It works natively on Windows and is fully supported on Linux via Wine, with scri
 
 - **Building from Source Dependencies:**
   - **Windows:** OpenGL 3.2+ video driver or Direct3D 9.0, Python 3.8 or newer, pip and PyInstaller;
-  - **Linux:** Bash, Wine 9.0+ and Python 3.8 or newer;
+  - **Linux/MacOS:** Bash, and Python 3.8 or newer;
 
 ## Getting Started
 
 ### 1. Download & Install
+
 
 - **Windows:**
   1. Download the latest release from [GitHub Releases](https://github.com/BrunoRNS/SNES-IDE/releases/latest).
   2. Decompress the .zip to a folder of your choice.
   3. Double-click `INSTALL.bat` to set up SNES-IDE and create shortcuts on your Desktop.
 
+- **macOS:**
+  1. Download the latest release from [GitHub Releases](https://github.com/BrunoRNS/SNES-IDE/releases/latest).
+  2. Decompress the .dmg or .zip file.
+  3. Run the `install.sh` script or drag SNES-IDE to your Applications folder.
+  4. Launch SNES-IDE from your Applications folder.
+
 - **Linux:**
   1. Download the .deb package from the latest release: [GitHub Releases](https://github.com/BrunoRNS/SNES-IDE/releases/latest).
-
-  2. Install Wine:  
-
-     `sudo apt install wine`
-
-  3. Install SNES-IDE:
-
+  2. Install using your package manager:
      ```sh
-     sudo apt install snes-ide_xyz.deb
+     sudo dpkg -i snes-ide_*.deb
+     sudo apt install -f  # Install dependencies if needed
      ```
-
-  4. Execute `snes-ide` in the terminal.
+  3. Alternatively, download the source and run `sudo ./install.sh` for local installation.
+  4. Launch SNES-IDE from your applications menu or run `snes-ide` in terminal.
 
 ### 2. Building from Source
 
 - Clone the repo:  
   `git clone https://github.com/BrunoRNS/SNES-IDE.git`
 - Follow the [build instructions](./build/BUILDING_FROM_SOURCE.md) to build all tools and the IDE from source.
-- After building, run the installer as above.
+- After building, run the installer for your platform.
 
-### 3. Shortcuts Generated
+### 3. Applications/Shortcuts Created
 
-After installation, these shortcuts are created:
+After installation, these applications/shortcuts are created:
 
-- **text-editor** – [Notepad++](https://github.com/notepad-plus-plus/notepad-plus-plus) .
+- **snes-ide** – Main application, here you can choose which tool to start.
+- **text-editor** – Configurable text editor (VS Code, Vim, etc.).
 - **audio-tools** – Convert and manage SNES-compatible audio assets.
 - **graphic-tools** – Convert and manage SNES-compatible graphics.
 - **other-tools** – Access additional utilities.
@@ -79,9 +82,7 @@ After installation, these shortcuts are created:
 - **compiler** – Compile your project into a SNES ROM.
 - **emulator** – Launch your ROM in bsnes.
 
-- **snes-ide** – All in one shorcut, the main entry of snes-ide, here you can basically choose which tool you want to start.
-
-> **Note:** Shortcuts are created in `Desktop/snes-ide/` on Windows, or as a desktop entry on Linux if its choosed to while building from source.
+> **Note:** On Windows, shortcuts are created on the Desktop. On macOS, applications are created in /Applications. On Linux, desktop entries are created in your applications menu.
 
 ## How can I use it?
 
@@ -118,9 +119,9 @@ Once installed, you can create and build SNES games easily:
 
 ## How SNES-IDE Works
 
-- Uses batch files (Windows) and shell scripts (Linux) as shortcuts to launch editors, tools, and build scripts.
+- Uses shell scripts and Python applications for each platform.
 - Most automation is done in Python; some tools are in C#, C, JavaScript, assembly, and Julia.
-- The goal is to make pvsneslib easy to use on Windows and Linux, with minimal setup.
+- The goal is to make pvsneslib easy to use on Windows, macOS, and Linux with minimal setup.
 - All-in-one: No need for extra software to create a complete SNES game.
 
 ## Contributing

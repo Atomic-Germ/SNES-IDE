@@ -150,26 +150,27 @@ def copy_docs() -> None:
     
     return None
 
-def copy_bat() -> None:
+def copy_scripts() -> None:
     """
-    Copy the bat files to the SNES-IDE-out directory.
+    Copy the script files (.bat or .sh) to the SNES-IDE-out directory.
     """
 
     (SNESIDEOUT / 'tools').mkdir(exist_ok=True)
 
-    for file in (ROOT / 'src' / 'tools' ).rglob("*.bat"):
+    # Copy .scripts
+    for pattern in ["*.bat", "*.sh"]:
+        for file in (ROOT / 'src' / 'tools' ).rglob(pattern):
 
-        if file.is_dir():
+            if file.is_dir():
+                continue
 
-            continue
+            rel_path = file.relative_to(ROOT / 'src' / 'tools')
 
-        rel_path = file.relative_to(ROOT / 'src' / 'tools')
+            dest_path = SNESIDEOUT / 'tools' / rel_path
 
-        dest_path = SNESIDEOUT / 'tools' / rel_path
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
 
-        dest_path.parent.mkdir(parents=True, exist_ok=True)
-
-        shutil.copy(file, dest_path)
+            shutil.copy(file, dest_path)
     
     return None
 
@@ -201,39 +202,56 @@ def compile() -> None:
     Compile the project.
     """
 
+    import platform as pf
+
     src_dir = ROOT / "src"
+    target_platform = sys.argv[1] if len(sys.argv) > 1 else "windows"
 
     # Compile Python files
-
     for file in src_dir.rglob("*.py"):
 
         rel_path = file.relative_to(src_dir)
-        out_path = SNESIDEOUT / rel_path.with_suffix(".exe")
-        out_path.parent.mkdir(parents=True, exist_ok=True)
+        py_out = SNESIDEOUT / rel_path
+        py_out.parent.mkdir(parents=True, exist_ok=True)
 
-        if len(sys.argv) > 1 and sys.argv[1] == "linux":
-            # On Linux, copy the .py file and create a .bat file to call it with python
-
-            py_out = SNESIDEOUT / rel_path
-            py_out.parent.mkdir(parents=True, exist_ok=True)
+        if target_platform in ["linux", "macos"]:
+            # On Unix-like systems, copy the .py file and make it executable
             shutil.copy(file, py_out)
+            # Make Python files executable on Unix systems
+            import os
+            os.chmod(py_out, 0o755)
 
-            bat_path = out_path.with_suffix(".bat")
-
-            with open(bat_path, "w") as bat_file:
-
-                bat_file.write(f'@echo off\npython "{Path(py_out).resolve().absolute()}" %*\n')
-
-        else:
+        elif target_platform == "windows":
+            # On Windows, compile to .exe using PyInstaller
+            out_path = SNESIDEOUT / rel_path.with_suffix(".exe")
+            out_path.parent.mkdir(parents=True, exist_ok=True)
 
             from buildModules.buildPy import main as mpy
 
             out: int = mpy(file, out_path.parent)
 
             if out != 0:
-                
                 raise Exception(f"ERROR while compiling python files: -{abs(out)}")
-            
+        else:
+            # Default: just copy Python files
+            shutil.copy(file, py_out)
+
+    # Copy installer scripts for the target platform
+    if target_platform == "linux":
+        installer_src = ROOT / "install-linux.sh"
+        installer_dst = SNESIDEOUT / "install.sh"
+        if installer_src.exists():
+            shutil.copy(installer_src, installer_dst)
+            import os
+            os.chmod(installer_dst, 0o755)
+
+    elif target_platform == "macos":
+        installer_src = ROOT / "install-macos.sh"
+        installer_dst = SNESIDEOUT / "install.sh"
+        if installer_src.exists():
+            shutil.copy(installer_src, installer_dst)
+            import os
+            os.chmod(installer_dst, 0o755)
 
     sys.stdout.write("Success compiling Python files.\n")
     
@@ -265,7 +283,7 @@ def main() -> int:
         ("Copying root files", copy_root),
         ("Copying libs", copy_lib),
         ("Copying docs", copy_docs),
-        ("Copying bat files", copy_bat),
+        ("Copying script files", copy_scripts),
         ("Copying dlls", copy_dlls),
         ("Copying tracker", copyTracker),
         ("Compiling python files", compile),
