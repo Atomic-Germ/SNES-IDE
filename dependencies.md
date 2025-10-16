@@ -6,6 +6,6 @@
   - **Linux:** Python 3.8+ (install via package manager: `sudo apt install python3`).
 
 - **Building from Source Dependencies:**
-  - **Windows:** Python 3.8+, PyInstaller.
-  - **macOS:** Python 3.8+, PyInstaller (install via Homebrew).
-  - **Linux:** Python 3.8+, PyInstaller (install via pip).
+  - **Windows:** Python 3.8+, PyInstaller, Rich.
+  - **macOS:** Python 3.8+, PyInstaller, Rich (install via Homebrew or pip).
+  - **Linux:** Python 3.8+, PyInstaller, Rich (install via pip).

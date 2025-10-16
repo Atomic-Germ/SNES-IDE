@@ -5,6 +5,11 @@ import sys
 import platform
 import os
 import json
+from rich.console import Console
+from rich.table import Table
+from rich.prompt import Prompt
+from rich.panel import Panel
+from rich.text import Text
 
 class SnesIde(object):
 
@@ -35,8 +40,12 @@ class SnesIde(object):
         # Load or create configuration
         self.config = self.load_config()
 
+        # Initialize Rich console for TUI
+        self.console = Console()
+
         # Set platform-specific installation paths
         self.install_path = self.get_install_path()
+        self.tools_path = self.get_tools_path()
 
         self.options: array = array("B", (0, 1, 2, 3, 4, 5, 6, 7))
 
@@ -156,6 +165,21 @@ class SnesIde(object):
             return Path.home() / "Desktop" / "snes-ide"
 
 
+    def get_tools_path(self) -> Path:
+        """
+        Get the path to the tools directory, handling both development and installed modes.
+
+        Returns:
+            Path: Tools directory path
+        """
+        if getattr(sys, 'frozen', False):
+            # Running as PyInstaller bundle - use install path
+            return self.install_path / "tools"
+        else:
+            # Running in development - use src/tools relative to script
+            return self.executable_path / "tools"
+
+
     @staticmethod
     def run_command(command: list, cwd: Path = None) -> None:
         """
@@ -221,7 +245,7 @@ class SnesIde(object):
 
     def get_create_project_command(self) -> list:
         """Get the command to create a new project."""
-        script_path = self.install_path / "tools" / "create-new-project.py"
+        script_path = self.tools_path / "create-new-project.py"
         if self.is_windows:
             return ["python", str(script_path)]
         else:
@@ -241,7 +265,7 @@ class SnesIde(object):
 
     def get_audio_tools_command(self) -> list:
         """Get the command to launch audio tools."""
-        script_path = self.install_path / "tools" / "audio-tools.py"
+        script_path = self.tools_path / "audio-tools.py"
         if self.is_windows:
             return ["python", str(script_path)]
         else:
@@ -250,7 +274,7 @@ class SnesIde(object):
 
     def get_gfx_tools_command(self) -> list:
         """Get the command to launch graphics tools."""
-        script_path = self.install_path / "tools" / "gfx-tools.py"
+        script_path = self.tools_path / "gfx-tools.py"
         if self.is_windows:
             return ["python", str(script_path)]
         else:
@@ -258,8 +282,8 @@ class SnesIde(object):
 
 
     def get_other_tools_command(self) -> list:
-        """Get the command to launch other tools."""
-        script_path = self.install_path / "tools" / "externTools.py"
+        """Get the command to launch other external tools."""
+        script_path = self.tools_path / "externTools.py"
         if self.is_windows:
             return ["python", str(script_path)]
         else:
@@ -268,11 +292,11 @@ class SnesIde(object):
 
     def get_compiler_command(self) -> list:
         """Get the command to launch the compiler."""
-        script_path = self.install_path / "tools" / "automatizer-batch.bat" if self.is_windows else self.install_path / "tools" / "automatizer-batch.sh"
+        script_path = self.tools_path / "automatizer-batch.bat" if self.is_windows else self.tools_path / "automatizer-batch.sh"
         if self.is_windows:
-            return ["cmd", "/c", str(script_path)]
+            return [str(script_path)]
         else:
-            return ["bash", str(script_path)]
+            return ["/bin/bash", str(script_path)]
 
 
     def get_emulator_command(self) -> list:
@@ -350,8 +374,9 @@ class SnesIde(object):
     def give_options(self) -> int:
         """
         Presents a menu of SNES project-related options to the user and prompts for a selection.
-        The available options include:
+        Uses Rich library to create a basic terminal user interface with a table of options.
 
+        The available options include:
             0 - Create a new SNES project
             1 - Start code editor
             2 - Start an audio framework for SNES
@@ -361,37 +386,51 @@ class SnesIde(object):
             6 - Emulate a SNES project with bsnes
             7 - Configure code editor
 
-        The method prints the options, reads user input, validates it against self.options,
-        and recursively prompts again if the input is invalid.
-
         Returns:
             int: The selected option as an integer.
-
         """
 
+        # Create a welcome panel
+        welcome_text = Text("SNES-IDE", style="bold magenta")
+        welcome_panel = Panel(welcome_text, title="Welcome to", border_style="blue")
+        self.console.print(welcome_panel)
+        self.console.print()
+
+        # Create options table
+        table = Table(title="Available Options", show_header=True, header_style="bold blue")
+        table.add_column("Option", style="cyan", no_wrap=True)
+        table.add_column("Description", style="white")
+
         editor_name = self.config.get("text_editor", "default").split()[0]
-        txt: str = f"""\
-Create a new Snes project -> 0
-Start {editor_name} text editor -> 1
-Start an audio framework for snes -> 2
-Start a graphic framework for snes -> 3
-Run an external framework for snes -> 4
-Compile a Snes project -> 5
-Emulate a Snes project with bsnes -> 6
-Configure text editor -> 7
-"""
 
-        print("Choose an option from the ones below: ", txt, sep="\n\n")
+        options_data = [
+            ("0", "Create a new SNES project"),
+            ("1", f"Start {editor_name} text editor"),
+            ("2", "Start an audio framework for SNES"),
+            ("3", "Start a graphic framework for SNES"),
+            ("4", "Run an external framework for SNES"),
+            ("5", "Compile a SNES project"),
+            ("6", "Emulate a SNES project with bsnes"),
+            ("7", "Configure text editor"),
+        ]
 
-        option = int(input())
+        for option_num, description in options_data:
+            table.add_row(option_num, description)
 
-        if option not in self.options:
+        self.console.print(table)
+        self.console.print()
 
-            print("\nINVALID ENTRY: try again\n")
-
-            return self.give_options()
-
-        return option
+        # Get user input with validation
+        while True:
+            try:
+                choice = Prompt.ask("Choose an option", choices=[str(i) for i in self.options])
+                option = int(choice)
+                if option in self.options:
+                    return option
+                else:
+                    self.console.print("[red]Invalid option selected. Please try again.[/red]")
+            except (ValueError, EOFError):
+                self.console.print("[red]Invalid input. Please enter a number.[/red]")
 
 
 
