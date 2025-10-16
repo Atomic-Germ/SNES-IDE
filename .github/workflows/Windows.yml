@@ -10,12 +10,8 @@ on:
 
 jobs:
   windows-build:
-  # This section builds and tests SNES-IDE on Windows using GitHub Actions.
-  # It uses the Green-Light phase of TDD. Nothing should fail. For new 
-  # features, use the "Test (Red-Light)" section to write failing tests before
-  # implementation.
     name: Build (Green-Light)
-    runs-on: windows-2025 # `windows-latest` is being replaced with windows-2025, pre-empt future deprecations
+    runs-on: windows-2025
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -32,7 +28,7 @@ jobs:
 
       - name: Build
         run: |
-          python build\build.py
+          python build\build.py windows
         shell: cmd
 
       - name: Verify
@@ -132,32 +128,5 @@ jobs:
       - name: Run INSTALL.bat
         run: |
           $ErrorActionPreference = "Stop"
-          Start-Process -FilePath "sneside-windows\INSTALL.bat" -NoNewWindow -Wait
-        shell: pwsh
-
-  windows-tests-redlight:
-  # This section builds and tests SNES-IDE on Windows using GitHub Actions.
-  # It uses the Red-Light phase of TDD. Nothing should pass. When new
-  # features are added, write failing tests here first, then implement the
-  # feature until passing. Move the passing test to "Test (Green-Light)"
-  # section above.
-    if: github.ref_name == 'windows/red'
-    name: Tests (Red-Light)
-    runs-on: windows-2025
-    needs: windows-build
-    steps:
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: sneside-windows
-      
-      - name: Extract sneside-windows.zip
-        run: |
-          powershell Expand-Archive -Path sneside-windows.zip -DestinationPath sneside-windows -Force
-        shell: pwsh
-      
-      - name: Deliberately failing example test
-        run: |
-          $ErrorActionPreference = "Stop"
-          Write-Error "This is a deliberate failure for Red-Light testing."
+          Start-Process -FilePath "sneside-windows\\INSTALL.bat" -NoNewWindow -Wait
         shell: pwsh
