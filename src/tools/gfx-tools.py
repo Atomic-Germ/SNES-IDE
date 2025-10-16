@@ -1,66 +1,27 @@
-from tkinter import StringVar, messagebox, filedialog, SOLID
+#!/usr/bin/env python3
 from pathlib import Path
-import tkinter as tk
 import subprocess
-import webbrowser
-import atexit
 import sys
 import os
-
-class shutil:
-    """Reimplementation of class shutil to avoid errors in Wine"""
-
-    @staticmethod
-    def copy(src: str|Path, dst: str|Path) -> None:
-        """Reimplementation of method copy using copy command"""
-
-        src, dst = map(lambda x: Path(x).resolve(), (src, dst))
-
-        subprocess.run(f'copy "{src}" "{dst}"', shell=True, check=True)
-
-    @staticmethod
-    def copytree(src: str|Path, dst: str|Path) -> None:
-        """Reimplementation of method copytree using xcopy"""
-
-        src, dst = map(lambda x: Path(x).resolve(), (src, dst))
-
-        cmd = f'xcopy "{src}" "{dst}" /E /I /Y /Q /H'
-        subprocess.run(cmd, shell=True, check=True)
-
-    @staticmethod
-    def rmtree(path: str|Path) -> None:
-        """Reimplementation of method rmtree using rmdir"""
-
-        path = Path(path).resolve()
-
-        subprocess.run(f'rmdir /S /Q "{path}"', shell=True, check=True)
-
-    @staticmethod
-    def move(src: str|Path, dst: str|Path) -> None:
-        """Reimplementation of method move using move command"""
-
-        src, dst = map(lambda x: Path(x).resolve(), (src, dst))
-
-        subprocess.run(f'move "{src}" "{dst}"', shell=True, check=True)
-
+import platform
+from rich.console import Console
+from rich.table import Table
+from rich.prompt import Prompt
+from rich.panel import Panel
+from rich.text import Text
 
 class PathManager:
 
     def __init__(self):
         """Initialize the PathManager to determine the root path based on execution context."""
-
         self.root = self._get_root_path()
 
     def _get_root_path(self) -> Path:
         """Determine the root path based on whether the script is run as a frozen executable or a Python script."""
         if getattr(sys, 'frozen', False):
-
             print("Executable path mode chosen")
-
             return Path(sys.executable).parent.parent
-        
         else:
-
             print("Python script path mode chosen")
             return Path(__file__).absolute().parent.parent
 
@@ -70,329 +31,405 @@ class PathManager:
 
 class M8TEExecutor:
 
-    def __init__(self, path_manager: PathManager):
+    def __init__(self, path_manager: PathManager, console: Console):
         """Initialize the M8TEExecutor with the path to the M8TE executable."""
-
         self.m8te_path = path_manager.get_tool_path("libs", "M8TE", "bin", "M8TE.exe")
+        self.path_manager = path_manager
+        self.console = console
 
     def run(self):
         """Run the M8TE executable and handle any errors."""
-
         try:
+            if not self.m8te_path.exists():
+                # Try alternative paths or provide helpful error
+                alt_path = self.path_manager.get_tool_path("libs", "M8TE", "M8TE.exe")
+                if alt_path.exists():
+                    self.m8te_path = alt_path
+                else:
+                    self.console.print("\n[red]M8TE Not Found[/red]")
+                    self.console.print("M8TE executable not found. This tool is only available on Windows builds of SNES-IDE.")
+                    self.console.print("\nOn other platforms, you can:")
+                    self.console.print("• Install M8TE via Wine/CrossOver")
+                    self.console.print("• Use alternative tile editors")
+                    self.console.print("• Check the PLATFORM_TOOLS_README.md file for more information")
+                    return -1
 
             subprocess.run([str(self.m8te_path)], check=True)
-
         except subprocess.CalledProcessError as e:
-
-            messagebox.showerror("Fatal", f"Error while executing {self.m8te_path}: {e}")
+            self.console.print(f"[red]Error while executing {self.m8te_path}: {e}[/red]")
+            return -1
+        except FileNotFoundError:
+            self.console.print(f"[red]M8TE executable not found at {self.m8te_path}.[/red]")
+            self.console.print("This tool may not be available on your platform.")
             return -1
 
-        messagebox.showinfo("SNES-IDE", "Success!")
+        self.console.print("[green]Success![/green]")
         return 0
 
 class Gfx4SnesExecutor:
 
-    def __init__(self, path_manager: PathManager):
+    def __init__(self, path_manager: PathManager, console: Console):
         """Initialize the Gfx4SnesExecutor with the path to the gfx4snes executable."""
-
         self.gfx4snes_path = path_manager.get_tool_path("libs", "pvsneslib", "tools", "gfx4snes.exe")
         self.root = path_manager.root
+        self.console = console
 
     def run(self):
         """Run the gfx4snes tool with user-selected options and input file."""
-
         try:
-
-            nwindow = tk.Tk()
-            nwindow.title("Choose options for the gfx4snes")
-            input_file = filedialog.askopenfilename(filetypes=[("your image(PNG or BMP)", ["*.png", "*.bmp"])])
-
+            # Get input file from user
+            input_file = self._get_input_file()
             if not input_file:
-
-                nwindow.destroy()
-                messagebox.showerror("Fatal", "No Input file selected")
-
                 return -1
 
-            options, entries = self._create_options(nwindow)
-            tk.Button(nwindow, text="Run", command=lambda: self._execute(nwindow, input_file, options, entries)).pack()
-            
-            nwindow.mainloop()
+            # Get options from user
+            options = self._get_options()
+            if options is None:
+                return -1
+
+            # Execute the command
+            self._execute(input_file, options)
 
         except subprocess.CalledProcessError as e:
+            self.console.print(f"[red]Error while executing {self.gfx4snes_path}: {e}[/red]")
+            return -1
+        except FileNotFoundError:
+            self.console.print(f"[red]gfx4snes executable not found at {self.gfx4snes_path}[/red]")
+            return -1
 
-            messagebox.showerror("Fatal", f"Error while executing {self.gfx4snes_path}: {e}")
+        self.console.print("[green]Success![/green]")
+        return 0
 
-        else:
+    def _get_input_file(self):
+        """Get input file path from user."""
+        self.console.print("\n[yellow]Select your image file (PNG or BMP):[/yellow]")
+        input_file = Prompt.ask("Enter the full path to your image file").strip()
 
-            messagebox.showinfo("SNES-IDE", "Success!")
-
-    def _create_options(self, nwindow):
-        """Create the options and entries for the gfx4snes tool in a new window."""
-
-        stroptions = [
-            "-b,        add blank tile management (for multiple bgs)",
-            "-s,        size of image blocks in pixels {[8],16,32,64} <int>",
-            "-k,        output in packed pixel format",
-            "-z,        add blank tile management (for multiple bgs)",
-            "-W,        width of image block in pixels <int>",
-            "-H,        height of image block in pixels <int>",
-            "-f,        generate the whole picture with an offset for tile number {0..2047}",
-            "-m,        include map for output",
-            "-g,        include high priority bit in map",
-            "-y,        generate map in pages of 32x32 (good for scrolling)",
-            "-R,        no tile reduction (not advised)",
-            "-M,        convert the whole picture for mode 1,5,6 or 7 format {[1],5,6,7} <int>",
-            "-a,        rearrange palette and preserve palette numbers in tilemap",
-            "-d,        palette rounding (to a maximum value of 63)",
-            "-e,        palette entry to add to map tiles {0..7} <int>",
-            "-o,        number of colors to output to filename.pal {0..256} <int>",
-            "-p,        include palette for output",
-            "-u,        number of colors to use {4,16,128,[256]} <int>",
-        ]
-
-        options = [StringVar() for _ in range(len(stroptions))]
-
-        entries = dict()
-
-        for i, opt in enumerate(stroptions):
-
-            tk.Checkbutton(nwindow, text=opt, variable=options[i], onvalue="1", offvalue="0").pack(anchor="w")
-
-            if "<int>" in opt:
-
-                entry = tk.Entry(nwindow)
-                entry.pack()
-                entries[opt[:2]] = entry
-
-        return options, entries
-
-    def _execute(self, nwindow, input_file, options, entries):
-        """Execute the gfx4snes command with the selected options and input file."""
-
-        stroptions = [
-            "-b,        add blank tile management (for multiple bgs)",
-            "-s,        size of image blocks in pixels {[8],16,32,64} <int>",
-            "-k,        output in packed pixel format",
-            "-z,        add blank tile management (for multiple bgs)",
-            "-W,        width of image block in pixels <int>",
-            "-H,        height of image block in pixels <int>",
-            "-f,        generate the whole picture with an offset for tile number {0..2047}",
-            "-m,        include map for output",
-            "-g,        include high priority bit in map",
-            "-y,        generate map in pages of 32x32 (good for scrolling)",
-            "-R,        no tile reduction (not advised)",
-            "-M,        convert the whole picture for mode 1,5,6 or 7 format {[1],5,6,7} <int>",
-            "-a,        rearrange palette and preserve palette numbers in tilemap",
-            "-d,        palette rounding (to a maximum value of 63)",
-            "-e,        palette entry to add to map tiles {0..7} <int>",
-            "-o,        number of colors to output to filename.pal {0..256} <int>",
-            "-p,        include palette for output",
-            "-u,        number of colors to use {4,16,128,[256]} <int>",
-        ]
-
-        args = []
-
-        for i, var in enumerate(options):
-
-            if var.get() == "1":
-
-                opt_flag = stroptions[i][:2]
-                args.append(opt_flag)
-
-                if "<int>" in stroptions[i]:
-
-                    entry = entries.get(opt_flag)
-
-                    if entry:
-
-                        args.append(entry.get())
-
-        nwindow.destroy()
+        if not input_file:
+            self.console.print("[red]No input file selected[/red]")
+            return None
 
         input_path = Path(input_file)
-        command = [str(self.gfx4snes_path)] + args
+        if not input_path.exists():
+            self.console.print(f"[red]File not found: {input_file}[/red]")
+            return None
 
-        if input_path.suffix.lower() == '.bmp':
+        if input_path.suffix.lower() not in ['.png', '.bmp']:
+            self.console.print("[red]Please select a PNG or BMP file[/red]")
+            return None
 
-            command += ['-t', 'bmp', '-i', str(input_path)]
+        return str(input_path)
 
-        else:
+    def _get_options(self):
+        """Get options from user input."""
+        self.console.print("\n[yellow]Available options for gfx4snes:[/yellow]")
+        options = [
+            ("-b", "add blank tile management (for multiple bgs)"),
+            ("-n", "no optimization of tile (keep all tiles)"),
+            ("-s", "share duplicate tiles (tile optimization)"),
+            ("-t", "output palette and tile data in binary format"),
+            ("-m", "output map data in binary format"),
+            ("-p", "output palette data in binary format"),
+            ("-z", "compress the output files with gzip"),
+            ("-q", "quiet mode (no output)"),
+        ]
 
-            command += ['-i', str(input_path)]
+        for flag, desc in options:
+            self.console.print(f"  {flag}: {desc}")
 
-        result = subprocess.run(command, cwd=str(input_path.parent), capture_output=True)
+        self.console.print("\n[yellow]Enter options (space-separated, or 'none' for defaults):[/yellow]")
+        option_input = Prompt.ask("Options").strip().lower()
 
-        messagebox.showinfo("Result: ", str(result))
+        if option_input == 'none' or not option_input:
+            return []
+
+        return option_input.split()
+
+    def _execute(self, input_file, options):
+        """Execute the gfx4snes command."""
+        cmd = [str(self.gfx4snes_path)] + options + [input_file]
+        self.console.print(f"\n[blue]Running: {' '.join(cmd)}[/blue]")
+        subprocess.run(cmd, check=True)
 
 class SnesToolsExecutor:
 
-    def __init__(self, path_manager: PathManager):
-        """Initialize the SnesToolsExecutor with the path to the snestools executable."""
-
+    def __init__(self, path_manager: PathManager, console: Console):
+        """Initialize the SnesToolsExecutor."""
         self.snestools_path = path_manager.get_tool_path("libs", "pvsneslib", "tools", "snestools.exe")
+        self.console = console
 
     def run(self):
-        """Run the snestools tool with user-selected input file."""
-
+        """Run the snestools with user-selected file."""
         try:
-
-            input_file = filedialog.askopenfilename(filetypes=[("your snes ROM", ["*.smc", "*.sfc"])])
-
+            input_file = self._get_input_file()
             if not input_file:
-
-                messagebox.showerror("Error", "Input file does not exist")
                 return -1
-            
-            input_path = Path(input_file)
-            result = subprocess.run([str(self.snestools_path), str(input_path)], capture_output=True, text=True)
 
-            messagebox.showinfo("snestools", str(result))
+            cmd = [str(self.snestools_path), input_file]
+            self.console.print(f"\n[blue]Running: {' '.join(cmd)}[/blue]")
+            subprocess.run(cmd, check=True)
 
         except subprocess.CalledProcessError as e:
-
-            messagebox.showerror("Fatal", f"Error while executing {self.snestools_path}: {e}")
+            self.console.print(f"[red]Error while executing snestools: {e}[/red]")
+            return -1
+        except FileNotFoundError:
+            self.console.print(f"[red]snestools executable not found at {self.snestools_path}[/red]")
             return -1
 
-        messagebox.showinfo("SNES-IDE", "Success!")
+        self.console.print("[green]Success![/green]")
         return 0
+
+    def _get_input_file(self):
+        """Get input file path from user."""
+        self.console.print("\n[yellow]Select your SNES ROM file (SMC/SFC):[/yellow]")
+        input_file = Prompt.ask("Enter the full path to your ROM file").strip()
+
+        if not input_file:
+            self.console.print("[red]No input file selected[/red]")
+            return None
+
+        input_path = Path(input_file)
+        if not input_path.exists():
+            self.console.print(f"[red]File not found: {input_file}[/red]")
+            return None
+
+        if input_path.suffix.lower() not in ['.smc', '.sfc']:
+            self.console.print("[red]Please select a SMC or SFC file[/red]")
+            return None
+
+        return str(input_path)
 
 class Tmx2SnesExecutor:
 
-    def __init__(self, path_manager: PathManager):
-        """Initialize the Tmx2SnesExecutor with the path to the tmx2snes executable."""
-
+    def __init__(self, path_manager: PathManager, console: Console):
+        """Initialize the Tmx2SnesExecutor."""
         self.tmx2snes_path = path_manager.get_tool_path("libs", "pvsneslib", "tools", "tmx2snes.exe")
+        self.console = console
 
     def run(self):
-        """Run the tmx2snes tool with user-selected input files."""
-
+        """Run the tmx2snes tool."""
         try:
-
-            input_file = filedialog.askopenfilename(filetypes=[("tmxfilename", "*")])
-            input_file2 = filedialog.askopenfilename(filetypes=[("mapfilename", "*")])
-
-            if not (input_file and input_file2):
-                messagebox.showerror("Error", "Input file does not exist")
+            tmx_file = self._get_tmx_file()
+            if not tmx_file:
                 return -1
-            
-            input_path = Path(input_file)
-            subprocess.run([str(self.tmx2snes_path), str(input_path), str(input_file2)], cwd=str(input_path.parent))
+
+            map_file = self._get_map_file()
+            if not map_file:
+                return -1
+
+            cmd = [str(self.tmx2snes_path), tmx_file, map_file]
+            self.console.print(f"\n[blue]Running: {' '.join(cmd)}[/blue]")
+            subprocess.run(cmd, check=True)
 
         except subprocess.CalledProcessError as e:
-
-            messagebox.showerror("Fatal", f"Error while executing {self.tmx2snes_path}: {e}")
+            self.console.print(f"[red]Error while executing tmx2snes: {e}[/red]")
+            return -1
+        except FileNotFoundError:
+            self.console.print(f"[red]tmx2snes executable not found at {self.tmx2snes_path}[/red]")
             return -1
 
-        messagebox.showinfo("SNES-IDE", "Success!")
+        self.console.print("[green]Success![/green]")
         return 0
+
+    def _get_tmx_file(self):
+        """Get TMX file path from user."""
+        self.console.print("\n[yellow]Select your TMX file:[/yellow]")
+        input_file = Prompt.ask("Enter the full path to your TMX file").strip()
+
+        if not input_file:
+            self.console.print("[red]No TMX file selected[/red]")
+            return None
+
+        input_path = Path(input_file)
+        if not input_path.exists():
+            self.console.print(f"[red]File not found: {input_file}[/red]")
+            return None
+
+        if input_path.suffix.lower() != '.tmx':
+            self.console.print("[red]Please select a TMX file[/red]")
+            return None
+
+        return str(input_path)
+
+    def _get_map_file(self):
+        """Get MAP file path from user."""
+        self.console.print("\n[yellow]Select your MAP file:[/yellow]")
+        input_file = Prompt.ask("Enter the full path to your MAP file").strip()
+
+        if not input_file:
+            self.console.print("[red]No MAP file selected[/red]")
+            return None
+
+        input_path = Path(input_file)
+        if not input_path.exists():
+            self.console.print(f"[red]File not found: {input_file}[/red]")
+            return None
+
+        return str(input_path)
 
 class FontCopier:
 
-    def __init__(self, path_manager: PathManager):
-        """Initialize the FontCopier with the path to the pvsneslib font image."""
-
-        self.font_path = path_manager.get_tool_path("font", "pvsneslibfont.png")
+    def __init__(self, path_manager: PathManager, console: Console):
+        """Initialize the FontCopier."""
+        self.font_path = path_manager.get_tool_path("libs", "pvsneslib", "tools", "font.png")
+        self.console = console
 
     def run(self):
-        """Copy the font image to a user-selected directory."""
-
+        """Copy the font file to user-selected location."""
         try:
-
-            target_dir = filedialog.askdirectory(title="Select the folder you want to generate the font")
-
-            if not target_dir:
-                messagebox.showerror("Fatal", "No directory selected")
+            dest_dir = self._get_destination()
+            if not dest_dir:
                 return -1
-            
-            target_path = Path(target_dir)
-            shutil.copy(str(self.font_path), str(target_path))
 
-        except Exception:
+            dest_path = Path(dest_dir) / "font.png"
+            import shutil
+            shutil.copy2(str(self.font_path), str(dest_path))
 
-            messagebox.showerror("Fatal", "Error while copying files")
+            self.console.print(f"[green]Font copied to: {dest_path}[/green]")
+
+        except Exception as e:
+            self.console.print(f"[red]Error copying font: {e}[/red]")
             return -1
-        
 
-        messagebox.showinfo("SNES-IDE", "Success!")
         return 0
-    
+
+    def _get_destination(self):
+        """Get destination directory from user."""
+        self.console.print("\n[yellow]Select destination folder for font.png:[/yellow]")
+        dest_dir = Prompt.ask("Enter the full path to the destination folder").strip()
+
+        if not dest_dir:
+            self.console.print("[red]No destination selected[/red]")
+            return None
+
+        dest_path = Path(dest_dir)
+        if not dest_path.exists():
+            self.console.print(f"[red]Directory not found: {dest_dir}[/red]")
+            return None
+
+        if not dest_path.is_dir():
+            self.console.print(f"[red]Path is not a directory: {dest_dir}[/red]")
+            return None
+
+        return str(dest_path)
 
 class HTTPServer:
-    def __init__(self, path, port=8000):
+    """Simple HTTP server to serve the tileset extractor."""
+
+    def __init__(self, path: Path):
         self.path = path
-        self.port = port
         self.process = None
 
     def run(self):
-        os.chdir(self.path)
-        self.process = subprocess.Popen(["python", "-m", "http.server", str(self.port)])
-        webbrowser.open(f"http://localhost:{self.port}")
+        """Start the HTTP server."""
+        import http.server
+        import socketserver
+        import threading
+
+        # Change to the directory containing the HTML file
+        os.chdir(self.path.parent)
+
+        # Find an available port
+        port = 8000
+        while port < 8100:
+            try:
+                with socketserver.TCPServer(("", port), http.server.SimpleHTTPRequestHandler) as httpd:
+                    self.process = httpd
+                    url = f"http://localhost:{port}/{self.path.name}"
+                    print(f"Serving tileset extractor at: {url}")
+                    print("Press Ctrl+C to stop the server")
+                    httpd.serve_forever()
+                break
+            except OSError:
+                port += 1
 
     def stop(self):
+        """Stop the HTTP server."""
         if self.process:
-            self.process.terminate()
-            self.process.wait()
-            print("Server stopped.")
-
-    def __del__(self):
-        self.stop()
+            self.process.shutdown()
+            self.process = None
 
 class TilesetExtractorOpener:
 
-    def __init__(self, path_manager: PathManager):
-        """Initialize the TilesetExtractorOpener with the path to the tileset extractor HTML file."""
-
+    def __init__(self, path_manager: PathManager, console: Console):
+        """Initialize the TilesetExtractorOpener."""
         self.tse_path = path_manager.get_tool_path("libs", "pvsneslib", "tools", "tilesetextractor", "index.html")
+        self.console = console
 
     def run(self):
         """Open the tileset extractor in the default web browser."""
+        try:
+            if not self.tse_path.exists():
+                self.console.print(f"[red]Tileset extractor not found at {self.tse_path}[/red]")
+                return -1
 
-        # Register cleanup on exit
-        server = HTTPServer(self.tse_path)
-        atexit.register(server.stop)
+            # Start HTTP server
+            server = HTTPServer(self.tse_path)
+            server.run()
 
-        server.run()
+        except Exception as e:
+            self.console.print(f"[red]Error opening tileset extractor: {e}[/red]")
+            return -1
+
+        return 0
 
 class GfxToolsApp:
 
     def __init__(self):
-        """Initialize the GfxToolsApp with a PathManager and set up the main window."""
-
+        """Initialize the GfxToolsApp with TUI interface."""
         self.path_manager = PathManager()
-        self.window = tk.Tk()
-        self.window.title("grafic-tools")
-        self._setup_ui()
+        self.console = Console()
+        self.tools = [
+            ("M8TE - Mode 3 and 7 tileset and tilemap editor", M8TEExecutor(self.path_manager, self.console).run),
+            ("gfx4snes - Convert images to SNES format (.pic, .pal, .map)", Gfx4SnesExecutor(self.path_manager, self.console).run),
+            ("snestools - SNES ROM file info viewer", SnesToolsExecutor(self.path_manager, self.console).run),
+            ("tmx2snes - TMX and map converter", Tmx2SnesExecutor(self.path_manager, self.console).run),
+            ("Font Generator - Copy pvsneslib font.png", FontCopier(self.path_manager, self.console).run),
+            ("Tileset Extractor - Online tileset extractor by André Michelle", TilesetExtractorOpener(self.path_manager, self.console).run),
+        ]
 
-    def _setup_ui(self):
-        """Set up the user interface with buttons for each tool."""
+    def show_menu(self):
+        """Display the graphics tools menu."""
+        self.console.print("\n[bold cyan]SNES Graphics Tools[/bold cyan]")
+        self.console.print("=" * 50)
 
-        self._add_button("Mode 3 and 7 tileset and tilemap editor", "Click to run M8TE", M8TEExecutor(self.path_manager).run)
-        self._add_button("gfx4snes of pvsneslib! convert your image to .pic, .pal and .map format", "Click to select your image", Gfx4SnesExecutor(self.path_manager).run)
-        self._add_button("SNES file info viewer(snestools of pvsneslib)", "Click to select your smc/sfc file", SnesToolsExecutor(self.path_manager).run)
-        self._add_button("TMX and map converter(tmx2snes)", "Click to select your tmx and map files", Tmx2SnesExecutor(self.path_manager).run)
-        self._add_button("The pvsneslib text font in your hands, just copy as font.png", "Click to generate the text font in the desired folder", FontCopier(self.path_manager).run)
-        self._add_button("Online Tileset extractor by André Michelle", "Click to run tileset extractor", TilesetExtractorOpener(self.path_manager).run)
+        table = Table(show_header=True, header_style="bold magenta")
+        table.add_column("Option", style="cyan", no_wrap=True)
+        table.add_column("Tool", style="white")
+        table.add_column("Description", style="yellow")
 
-    def _add_button(self, label_text, button_text, command):
-        """Create a label and button in the main window."""
+        for i, (name, _) in enumerate(self.tools):
+            tool_name = name.split(" - ")[0]
+            description = name.split(" - ")[1] if " - " in name else ""
+            table.add_row(str(i), tool_name, description)
 
-        var = StringVar()
-
-        label = tk.Label(self.window, textvariable=var, relief=SOLID)
-        button = tk.Button(self.window, text=button_text, command=command)
-
-        var.set(label_text)
-
-        label.pack()
-        button.pack()
+        self.console.print(table)
+        self.console.print("\n[dim]Enter option number or 'q' to quit[/dim]")
 
     def run(self):
-        """Run the main loop of the application."""
+        """Run the TUI application."""
+        while True:
+            self.show_menu()
+            choice = Prompt.ask("\nChoose a tool").strip().lower()
 
-        self.window.mainloop()
+            if choice == 'q':
+                break
+
+            try:
+                option = int(choice)
+                if 0 <= option < len(self.tools):
+                    tool_name, tool_func = self.tools[option]
+                    self.console.print(f"\n[bold]Running {tool_name.split(' - ')[0]}...[/bold]")
+                    result = tool_func()
+                    if result == -1:
+                        self.console.print("[red]Tool execution failed[/red]")
+                    Prompt.ask("\nPress Enter to continue")
+                else:
+                    self.console.print("[red]Invalid option[/red]")
+            except ValueError:
+                self.console.print("[red]Please enter a valid number[/red]")
 
 if __name__ == "__main__":
     """Run the GfxToolsApp if this script is executed directly."""
-
-    GfxToolsApp().run()
+    app = GfxToolsApp()
+    app.run()

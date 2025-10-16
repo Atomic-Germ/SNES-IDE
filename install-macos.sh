@@ -32,15 +32,22 @@ fi
 print_step "Installing SNES-IDE for macOS..."
 
 # Set installation directory
-INSTALL_DIR="/Applications/SNES-IDE"
+INSTALL_DIR="$HOME/Applications/SNES-IDE"
 
 # Create installation directory
 print_step "Creating installation directory..."
 sudo mkdir -p "$INSTALL_DIR"
 
 # Get the directory where this script is located
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
+# Try multiple methods to handle different shells
+if [[ -n "${BASH_SOURCE[0]}" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+elif [[ -n "${ZSH_VERSION}" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "${(%):-%N}")" && pwd)"
+else
+    # Fallback for other shells
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+fi
 print_step "Copying SNES-IDE files..."
 # Copy all files to install directory
 sudo cp -r "$SCRIPT_DIR"/* "$INSTALL_DIR/"
@@ -52,6 +59,9 @@ sudo find "$INSTALL_DIR" -name "*.py" -exec chmod +x {} \;
 
 # Create wrapper scripts for macOS
 print_step "Creating macOS wrapper scripts..."
+
+# Ensure tools directory exists
+sudo mkdir -p "$INSTALL_DIR/tools"
 
 # Text editor wrapper
 sudo tee "$INSTALL_DIR/tools/text-editor.sh" > /dev/null << 'EOF'
@@ -77,6 +87,10 @@ sudo chmod +x "$INSTALL_DIR/tools/text-editor.sh"
 
 # Create Applications folder shortcuts
 print_step "Creating Applications shortcuts..."
+
+# Create basic app bundle structure
+sudo mkdir -p "/Applications/SNES-IDE.app/Contents/MacOS"
+sudo mkdir -p "/Applications/SNES-IDE.app/Contents/Resources"
 
 # Main SNES-IDE app
 sudo tee "/Applications/SNES-IDE.app/Contents/MacOS/SNES-IDE" > /dev/null << EOF

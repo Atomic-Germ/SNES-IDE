@@ -223,6 +223,10 @@ class SnesIde(object):
             self.configure_text_editor()
             return 0
 
+        # Handle graphics tools internally to maintain TUI
+        if option == 3:
+            return self.run_gfx_tools()
+
         commands = {
             0: self.get_create_project_command(),
             1: self.get_text_editor_command(),
@@ -242,7 +246,31 @@ class SnesIde(object):
                 return -1
 
         return -1
-    
+
+    def run_gfx_tools(self) -> int:
+        """Run the graphics tools menu internally."""
+        try:
+            # Import the graphics tools module
+            import sys
+            import importlib.util
+            tools_path = self.tools_path
+            gfx_tools_path = tools_path / "gfx-tools.py"
+
+            # Load the module from file
+            spec = importlib.util.spec_from_file_location("gfx_tools", str(gfx_tools_path))
+            if spec is None or spec.loader is None:
+                raise ImportError(f"Could not load graphics tools from {gfx_tools_path}")
+
+            gfx_tools_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(gfx_tools_module)
+
+            # Run the graphics tools app
+            app = gfx_tools_module.GfxToolsApp()
+            app.run()
+            return 0
+        except Exception as e:
+            print(f"Error running graphics tools: {e}")
+            return -1
 
     def get_create_project_command(self) -> list:
         """Get the command to create a new project."""
