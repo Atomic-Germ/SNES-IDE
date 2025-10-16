@@ -151,6 +151,27 @@ def copy_docs() -> None:
     
     return None
 
+
+def copy_gh_pages() -> None:
+    """
+    Copy the gh-pages directory to the SNES-IDE-out directory.
+    """
+
+    (SNESIDEOUT / 'gh-pages').mkdir(exist_ok=True)
+
+    for file in (ROOT / 'gh-pages').rglob("*"):
+
+        if file.is_dir():
+            continue
+
+        rel_path = file.relative_to(ROOT / 'gh-pages')
+        dest_path = SNESIDEOUT / 'gh-pages' / rel_path
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(file, dest_path)
+    
+    return None
+
+
 def copy_scripts() -> None:
     """
     Copy the script files (.bat or .sh) to the SNES-IDE-out directory.
@@ -294,6 +315,7 @@ def main() -> int:
         ("Copying root files", copy_root),
         ("Copying libs", copy_lib),
         ("Copying docs", copy_docs),
+        ("Copying gh-pages", copy_gh_pages),
         ("Copying script files", copy_scripts),
         ("Copying dlls", copy_dlls),
         ("Copying tracker", copyTracker),

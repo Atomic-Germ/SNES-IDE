@@ -82,17 +82,21 @@ def main(python_file: str | Path, target_dir: str | Path) -> int:
         return 1
 
     exe_name = python_file.stem + ".exe"
-    icon_path = (Path(__file__).parent.parent.parent.parent / "assets" / "icons" / "icon.ico").absolute()
+    icon_path = (Path(__file__).parent.parent.parent.parent / "gh-pages" / "assets" / "icons" / "icon.ico").absolute()
 
     print(f"Converting '{python_file}' to '{exe_name}'...")
 
     # Build command for pyinstaller
-
     cmd = [
-
         sys.executable, "-m", "PyInstaller",
         "--onefile",
-        f"--icon={icon_path}",
+    ]
+
+    # Only add icon if it exists
+    if icon_path.exists():
+        cmd.append(f"--icon={icon_path}")
+    else:
+        print(f"Warning: Icon file not found at {icon_path}, building without icon")
         str(python_file)
 
     ]
