@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # This script is used to build the project.
 
 from pathlib import Path
@@ -206,6 +207,13 @@ def compile() -> None:
 
     src_dir = ROOT / "src"
     target_platform = sys.argv[1] if len(sys.argv) > 1 else "windows"
+    host_platform = pf.system().lower()
+
+    # Check for cross-compilation limitations
+    if target_platform == "windows" and host_platform != "windows":
+        print("Warning: Building Windows executables on non-Windows platform.")
+        print("Windows executables should be built on Windows for best compatibility.")
+        print("Falling back to copying Python files instead.")
 
     # Compile Python files
     for file in src_dir.rglob("*.py"):
@@ -221,8 +229,8 @@ def compile() -> None:
             import os
             os.chmod(py_out, 0o755)
 
-        elif target_platform == "windows":
-            # On Windows, compile to .exe using PyInstaller
+        elif target_platform == "windows" and host_platform == "windows":
+            # On Windows building for Windows, compile to .exe using PyInstaller
             out_path = SNESIDEOUT / rel_path.with_suffix(".exe")
             out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -233,8 +241,11 @@ def compile() -> None:
             if out != 0:
                 raise Exception(f"ERROR while compiling python files: -{abs(out)}")
         else:
-            # Default: just copy Python files
+            # Cross-platform or fallback: just copy Python files
             shutil.copy(file, py_out)
+            if target_platform in ["linux", "macos"]:
+                import os
+                os.chmod(py_out, 0o755)
 
     # Copy installer scripts for the target platform
     if target_platform == "linux":
