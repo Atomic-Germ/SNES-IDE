@@ -182,6 +182,59 @@ def download_and_extract_tool(tool_name: str, platform_name: str) -> bool:
                         pyshutil.rmtree(dest_dir)
                     pyshutil.copytree(source_file, dest_dir)
         
+        # Special handling for pvsneslib components
+        if tool_name == "pvsneslib-tools":
+            # Copy font file
+            font_file = source_dir / "snes-examples" / "memory_mapping" / "pvsneslibfont.png"
+            if font_file.exists():
+                # Copy to source libs/font/
+                font_dest_dir = libs_dir / "font"
+                font_dest_dir.mkdir(parents=True, exist_ok=True)
+                pyshutil.copy2(font_file, font_dest_dir / "pvsneslibfont.png")
+                
+                # Also copy to output libs/font/
+                output_font_dest_dir = SNESIDEOUT / "libs" / "font"
+                output_font_dest_dir.mkdir(parents=True, exist_ok=True)
+                pyshutil.copy2(font_file, output_font_dest_dir / "pvsneslibfont.png")
+            
+            # Copy devkitsnes include directory
+            devkitsnes_include_dir = source_dir / "devkitsnes" / "include"
+            if devkitsnes_include_dir.exists():
+                # Copy to source libs/include/devkitsnes/
+                devkitsnes_dest_dir = libs_dir / "include" / "devkitsnes"
+                if devkitsnes_dest_dir.exists():
+                    pyshutil.rmtree(devkitsnes_dest_dir)
+                pyshutil.copytree(devkitsnes_include_dir, devkitsnes_dest_dir)
+                
+                # Also copy to output libs/include/devkitsnes/
+                output_devkitsnes_dest_dir = SNESIDEOUT / "libs" / "include" / "devkitsnes"
+                if output_devkitsnes_dest_dir.exists():
+                    pyshutil.rmtree(output_devkitsnes_dest_dir)
+                pyshutil.copytree(devkitsnes_include_dir, output_devkitsnes_dest_dir)
+            
+            # Copy pvsneslib include files
+            pvsneslib_include_dir = source_dir / "pvsneslib" / "include"
+            if pvsneslib_include_dir.exists():
+                # Copy contents to source libs/include/
+                for item in pvsneslib_include_dir.iterdir():
+                    dest_path = libs_dir / "include" / item.name
+                    if item.is_file():
+                        pyshutil.copy2(item, dest_path)
+                    elif item.is_dir():
+                        if dest_path.exists():
+                            pyshutil.rmtree(dest_path)
+                        pyshutil.copytree(item, dest_path)
+                
+                # Also copy contents to output libs/include/
+                for item in pvsneslib_include_dir.iterdir():
+                    dest_path = SNESIDEOUT / "libs" / "include" / item.name
+                    if item.is_file():
+                        pyshutil.copy2(item, dest_path)
+                    elif item.is_dir():
+                        if dest_path.exists():
+                            pyshutil.rmtree(dest_path)
+                        pyshutil.copytree(item, dest_path)
+        
         # Cleanup
         # pyshutil.rmtree(temp_dir)  # Commented out for debugging
         
