@@ -83,19 +83,19 @@ TOOL_MANIFEST = {
         "license": "MIT",
         "platforms": {
             "windows": {
-                "url": "https://github.com/alekmaul/pvsneslib/releases/download/4.2.0/pvsneslib_win32_4.2.0.zip",
-                "extract_path": "pvsneslib_win32_4.2.0",
-                "files": ["devkitsnes/", "tools/"]
+                "url": "https://github.com/alekmaul/pvsneslib/releases/download/4.4.0/pvsneslib_440_64b_windows.zip",
+                "extract_path": "pvsneslib",
+                "files": ["devkitsnes/", "pvsneslib/"]
             },
             "macos": {
-                "url": "https://github.com/alekmaul/pvsneslib/releases/download/4.2.0/pvsneslib_macos_4.2.0.zip",
-                "extract_path": "pvsneslib_macos_4.2.0", 
-                "files": ["devkitsnes/", "tools/"]
+                "url": "https://github.com/alekmaul/pvsneslib/releases/download/4.4.0/pvsneslib_440_64b_darwin.zip",
+                "extract_path": "pvsneslib",
+                "files": ["devkitsnes/", "pvsneslib/"]
             },
             "linux": {
-                "url": "https://github.com/alekmaul/pvsneslib/releases/download/4.2.0/pvsneslib_linux_4.2.0.zip",
-                "extract_path": "pvsneslib_linux_4.2.0",
-                "files": ["devkitsnes/", "tools/"]
+                "url": "https://github.com/alekmaul/pvsneslib/releases/download/4.4.0/pvsneslib_440_64b_linux.zip",
+                "extract_path": "pvsneslib",
+                "files": ["devkitsnes/", "pvsneslib/"]
             }
         }
     }
@@ -171,19 +171,19 @@ def download_and_extract_tool(tool_name: str, platform_name: str) -> bool:
                 if source_file.is_file():
                     # Copy file
                     rel_path = source_file.relative_to(source_dir)
-                    dest_path = libs_dir / tool_name / rel_path
+                    dest_path = libs_dir / extract_path / rel_path
                     dest_path.parent.mkdir(parents=True, exist_ok=True)
                     pyshutil.copy2(source_file, dest_path)
                 elif source_file.is_dir():
                     # Copy directory
                     rel_path = source_file.relative_to(source_dir)
-                    dest_dir = libs_dir / tool_name / rel_path
+                    dest_dir = libs_dir / extract_path / rel_path
                     if dest_dir.exists():
                         pyshutil.rmtree(dest_dir)
                     pyshutil.copytree(source_file, dest_dir)
         
         # Cleanup
-        pyshutil.rmtree(temp_dir)
+        # pyshutil.rmtree(temp_dir)  # Commented out for debugging
         
         print_ok(f"Successfully installed {tool_name} for {platform_name}")
         return True
