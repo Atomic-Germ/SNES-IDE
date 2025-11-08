@@ -17,13 +17,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 from typing import Union, List, NoReturn, Optional, Tuple
-from subprocess import run, CalledProcessError
+from subprocess import CalledProcessError
 from tkinter import Tk, filedialog
 from typing import NoReturn
 from pathlib import Path
 import platform
 import sys
 import os
+
+from platform_helpers import runGetSnesIDEHome, runCmd, openPath
+
 
 def get_file_path(
     title: str = "Select file",
@@ -118,30 +121,38 @@ def main() -> NoReturn:
     home_path: Path
 
     try:
-        home_path = Path(
-            run(
-                ["get-snes-ide-home.exe"] if os.name == "nt" 
-                else ["./get-snes-ide-home"], shell=True, text=True,
-                cwd=get_executable_path(), check=True
-            ).stdout
-        )
-    except CalledProcessError as e:
-        print(f"Error while getting snes-ide home folder: {e}, exiting...")
+        # Use runGetSnesIDEHome to locate and run the
+        # helper that prints the snes-ide home path. The helper 
+        # searches PATH and cwd
+        home_path = runGetSnesIDEHome(cwd=get_executable_path())
+    except FileNotFoundError as e:
+        print(f"get-snes-ide-home helper not found: {e}")
         exit(-1)
     except Exception as e:
-        print(f"Unknown error while getting snes-ide home folder: {e}, exiting...")
+        print(f"Error while getting snes-ide home folder: {e}, exiting...")
         exit(-1)
 
-    snes_emulator: Path = home_path / "bin" / "snes-emulator"
+    sbase: Path = home_path / "bin" / "snes-emulator"
 
-    if platform.system().lower() == "windows":
-        snes_emulator = snes_emulator / "lakesnes.exe"
+    system_name = platform.system().lower()
 
-    elif platform.system().lower() == "darwin":
-        snes_emulator = snes_emulator / "bsnes.app"
-
+    # Prefer platform-appropriate binary names
+    if system_name == "windows":
+        candidates = [sbase / "lakesnes.exe", sbase / "lakesnes"]
+    elif system_name == "darwin":
+        candidates = [sbase / "bsnes.app", sbase / "lakesnes"]
     else:
-        snes_emulator = snes_emulator / "lakesnes"
+        candidates = [sbase / "lakesnes", sbase / "lakesnes.exe"]
+
+    snes_emulator: Optional[Path] = None
+    for c in candidates:
+        if c.exists():
+            snes_emulator = c
+            break
+
+    if not snes_emulator:
+        print(f"Failed, snes emulator not found in any of: {', '.join(str(p) for p in candidates)}")
+        exit(-1)
 
     rom_path: Path = Path(str(get_file_path(
         "Select your ROM", [("ROM files", "*.sfc")], multiple=False,
@@ -149,15 +160,19 @@ def main() -> NoReturn:
     )))
 
     try:
-        
-        if platform.system().lower() == "darwin":
-            run(["open", "-a", str(snes_emulator)], check=True)
-        
+        if system_name == "darwin":
+            # Open the .app bundle and forward the ROM path as
+            # an argument if it accepts arguments this way; if not,
+            # the app will simply be opened.
+            openPath(snes_emulator, args=[str(rom_path)])
         else:
-            run([str(snes_emulator), str(rom_path)], check=True)
+            # Execute the emulator binary directly and pass the ROM path
+            runCmd([str(snes_emulator), str(rom_path)], check=True)
 
     except CalledProcessError as e:
-
+        print(f"Error while executing {snes_emulator}: {e}")
+        exit(-1)
+    except Exception as e:
         print(f"Error while executing {snes_emulator}: {e}")
         exit(-1)
 

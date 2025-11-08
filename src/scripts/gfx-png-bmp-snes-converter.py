@@ -25,6 +25,7 @@ import tkinter as tk
 import subprocess
 import sys
 import os
+from platform_helpers import runGetSnesIDEHome, runCmd
 
 showinfo: Callable[..., str]
 showerror: Callable[..., str]
@@ -257,76 +258,75 @@ class TileConverterGUI:
         
         return True
     
-    def build_command_line(self) -> List[str]:
-        """
-        Build command line arguments based on GUI selections.
-        
+    def buildCommandLine(self) -> List[str]:
+        """Build command line arguments based on GUI selections.
+
         Returns:
-            str: The constructed command line string
+            List[str]: Tokenized argv list (no shell quoting)
         """
 
         args: List[str] = []
-        
+
         if self.add_blank_tile.get():
             args.append("-b")
-        
+
         if self.block_size.get() != "8":
-            args.append(f"-s {self.block_size.get()}")
-        
+            args.extend(["-s", self.block_size.get()])
+
         if self.packed_format.get():
             args.append("-k")
-        
+
         if self.lz77_compressed.get():
             args.append("-z")
-        
+
         if self.block_size.get() == "8":
             if self.block_width.get() != "8":
-                args.append(f"-W {self.block_width.get()}")
+                args.extend(["-W", self.block_width.get()])
             if self.block_height.get() != "8":
-                args.append(f"-H {self.block_height.get()}")
-        
+                args.extend(["-H", self.block_height.get()])
+
         if self.tile_offset.get() != "0":
-            args.append(f"-f {self.tile_offset.get()}")
-        
+            args.extend(["-f", self.tile_offset.get()])
+
         if self.include_map.get():
             args.append("-m")
-        
+
         if self.high_priority_bit.get():
             args.append("-g")
-        
+
         if self.generate_pages.get():
             args.append("-y")
-        
+
         if self.no_tile_reduction.get():
             args.append("-R")
-        
+
         if self.mode_format.get() != "1":
-            args.append(f"-M {self.mode_format.get()}")
-        
+            args.extend(["-M", self.mode_format.get()])
+
         if self.rearrange_palette.get():
             args.append("-a")
-        
+
         if self.palette_rounding.get():
             args.append("-d")
-        
+
         if self.palette_entry.get() != "0":
-            args.append(f"-e {self.palette_entry.get()}")
-        
+            args.extend(["-e", self.palette_entry.get()])
+
         if self.colors_output.get() != "16":
-            args.append(f"-o {self.colors_output.get()}")
-        
+            args.extend(["-o", self.colors_output.get()])
+
         if self.include_palette.get():
             args.append("-p")
-        
+
         if self.colors_used.get() != "16":
-            args.append(f"-u {self.colors_used.get()}")
-        
-        args.append(f"-i \"{self.input_file.get()}\"")
-        args.append(f"-t {self.file_type.get()}")
+            args.extend(["-u", self.colors_used.get()])
+
+        args.extend(["-i", self.input_file.get()])
+        args.extend(["-t", self.file_type.get()])
         
         if self.quiet_mode.get():
             args.append("-q")
-        
+
         return args
     
     def convert(self) -> "None|NoReturn":
@@ -336,44 +336,41 @@ class TileConverterGUI:
             return
 
         gfx4snes: Path
-
         try:
-            gfx4snes = (
-                Path(self.get_home_path()) / "bin" / "pvsneslib" / "devkitsnes" / "tools"
-                / ("gfx4snes.exe" if os.name == "nt" else "gfx4snes")
-            )
-        except CalledProcessError as e:
-            showerror(f"Failed to get snes-ide home path duel to: {e}")
+            home_path = runGetSnesIDEHome(cwd=Path(self.get_executable_path()))
+        except FileNotFoundError as e:
+            showerror(f"Failed to find get-snes-ide-home helper: {e}")
             exit(-1)
         except Exception as e:
-            showerror(f"Unknown error ocurred when getting snes-ide home path duel to: {e}")
+            showerror(f"Unknown error occurred when getting snes-ide home path due to: {e}")
             exit(-1)
-        
-        command_line: List[str] = self.build_command_line()
-        
-        showinfo("Conversion started", 
-                f"Conversion started with parameters:\n{command_line}\n\n")
-        
+
+        gfx4snes = (
+            Path(home_path) / "bin" / "pvsneslib" / "devkitsnes" / "tools" /
+            ("gfx4snes.exe" if os.name == "nt" else "gfx4snes")
+        )
+
+        if not gfx4snes.exists():
+            showerror(f"gfx4snes not found at: {gfx4snes}")
+            exit(-1)
+        command_line: List[str] = self.buildCommandLine()
+
+        showinfo("Conversion started", f"Conversion started with parameters:\n{command_line}\n\n")
+
         try:
-            process: CompletedProcess[bytes] = subprocess.run([gfx4snes] + command_line, shell=True,
-                cwd=Path(self.input_file.get()).parent
-            )
+            # runCmd will raise CalledProcessError when check=True and exit code != 0
+            runCmd([str(gfx4snes)] + command_line, cwd=Path(self.input_file.get()).parent, check=True)
+        except CalledProcessError as e:
+            showerror(f"Failed to convert image to SNES format due to: {e}")
+            exit(-1)
+        except FileNotFoundError as e:
+            showerror(f"Failed to execute gfx4snes: {e}")
+            exit(-1)
         except Exception as e:
             showerror(f"Failed to execute gfx4snes process: {e}")
             exit(-1)
 
-        if process.returncode != 0:
-            try:
-                process.check_returncode()
-
-            except CalledProcessError as e:
-                showerror(f"Failed to convert image to SNES format duel to: {e}")
-
-            finally:
-                exit(-1)
-        
-        showinfo("Conversion finished",
-                "Conversion finished successfully!")
+        showinfo("Conversion finished", "Conversion finished successfully!")
 
     @staticmethod
     def get_executable_path() -> str:
