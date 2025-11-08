@@ -16,10 +16,20 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget
-from PySide6.QtWebEngineWidgets import QWebEngineView
-from PySide6.QtCore import QObject, Slot, Signal
-from PySide6.QtWebChannel import QWebChannel
+try:
+    from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget
+    from PySide6.QtWebEngineWidgets import QWebEngineView
+    from PySide6.QtCore import QObject, Slot, Signal
+    from PySide6.QtWebChannel import QWebChannel
+except Exception as e:
+    # Fail fast with a helpful message rather than a long import traceback.
+    # Many users will fix this by creating the project's venv and installing
+    # the requirements (see `build/requirements.txt`).
+    import sys as _sys
+    _sys.stderr.write("ERROR: Missing or incompatible PySide6/Qt components.\n")
+    _sys.stderr.write("To run the GUI, install dependencies into a supported Python (see build/requirements.txt).\n")
+    _sys.stderr.write(f"Detailed error: {e!r}\n")
+    _sys.exit(2)
 
 from subprocess import CompletedProcess
 from typing_extensions import NoReturn

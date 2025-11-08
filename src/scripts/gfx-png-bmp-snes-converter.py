@@ -16,16 +16,36 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-from tkinter import Tk, filedialog, ttk, StringVar, BooleanVar
 from subprocess import CompletedProcess, CalledProcessError
-from tkinter.messagebox import showinfo, showerror # type: ignore
 from typing import List, Tuple, Callable, NoReturn
 from pathlib import Path
-import tkinter as tk
 import subprocess
 import sys
 import os
 from platform_helpers import runGetSnesIDEHome, runCmd
+
+# tkinter is optional at import time; when missing we provide small
+# fallbacks so the module can be imported and produce helpful errors at runtime.
+HAS_TK = True
+try:
+    import tkinter as tk
+    from tkinter import Tk, filedialog, ttk, StringVar, BooleanVar
+    from tkinter.messagebox import showinfo, showerror  # type: ignore
+except Exception as _e:
+    HAS_TK = False
+    # fallback messagebox functions that write to stderr so callers still get useful output
+    def showinfo(title: str, message: str, *a, **kw):
+        print(f"{title}: {message}", file=sys.stderr)
+
+    def showerror(title: str, message: str, *a, **kw):
+        print(f"ERROR - {title}: {message}", file=sys.stderr)
+
+    # minimal placeholders for types used in annotations (not required at runtime)
+    Tk = object
+    filedialog = None
+    ttk = None
+    StringVar = lambda *a, **k: None
+    BooleanVar = lambda *a, **k: None
 
 showinfo: Callable[..., str]
 showerror: Callable[..., str]
@@ -402,6 +422,12 @@ class TileConverterGUI:
 
 def main() -> None:
     """Main function to launch the Tile Converter GUI."""
+
+    if not HAS_TK:
+        # tkinter not available — fail politely with next steps
+        print("ERROR: tkinter is not available. Install the system tcl/tk or use a Python distribution that includes tkinter.", file=sys.stderr)
+        print("On macOS you can: brew install tcl-tk && reinstall Python or use python.org macOS installer.", file=sys.stderr)
+        sys.exit(2)
 
     app: TileConverterGUI = TileConverterGUI()
     app.run()
