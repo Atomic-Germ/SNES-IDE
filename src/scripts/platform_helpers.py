@@ -58,15 +58,29 @@ def runGetSnesIDEHome(cwd: Optional[Path] = None, timeout: Optional[int] = None)
     Raises FileNotFoundError if the helper wasn't found and subprocess.CalledProcessError
     if the helper ran but returned a non-zero exit code or no output.
     """
-    exe_name = "get-snes-ide-home.exe" if os.name == "nt" else "get-snes-ide-home"
+    base_name = "get-snes-ide-home"
+    exe_name = f"{base_name}.exe" if os.name == "nt" else base_name
+    py_name = f"{base_name}.py"
+
+    # Environment override: if SNES_IDE_HOME is set, prefer it
+    env_home = os.environ.get("SNES_IDE_HOME")
+    if env_home:
+        return Path(env_home)
 
     candidates: List[Path] = []
     if cwd:
         candidates.append(Path(cwd) / exe_name)
+        candidates.append(Path(cwd) / py_name)
 
-    found = findExecutable(exe_name)
-    if found:
-        candidates.append(found)
+    # Look on PATH for either an executable or a python script
+    found_exe = findExecutable(exe_name)
+    if found_exe:
+        candidates.append(found_exe)
+
+    # also consider python scripts discoverable on PATH
+    found_py = shutil.which(py_name)
+    if found_py:
+        candidates.append(Path(found_py))
 
     # Try each candidate in order and use the first that executes successfully
     checked = set()
@@ -77,20 +91,56 @@ def runGetSnesIDEHome(cwd: Optional[Path] = None, timeout: Optional[int] = None)
         if not c.exists():
             continue
 
-        cmd = [str(c)]
-        result = subprocess.run(cmd, cwd=str(cwd) if cwd else None, capture_output=True, text=True, check=False, timeout=timeout)
+        # If candidate is a .py file, run it with the current Python interpreter
+        if c.suffix.lower() == ".py":
+            cmd = [sys.executable, str(c)]
+        else:
+            cmd = [str(c)]
+
+        try:
+            result = subprocess.run(cmd, cwd=str(cwd) if cwd else None, capture_output=True, text=True, check=False, timeout=timeout)
+        except FileNotFoundError:
+            # candidate not executable; try next
+            continue
+
         if result.returncode != 0:
             # try next candidate
             continue
 
-        out = result.stdout.strip()
-        if not out:
+        raw_out = result.stdout
+        if not raw_out or not raw_out.strip():
             # invalid output
             continue
 
-        return Path(out)
+        # The helper may print informational lines before the path (e.g. "Python script path mode chosen\n/path").
+        # Parse the output and prefer the last non-empty line that looks like a path. If none of the
+        # lines point to an existing path, fall back to the last non-empty line.
+        lines = [l.strip() for l in raw_out.splitlines() if l.strip()]
+        if not lines:
+            continue
 
-    raise FileNotFoundError(f"get-snes-ide-home helper not found (looked for {exe_name} in cwd={cwd} and on PATH)")
+        candidate_path = None
+        for l in reversed(lines):
+            try:
+                p = Path(l)
+            except Exception:
+                continue
+            # If this line points to an existing path, prefer it
+            if p.exists():
+                candidate_path = p
+                break
+
+        if candidate_path is None:
+            # No existing path found; use the last non-empty line as the returned value.
+            candidate_path = Path(lines[-1])
+
+        # Return a normalized Path (don't require it to exist here; caller may validate)
+        try:
+            return candidate_path.expanduser().resolve(strict=False)
+        except Exception:
+            return candidate_path
+
+    raise FileNotFoundError(f"get-snes-ide-home helper not found (looked for {exe_name} and {py_name} in cwd={cwd} and on PATH)")
 
 
 def runCmd(args: Sequence[Union[str, Path]], cwd: Optional[Path] = None, check: bool = True,

@@ -24,6 +24,7 @@ import subprocess
 import shutil
 import sys
 import os
+from platform_helpers import runGetSnesIDEHome
 
 def get_file_path(
     title: str = "Select file",
@@ -80,23 +81,23 @@ def get_file_path(
             root = None
         
         if not selected_path or (isinstance(selected_path, list) and len(selected_path) == 0):
-            print("No file/directory selected. Application terminated.")
+            print("No file/directory selected. Application terminated.", file=sys.stderr)
             sys.exit(1)
         
         if isinstance(selected_path, str) and not os.path.exists(selected_path):
-            print(f"Selected path does not exist: {selected_path}")
+            print(f"Selected path does not exist: {selected_path}", file=sys.stderr)
             sys.exit(1)
         
         return selected_path
-        
+
     except Exception as e:
         if root:
             try:
                 root.destroy()
             except:
                 pass
-        
-        print(f"Error in file dialog: {e}")
+
+        print(f"Error in file dialog: {e}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -127,11 +128,10 @@ class ProjectCreator:
 
     def get_home_path(self) -> str:
         """Get snes-ide home directory, can raise subprocess.CalledProcessError"""
-
-        command: list[str] = ["get-snes-ide-home.exe" if os.name == "nt" else "./get-snes-ide-home"]
-        cwd: str = self.get_executable_path()
-
-        return subprocess.run(command, cwd=cwd, capture_output=True, text=True, check=True).stdout.strip()
+        # Use centralized platform helper which searches cwd and PATH and
+        # returns a Path or raises FileNotFoundError with a helpful message.
+        cwd_path: Path = Path(self.get_executable_path())
+        return str(runGetSnesIDEHome(cwd=cwd_path))
 
 
     def validate(self) -> None:
@@ -143,7 +143,7 @@ class ProjectCreator:
             match(r"^[A-Za-z0-9_-]+$", self.project_name)
         ):
 
-            print("Illegal parameter was given to create-pvsneslib-proj")
+            print("Illegal parameter was given to create-pvsneslib-proj", file=sys.stderr)
             exit(-1)
 
     def run(self) -> NoReturn:
@@ -152,18 +152,56 @@ class ProjectCreator:
         target_path: Path = self.full_path / self.project_name
 
         try:
-            template_path: Path = Path(self.get_home_path()) / "libs" / "pvsneslib" / "template"
+            home = Path(self.get_home_path())
 
-        except subprocess.CalledProcessError:
+            # Historically templates have lived in different locations across
+            # repository layouts (root/libs, resources/libs, src/libs). Try a
+            # few common candidate locations derived from the helper's output
+            # and from its parents (in case the helper returns the `src/` dir
+            # instead of the repository root).
+            bases = [home]
+            if home.parent and home.parent != home:
+                bases.append(home.parent)
+            if home.parent.parent and home.parent.parent not in bases:
+                bases.append(home.parent.parent)
 
-            print("Error while getting path to templates")
-            exit(-1)
+            checked = []
+            template_path = None
+            for base in bases:
+                checked.extend([
+                    base / "libs" / "pvsneslib" / "template",
+                    base / "resources" / "libs" / "pvsneslib" / "template",
+                    base / "src" / "libs" / "pvsneslib" / "template",
+                ])
+                for c in checked:
+                    if c.exists():
+                        template_path = c
+                        break
+                if template_path:
+                    break
+
+            if template_path is None:
+                tried = ", ".join(str(p) for p in checked)
+                raise FileNotFoundError(f"pvsneslib template not found; looked in: {tried}")
+
+        except FileNotFoundError as e:
+            # runGetSnesIDEHome or our candidate lookup failed with a clear message
+            print(f"Error while locating template: {e}", file=sys.stderr)
+            sys.exit(1)
+
+        except subprocess.CalledProcessError as e:
+            print(f"Error while getting path to templates: {e}", file=sys.stderr)
+            sys.exit(1)
+
+        except Exception as e:
+            print(f"Unexpected error while locating templates: {e}", file=sys.stderr)
+            sys.exit(1)
 
         try:
             shutil.copytree(template_path, target_path)
 
         except Exception as e:
-            print(f"Error while copying the template: {e}")
+            print(f"Error while copying the template: {e}", file=sys.stderr)
             exit(-1)
 
         print("Successfully copied template to target path, exiting...")

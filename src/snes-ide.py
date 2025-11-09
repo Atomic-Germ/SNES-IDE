@@ -83,11 +83,16 @@ class ScriptRunner(QObject):
                     text=True,
                     cwd=self.scripts_dir
                 )
-                
+
                 if result.returncode == 0:
-                    self.scriptExecuted.emit(script_name, "Script executed successfully!")
+                    self.scriptExecuted.emit(script_name, " ran successfully!")
                 else:
-                    self.scriptExecuted.emit(script_name, f"Error: {result.stderr}")
+                    # Prefer stderr, but fall back to stdout if stderr is empty so
+                    # scripts that print errors to stdout are still visible to the UI.
+                    stderr = (result.stderr or "").strip()
+                    stdout = (result.stdout or "").strip()
+                    msg = stderr if stderr else (stdout if stdout else f"Exit code {result.returncode}")
+                    self.scriptExecuted.emit(script_name, f"Error: {msg}")
             else:
                 self.scriptExecuted.emit(script_name, f"Script not found: {script_path}")
 
