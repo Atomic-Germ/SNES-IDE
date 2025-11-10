@@ -144,10 +144,12 @@ def compile_python(
             cmd.append("--noconsole")
         else:
             cmd.append("--console")
-    
+
     if icon_path and icon_path.exists():
         cmd.extend(["--icon", str(icon_path)])
     
+    cmd.extend("--workpath", str(temp_workpath)])
+    cmd.extend("--distpath", str(temp_distpath)])
     cmd.append(str(python_file_path))
     
     try:
@@ -219,7 +221,7 @@ def compile_python(
                 print(f"Set executable permissions on: {file_path}")
         
         if clean_tmp_exec:
-            cleanup_files: List[str] = ["build", "dist", f"{exec_name}.spec"]
+            cleanup_files: List[Path] = [ Path.cwd() / ".pyinstaller_temp", Path.cwd() / f"{exec_name}.spec"]
             for item in cleanup_files:
                 path: Path = Path(item)
                 if path.exists():
