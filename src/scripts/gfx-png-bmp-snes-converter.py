@@ -26,6 +26,10 @@ import subprocess
 import sys
 import os
 
+# Import platform utilities
+sys.path.append(str(Path(__file__).parent.parent))
+from platform_utils import platform_manager
+
 showinfo: Callable[..., str]
 showerror: Callable[..., str]
 
@@ -340,7 +344,7 @@ class TileConverterGUI:
         try:
             gfx4snes = (
                 Path(self.get_home_path()) / "bin" / "pvsneslib" / "devkitsnes" / "tools"
-                / ("gfx4snes.exe" if os.name == "nt" else "gfx4snes")
+                / platform_manager.get_executable_name("gfx4snes")
             )
         except CalledProcessError as e:
             showerror(f"Failed to get snes-ide home path duel to: {e}")
@@ -392,7 +396,7 @@ class TileConverterGUI:
     def get_home_path(cls) -> str:
         """Get snes-ide home directory, can raise subprocess.CalledProcessError"""
 
-        command: list[str] = ["get-snes-ide-home.exe" if os.name == "nt" else "./get-snes-ide-home"]
+        command: list[str] = [platform_manager.get_relative_executable_path("get-snes-ide-home")]
         cwd: str = cls.get_executable_path()
 
         return subprocess.run(command, cwd=cwd, capture_output=True, text=True, check=True).stdout.strip()

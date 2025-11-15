@@ -25,6 +25,10 @@ import subprocess
 import sys
 import os
 
+# Import platform utilities
+sys.path.append(str(Path(__file__).parent.parent))
+from platform_utils import platform_manager
+
 class MainWindow(QMainWindow):
     def __init__(self, web_app: "Path|str") -> None:
 
@@ -63,7 +67,7 @@ def main() -> NoReturn:
     """Init TileSetExtractor from pvsneslib to convert TMX to TMJ"""
 
     output: CompletedProcess[str] = subprocess.run(
-        [".\\get-snes-ide-home.exe" if os.name == "nt" else "./get-snes-ide-home"],
+        [platform_manager.get_relative_executable_path("get-snes-ide-home")],
         cwd=get_executable_path(), shell=True, capture_output=True, text=True
     )
 

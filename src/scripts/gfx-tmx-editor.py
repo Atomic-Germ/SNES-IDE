@@ -19,10 +19,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from subprocess import run, CalledProcessError
 from typing_extensions import NoReturn
 from pathlib import Path
-import platform
 import shutil
 import sys
 import os
+
+# Import platform utilities
+sys.path.append(str(Path(__file__).parent.parent))
+from platform_utils import platform_manager
 
 def check_if_path(program: str) -> bool:
     """
@@ -54,7 +57,7 @@ def get_executable_path() -> str:
 def get_home_path() -> str:
     """Get snes-ide home directory, can raise subprocess.CalledProcessError"""
 
-    command: list[str] = ["get-snes-ide-home.exe" if os.name == "nt" else "./get-snes-ide-home"]
+    command: list[str] = [platform_manager.get_relative_executable_path("get-snes-ide-home")]
     cwd: str = get_executable_path()
 
     return run(command, cwd=cwd, capture_output=True, text=True, check=True).stdout.strip()
@@ -65,10 +68,10 @@ def main() -> NoReturn:
 
     tmx_editor: Path
     
-    if platform.system().lower() == "windows":
+    if platform_manager.is_windows():
         tmx_editor = Path(get_home_path()) / "bin" / "tmx-editor" / "tiled.exe"
     
-    elif platform.system().lower() == "darwin":
+    elif platform_manager.is_macos():
         tmx_editor = Path(get_home_path()) / "bin" / "tmx-editor" / "Tiled.app"
 
     else:
@@ -80,7 +83,7 @@ def main() -> NoReturn:
 
     try:
         
-        if platform.system().lower() == "darwin":
+        if platform_manager.is_macos():
             run(["open", "-a", str(tmx_editor)], shell=True, check=True)
         
         else:
