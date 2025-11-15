@@ -21,14 +21,13 @@ from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtCore import QObject, Slot, Signal
 from PySide6.QtWebChannel import QWebChannel
 
-from subprocess import CompletedProcess
 from typing_extensions import NoReturn
 from pathlib import Path
-import subprocess
 import sys
 
 # Import path utilities
 from path_utils import path_manager
+from subprocess_utils import subprocess_manager
 
 class ScriptRunner(QObject):
     
@@ -55,14 +54,15 @@ class ScriptRunner(QObject):
         try:
             script_path: Path = self.scripts_dir / script_name
             if script_path.exists():
-                result: CompletedProcess[str] = subprocess.run(
-                    [sys.executable, str(script_path)],
-                    capture_output=True,
-                    text=True,
-                    cwd=self.scripts_dir
+                # Execute Python script using subprocess_manager
+                result = subprocess_manager.run_external_executable(
+                    sys.executable,
+                    args=[str(script_path)],
+                    cwd=self.scripts_dir,
+                    capture_output=True
                 )
                 
-                if result.returncode == 0:
+                if result.success:
                     self.scriptExecuted.emit(script_name, "Script executed successfully!")
                 else:
                     self.scriptExecuted.emit(script_name, f"Error: {result.stderr}")

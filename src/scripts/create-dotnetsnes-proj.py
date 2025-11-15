@@ -17,10 +17,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 from typing import Union, List, NoReturn, Optional, Tuple
-from subprocess import CompletedProcess
 from tkinter import Tk, filedialog
 from pathlib import Path
-import subprocess
 import sys
 import os
 
@@ -28,6 +26,7 @@ import os
 sys.path.append(str(Path(__file__).parent.parent))
 from platform_utils import platform_manager
 from path_utils import path_manager
+from subprocess_utils import subprocess_manager
 
 def get_file_path(
     title: str = "Select file",
@@ -105,18 +104,16 @@ def get_file_path(
 def main() -> NoReturn:
     """Main logic to create dotnetsnes project"""
 
-    snes_ide_home: CompletedProcess[str] = subprocess.run(
-        [platform_manager.get_relative_executable_path("get-snes-ide-home")],
-        cwd=str(path_manager.executable_dir), shell=True, capture_output=True, text=True
-    )
+    # Get SNES-IDE home directory using subprocess_manager
+    result = subprocess_manager.run_tool("get-snes-ide-home")
 
-    if snes_ide_home.returncode != 0:
+    if result.failed:
         print(
-            f"get-snes-ide-home failed to execute duel to {snes_ide_home.stderr}, exiting..."
+            f"get-snes-ide-home failed to execute due to {result.stderr}, exiting..."
         )
         exit(-1)
 
-    snes_home = Path(snes_ide_home.stdout.strip())
+    snes_home = Path(result.stdout.strip())
     dotnetsnes_proj = platform_manager.get_template_path(
         "DotnetSnesLib/template/DotnetSnes.Example.HelloWorld", snes_home
     )

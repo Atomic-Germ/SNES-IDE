@@ -18,10 +18,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget
 from PySide6.QtWebEngineWidgets import QWebEngineView
-from subprocess import CompletedProcess
 from typing import NoReturn
 from pathlib import Path
-import subprocess
 import sys
 import os
 
@@ -29,6 +27,7 @@ import os
 sys.path.append(str(Path(__file__).parent.parent))
 from platform_utils import platform_manager
 from path_utils import path_manager
+from subprocess_utils import subprocess_manager
 
 class MainWindow(QMainWindow):
     def __init__(self, web_app: "Path|str") -> None:
@@ -55,21 +54,19 @@ class MainWindow(QMainWindow):
 def main() -> NoReturn:
     """Init TileSetExtractor from pvsneslib to convert TMX to TMJ"""
 
-    output: CompletedProcess[str] = subprocess.run(
-        [platform_manager.get_relative_executable_path("get-snes-ide-home")],
-        cwd=str(path_manager.executable_dir), shell=True, capture_output=True, text=True
-    )
+    # Get SNES-IDE home directory using subprocess_manager
+    result = subprocess_manager.run_tool("get-snes-ide-home")
 
-    if output.returncode != 0:
+    if result.failed:
         print(
-            f"get-snes-ide-home failed to execute duel to {output.stderr}, exiting..."
+            f"get-snes-ide-home failed to execute due to {result.stderr}, exiting..."
         )
         exit(-1)
 
-    pvsneslib_home: Path = Path(output.stdout.strip()) / "bin" / "pvsneslib"
+    pvsneslib_home: Path = Path(result.stdout.strip()) / "bin" / "pvsneslib"
     os.environ["PVSNESLIB_HOME"] = str(pvsneslib_home)
 
-    pvsneslib_tmx_tmj_converter: Path = Path(output.stdout.strip()) / "libs" / "pvsneslib" / "tilesetextractor"
+    pvsneslib_tmx_tmj_converter: Path = Path(result.stdout.strip()) / "libs" / "pvsneslib" / "tilesetextractor"
 
     app: QApplication = QApplication(sys.argv)
     window: MainWindow = MainWindow(pvsneslib_tmx_tmj_converter)

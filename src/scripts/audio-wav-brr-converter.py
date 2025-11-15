@@ -17,7 +17,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 from typing import Union, List, NoReturn, Optional, Tuple
-from subprocess import run, CalledProcessError
 from typing_extensions import Literal
 from tkinter import Tk, filedialog
 from pathlib import Path
@@ -28,6 +27,7 @@ import os
 sys.path.append(str(Path(__file__).parent.parent))
 from platform_utils import platform_manager
 from path_utils import path_manager
+from subprocess_utils import subprocess_manager
 
 def get_file_path(
     title: str = "Select file",
@@ -104,12 +104,14 @@ def get_file_path(
         sys.exit(1)
 
 def get_home_path() -> str:
-    """Get snes-ide home directory, can raise subprocess.CalledProcessError"""
+    """Get snes-ide home directory using subprocess_manager"""
 
-    command: list[str] = [platform_manager.get_relative_executable_path("get-snes-ide-home")]
-    cwd: str = str(path_manager.executable_dir)
-
-    return run(command, cwd=cwd, capture_output=True, text=True, check=True).stdout.strip()
+    result = subprocess_manager.run_tool("get-snes-ide-home")
+    
+    if result.failed:
+        raise RuntimeError(f"get-snes-ide-home failed: {result.stderr}")
+        
+    return result.stdout.strip()
 
 def convert() -> Literal[-1, 0]:
     """Convert WAV files to BRR using snesbrr converter."""
@@ -139,9 +141,18 @@ def convert() -> Literal[-1, 0]:
             print("Input file does not exist or is not a brr file")
             return -1
             
-        run([snesbrr, "-e", input_file, str(input_file).split('.')[0] + ".brr"])
+        # Execute snesbrr conversion using subprocess_manager
+        output_file = str(input_file).split('.')[0] + ".brr"
+        result = subprocess_manager.run_external_executable(
+            snesbrr, 
+            args=["-e", str(input_file), output_file]
+        )
+        
+        if result.failed:
+            print(f"Error while executing snesbrr to convert your wav file: {result.stderr}")
+            return -1
 
-    except CalledProcessError as e:
+    except Exception as e:
 
         print(f"Error while executing snesbrr to convert your wav file: {e}")
         return -1

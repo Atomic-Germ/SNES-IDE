@@ -16,7 +16,6 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-from subprocess import run, CalledProcessError
 from typing_extensions import NoReturn
 from pathlib import Path
 import shutil
@@ -27,6 +26,7 @@ import os
 sys.path.append(str(Path(__file__).parent.parent))
 from platform_utils import platform_manager
 from path_utils import path_manager
+from subprocess_utils import subprocess_manager
 
 def check_if_path(program: str) -> bool:
     """
@@ -41,12 +41,14 @@ def check_if_path(program: str) -> bool:
     return shutil.which(program) is not None
 
 def get_home_path() -> str:
-    """Get snes-ide home directory, can raise subprocess.CalledProcessError"""
+    """Get snes-ide home directory using subprocess_manager"""
 
-    command: list[str] = [platform_manager.get_relative_executable_path("get-snes-ide-home")]
-    cwd: str = str(path_manager.executable_dir)
-
-    return run(command, cwd=cwd, capture_output=True, text=True, check=True).stdout.strip()
+    result = subprocess_manager.run_tool("get-snes-ide-home")
+    
+    if result.failed:
+        raise RuntimeError(f"get-snes-ide-home failed: {result.stderr}")
+        
+    return result.stdout.strip()
 
 
 def main() -> NoReturn:
@@ -70,13 +72,18 @@ def main() -> NoReturn:
     try:
         
         if platform_manager.is_macos():
-            run(["open", "-a", str(tmx_editor)], shell=True, check=True)
+            # Use macOS "open" command for applications
+            result = subprocess_manager.run_shell_command(f'open -a "{tmx_editor}"')
         
         else:
-            run([str(tmx_editor)], shell=True, check=True)
+            # Direct execution for Linux/Windows
+            result = subprocess_manager.run_external_executable(tmx_editor)
 
-    except CalledProcessError as e:
+        if result.failed:
+            print(f"Error while executing {tmx_editor}: {result.stderr}")
+            exit(-1)
 
+    except Exception as e:
         print(f"Error while executing {tmx_editor}: {e}")
         exit(-1)
 

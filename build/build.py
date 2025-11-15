@@ -21,9 +21,7 @@ from colorama import init, Fore, Style
 from typing import Any, List, Tuple, Callable, Dict
 from typing_extensions import Literal
 
-from subprocess import CompletedProcess
 from pathlib import Path
-import subprocess
 import traceback
 import hashlib
 import shutil
@@ -37,6 +35,7 @@ import os
 sys.path.append(str(Path(__file__).parent.parent / "src"))
 from platform_utils import platform_manager
 from path_utils import path_manager
+from subprocess_utils import subprocess_manager
 
 """
 Print functions
@@ -186,11 +185,15 @@ def compile_python(
     
     try:
         print(f"Running PyInstaller with command: {' '.join(cmd)}")
-        result: CompletedProcess[str] = subprocess.run(
-            cmd, capture_output=True, text=True
+        
+        # Execute PyInstaller using subprocess_manager
+        result = subprocess_manager.run_external_executable(
+            "pyinstaller", 
+            args=cmd[1:],  # Skip the 'pyinstaller' part since it's the executable
+            capture_output=True
         )
         
-        if result.returncode != 0:
+        if result.failed:
             print(f"PyInstaller failed with return code: {result.returncode}")
             print(f"Stdout: {result.stdout}")
             print(f"Stderr: {result.stderr}")

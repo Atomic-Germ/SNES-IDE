@@ -17,12 +17,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 from tkinter import Tk, filedialog, ttk, StringVar, BooleanVar
-from subprocess import CompletedProcess, CalledProcessError
 from tkinter.messagebox import showinfo, showerror # type: ignore
 from typing import List, Tuple, Callable, NoReturn
 from pathlib import Path
 import tkinter as tk
-import subprocess
 import sys
 import os
 
@@ -30,6 +28,7 @@ import os
 sys.path.append(str(Path(__file__).parent.parent))
 from platform_utils import platform_manager
 from path_utils import path_manager
+from subprocess_utils import subprocess_manager
 
 showinfo: Callable[..., str]
 showerror: Callable[..., str]
@@ -347,11 +346,11 @@ class TileConverterGUI:
                 Path(self.get_home_path()) / "bin" / "pvsneslib" / "devkitsnes" / "tools"
                 / platform_manager.get_executable_name("gfx4snes")
             )
-        except CalledProcessError as e:
-            showerror(f"Failed to get snes-ide home path duel to: {e}")
+        except RuntimeError as e:
+            showerror("Path Error", f"Failed to get snes-ide home path due to: {e}")
             exit(-1)
         except Exception as e:
-            showerror(f"Unknown error ocurred when getting snes-ide home path duel to: {e}")
+            showerror("Error", f"Unknown error occurred when getting snes-ide home path due to: {e}")
             exit(-1)
         
         command_line: List[str] = self.build_command_line()
@@ -359,35 +358,36 @@ class TileConverterGUI:
         showinfo("Conversion started", 
                 f"Conversion started with parameters:\n{command_line}\n\n")
         
+        
         try:
-            process: CompletedProcess[bytes] = subprocess.run([gfx4snes] + command_line, shell=True,
-                cwd=Path(self.input_file.get()).parent
+            # Execute gfx4snes using subprocess_manager
+            result = subprocess_manager.run_external_executable(
+                gfx4snes,
+                args=command_line,
+                cwd=Path(self.input_file.get()).parent,
+                capture_output=False  # Don't capture output for GUI feedback
             )
         except Exception as e:
-            showerror(f"Failed to execute gfx4snes process: {e}")
+            showerror("Execution Error", f"Failed to execute gfx4snes process: {e}")
             exit(-1)
 
-        if process.returncode != 0:
-            try:
-                process.check_returncode()
-
-            except CalledProcessError as e:
-                showerror(f"Failed to convert image to SNES format duel to: {e}")
-
-            finally:
-                exit(-1)
+        if result.failed:
+            showerror("Conversion Error", f"Failed to convert image to SNES format due to: {result.stderr}")
+            exit(-1)
         
         showinfo("Conversion finished",
                 "Conversion finished successfully!")
 
     @classmethod
     def get_home_path(cls) -> str:
-        """Get snes-ide home directory, can raise subprocess.CalledProcessError"""
+        """Get snes-ide home directory using subprocess_manager"""
 
-        command: list[str] = [platform_manager.get_relative_executable_path("get-snes-ide-home")]
-        cwd: str = str(path_manager.executable_dir)
-
-        return subprocess.run(command, cwd=cwd, capture_output=True, text=True, check=True).stdout.strip()
+        result = subprocess_manager.run_tool("get-snes-ide-home")
+        
+        if result.failed:
+            raise RuntimeError(f"get-snes-ide-home failed: {result.stderr}")
+            
+        return result.stdout.strip()
     
     def run(self) -> None:
         """Start the GUI application."""

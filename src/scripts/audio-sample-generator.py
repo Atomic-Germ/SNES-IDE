@@ -27,7 +27,6 @@ from PySide6.QtCore import Qt
 
 from typing import List, Dict, Any
 from pathlib import Path
-import subprocess
 import shutil
 import math
 import sys
@@ -37,6 +36,7 @@ import os
 sys.path.append(str(Path(__file__).parent.parent))
 from platform_utils import platform_manager
 from path_utils import path_manager
+from subprocess_utils import subprocess_manager
 
 class MusicalNote:
     """Represents a musical note with its properties."""
@@ -92,12 +92,14 @@ class NoteManager(QMainWindow):
         self._init_ui()
 
     def get_home_path(self) -> str:
-        """Get snes-ide home directory, can raise subprocess.CalledProcessError"""
+        """Get snes-ide home directory using subprocess_manager"""
 
-        command: list[str] = [platform_manager.get_relative_executable_path("get-snes-ide-home")]
-        cwd: str = str(path_manager.executable_dir)
-
-        return subprocess.run(command, cwd=cwd, capture_output=True, text=True, check=True).stdout.strip()
+        result = subprocess_manager.run_tool("get-snes-ide-home")
+        
+        if result.failed:
+            raise RuntimeError(f"get-snes-ide-home failed: {result.stderr}")
+            
+        return result.stdout.strip()
     
     def _generate_notes(self) -> List[MusicalNote]:
         """

@@ -17,10 +17,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 from typing import Union, List, NoReturn, Optional, Tuple
-from subprocess import CompletedProcess
 from tkinter import Tk, filedialog
 from pathlib import Path
-import subprocess
 import sys
 import os
 
@@ -28,6 +26,7 @@ import os
 sys.path.append(str(Path(__file__).parent.parent))
 from platform_utils import platform_manager
 from path_utils import path_manager
+from subprocess_utils import subprocess_manager
 
 def get_file_path(
     title: str = "Select file",
@@ -108,18 +107,16 @@ def get_file_path(
 def main() -> NoReturn:
     """Main logic of the compilation of the pvsneslib project"""
 
-    output: CompletedProcess[str] = subprocess.run(
-        [platform_manager.get_relative_executable_path("get-snes-ide-home")],
-        cwd=str(path_manager.executable_dir), shell=True, capture_output=True, text=True
-    )
+    # Get SNES-IDE home directory using subprocess_manager
+    result = subprocess_manager.run_tool("get-snes-ide-home")
 
-    if output.returncode != 0:
+    if result.failed:
         print(
-            f"get-snes-ide-home failed to execute duel to {output.stderr}, exiting..."
+            f"get-snes-ide-home failed to execute due to {result.stderr}, exiting..."
         )
         exit(-1)
 
-    pvsneslib_home: Path = Path(output.stdout.strip()) / "bin" / "pvsneslib"
+    pvsneslib_home: Path = Path(result.stdout.strip()) / "bin" / "pvsneslib"
 
     os.environ["PVSNESLIB_HOME"] = str(pvsneslib_home)
 
@@ -131,19 +128,15 @@ def main() -> NoReturn:
     if not (pvsneslib_proj / "Makefile").exists():
         print("No Makefile to build project found, exiting...")
         exit(-1)
-        
-    bin_dir: Path = Path(output.stdout.strip()) / "bin"
-    make: Path = platform_manager.get_make_path(bin_dir)
 
-    make_output: CompletedProcess[str]
-    
-    make_output = subprocess.run(
-        [str(make)], cwd=pvsneslib_proj, shell=True, capture_output=True,
-        env=os.environ, text=True
+    # Compile project using subprocess_manager
+    make_result = subprocess_manager.compile_with_make(
+        makefile_dir=pvsneslib_proj,
+        env_vars={"PVSNESLIB_HOME": str(pvsneslib_home)}
     )
 
-    if make_output.returncode != 0:
-        print(f"Error while compiling the software {make_output.stderr}, exiting...")
+    if make_result.failed:
+        print(f"Error while compiling the software {make_result.stderr}, exiting...")
         exit(-1)
 
     exit(0)

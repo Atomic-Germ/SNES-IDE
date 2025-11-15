@@ -17,10 +17,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 from typing import Union, List, NoReturn, Optional, Tuple
-from subprocess import CompletedProcess
 from tkinter import Tk, filedialog
 from pathlib import Path
-import subprocess
 import sys
 import os
 
@@ -28,6 +26,7 @@ import os
 sys.path.append(str(Path(__file__).parent.parent))
 from platform_utils import platform_manager
 from path_utils import path_manager
+from subprocess_utils import subprocess_manager
 
 def get_file_path(
     title: str = "Select file",
@@ -105,23 +104,24 @@ def get_file_path(
 def main() -> NoReturn:
     """Main logic of the compilation of the javasnes project"""
 
-    output: CompletedProcess[str] = subprocess.run(
-        [platform_manager.get_relative_executable_path("get-snes-ide-home")],
-        cwd=str(path_manager.executable_dir), shell=True, capture_output=True, text=True
-    )
+    # Get SNES-IDE home directory using subprocess_manager
+    result = subprocess_manager.run_tool("get-snes-ide-home")
 
-    if output.returncode != 0:
+    if result.failed:
         print(
-            f"get-snes-ide-home failed to execute duel to {output.stderr}, exiting..."
+            f"get-snes-ide-home failed to execute due to {result.stderr}, exiting..."
         )
         exit(-1)
 
-    pvsneslib_home: Path = Path(output.stdout.strip()) / "bin" / "pvsneslib"
-    bin_dir: Path = Path(output.stdout.strip()) / "bin"
+    pvsneslib_home: Path = Path(result.stdout.strip()) / "bin" / "pvsneslib"
+    bin_dir: Path = Path(result.stdout.strip()) / "bin"
     java_home: Path = platform_manager.get_java_home(bin_dir)
 
-    os.environ["PVSNESLIB_HOME"] = str(pvsneslib_home)
-    os.environ["JAVA_HOME"] = str(java_home)
+    # Set up environment variables
+    env_vars = {
+        "PVSNESLIB_HOME": str(pvsneslib_home),
+        "JAVA_HOME": str(java_home)
+    }
 
     javasnes_proj_jar: Path = Path(str(get_file_path(
         "Select JavaSnes project's JAR output file",
@@ -135,22 +135,17 @@ def main() -> NoReturn:
         print("No JAR file to build project found, exiting...")
         exit(-1)
 
-    try:
-        java_path = platform_manager.get_java_path(bin_dir)
-        subprocess.run(
-            [
-                str(java_path),
-                "-jar", javasnes_proj_jar
-            ],
-            shell=True, env=os.environ, check=True
-        )
+    # Run Java JAR using subprocess_manager
+    java_path = platform_manager.get_java_path(bin_dir)
+    java_result = subprocess_manager.run_external_executable(
+        java_path,
+        args=["-jar", str(javasnes_proj_jar)],
+        env=env_vars,
+        check=False  # We handle errors manually
+    )
 
-    except subprocess.CalledProcessError as e:
-        print(f"Error while building javasnes project: {e}")
-        exit(-1)
-    
-    except Exception as e:
-        print(f"Unknown error while building java project: {e}")
+    if java_result.failed:
+        print(f"Error while building javasnes project: {java_result.stderr}")
         exit(-1)
 
     if not (javasnes_proj / "output").exists():
@@ -161,17 +156,14 @@ def main() -> NoReturn:
         print("No Makefile to build project found, exiting...")
         exit(-1)
 
-    make: Path = platform_manager.get_make_path(bin_dir)
-
-    make_output: CompletedProcess[str]
-    
-    make_output = subprocess.run(
-        [str(make)], cwd=javasnes_proj / "output", shell=True, capture_output=True,
-        env=os.environ, text=True
+    # Compile using subprocess_manager
+    make_result = subprocess_manager.compile_with_make(
+        makefile_dir=javasnes_proj / "output",
+        env_vars=env_vars
     )
 
-    if make_output.returncode != 0:
-        print(f"Error while compiling the software {make_output.stderr}, exiting...")
+    if make_result.failed:
+        print(f"Error while compiling the software {make_result.stderr}, exiting...")
         exit(-1)
 
     exit(0)

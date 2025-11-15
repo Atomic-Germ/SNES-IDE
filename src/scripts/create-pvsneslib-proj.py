@@ -19,7 +19,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from typing import Union, List, NoReturn, Optional, Tuple
 from tkinter import Tk, filedialog
 from pathlib import Path
-import subprocess
 import sys
 import os
 
@@ -27,6 +26,7 @@ import os
 sys.path.append(str(Path(__file__).parent.parent))
 from platform_utils import platform_manager
 from path_utils import path_manager
+from subprocess_utils import subprocess_manager
 
 def get_file_path(
     title: str = "Select file",
@@ -116,12 +116,14 @@ class ProjectCreator:
         self.project_name: str = self.full_path.name
 
     def get_home_path(self) -> str:
-        """Get snes-ide home directory, can raise subprocess.CalledProcessError"""
+        """Get snes-ide home directory using subprocess_manager"""
 
-        command: list[str] = [platform_manager.get_relative_executable_path("get-snes-ide-home")]
-        cwd: str = str(path_manager.executable_dir)
-
-        return subprocess.run(command, cwd=cwd, capture_output=True, text=True, check=True).stdout.strip()
+        result = subprocess_manager.run_tool("get-snes-ide-home")
+        
+        if result.failed:
+            raise RuntimeError(f"get-snes-ide-home failed: {result.stderr}")
+            
+        return result.stdout.strip()
 
 
     def validate(self) -> None:
@@ -145,7 +147,7 @@ class ProjectCreator:
             snes_home = Path(self.get_home_path())
             template_path = platform_manager.get_template_path("pvsneslib/template", snes_home)
 
-        except subprocess.CalledProcessError:
+        except RuntimeError:
             print("Error while getting path to templates")
             exit(-1)
 
