@@ -219,15 +219,19 @@ def compile_python(
                 print(f"Set executable permissions on: {file_path}")
         
         if clean_tmp_exec:
-            cleanup_files: List[str] = ["build", "dist", f"{exec_name}.spec"]
-            for item in cleanup_files:
-                path: Path = Path(item)
+            # Clean PyInstaller temporary files - be specific to avoid deleting source directories
+            pyinstaller_build = Path("build") / exec_name  # PyInstaller's build directory
+            pyinstaller_dist = Path("dist")
+            spec_file = Path(f"{exec_name}.spec")
+            
+            cleanup_paths = [pyinstaller_build, pyinstaller_dist, spec_file]
+            for path in cleanup_paths:
                 if path.exists():
                     if path.is_dir():
                         shutil.rmtree(path)
                     else:
                         path.unlink()
-                    print(f"Cleaned up: {item}")
+                    print(f"Cleaned up: {path}")
         
         return 0
     
