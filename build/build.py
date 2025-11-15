@@ -25,7 +25,6 @@ from subprocess import CompletedProcess
 from pathlib import Path
 import subprocess
 import traceback
-import platform
 import hashlib
 import shutil
 import locale
@@ -33,6 +32,10 @@ import stat
 import json
 import sys
 import os
+
+# Import platform utilities
+sys.path.append(str(Path(__file__).parent.parent / "src"))
+from platform_utils import platform_manager
 
 """
 Print functions
@@ -118,10 +121,9 @@ def compile_python(
     
     file_path.parent.mkdir(parents=True, exist_ok=True)
     
-    system: str = platform.system()
     cmd: List[str] = ["pyinstaller", "--onefile"]
     
-    if system == "Darwin":
+    if platform_manager.is_macos():
         if windowed:
             cmd.remove("--onefile")
             cmd.append("--windowed")
@@ -130,7 +132,7 @@ def compile_python(
         else:
             cmd.append("--console")
             
-    elif system == "Windows":
+    elif platform_manager.is_windows():
         if windowed:
             cmd.append("--windowed")
         else:
@@ -172,11 +174,11 @@ def compile_python(
         generated_item: Path
         item_type: str
 
-        if system == "Darwin" and windowed:
+        if platform_manager.is_macos() and windowed:
             generated_item = dist_dir / f"{exec_name}.app"
             item_type = "app bundle"
             
-        elif system == "Windows":
+        elif platform_manager.is_windows():
             generated_item = dist_dir / f"{exec_name}.exe"
             item_type = "executable"
             
@@ -201,9 +203,9 @@ def compile_python(
         
         print(f"{item_type.capitalize()} created at: {file_path}")
         
-        if do_chmod_x and system != "Windows":
+        if do_chmod_x and not platform_manager.is_windows():
             
-            if system == "Darwin" and windowed:
+            if platform_manager.is_macos() and windowed:
                 
                 actual_executable: Path = file_path / "Contents" / "MacOS" / exec_name
                 
@@ -564,10 +566,13 @@ def copy_bin() -> None:
 
     (SNESIDEOUT / 'bin').mkdir(exist_ok=True)
 
-    system: str = platform.system().lower()
-
-    if system == 'darwin':
+    # Get platform-specific directory name
+    if platform_manager.is_windows():
+        system = 'windows'
+    elif platform_manager.is_macos():
         system = 'macos'
+    else:  # Linux
+        system = 'linux'
 
     path: Path = ROOT / 'resources' / 'bin' / 'COPYING.md'
     dest_path: Path = SNESIDEOUT / 'bin' / 'COPYING.md'
@@ -617,17 +622,17 @@ def compile_and_copy_source() -> None:
         if file.name == "snes-ide.py":
             compile_python(
                 file, dest_path.parent /
-                (file.stem + ".exe" if os.name == "nt" else file.stem),
+                (file.stem + ".exe" if platform_manager.is_windows() else file.stem),
                 icon_path=ROOT/"icon.png",
-                windowed=True, do_chmod_x=os.name=="posix", clean_tmp_exec=True
+                windowed=True, do_chmod_x=not platform_manager.is_windows(), clean_tmp_exec=True
             )
             
         elif file.suffix == ".py":
             compile_python(
                 file, dest_path.parent /
-                (file.stem + ".exe" if os.name == "nt" else file.stem),
+                (file.stem + ".exe" if platform_manager.is_windows() else file.stem),
                 icon_path=ROOT/"icon.png",
-                windowed=False, do_chmod_x=os.name=="posix", clean_tmp_exec=True
+                windowed=False, do_chmod_x=not platform_manager.is_windows(), clean_tmp_exec=True
             )
             
         else:
