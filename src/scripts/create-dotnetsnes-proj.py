@@ -21,9 +21,12 @@ from subprocess import CompletedProcess
 from tkinter import Tk, filedialog
 from pathlib import Path
 import subprocess
-import shutil
 import sys
 import os
+
+# Import platform utilities
+sys.path.append(str(Path(__file__).parent.parent))
+from platform_utils import platform_manager
 
 def get_file_path(
     title: str = "Select file",
@@ -116,7 +119,7 @@ def main() -> NoReturn:
     """Main logic to create dotnetsnes project"""
 
     snes_ide_home: CompletedProcess[str] = subprocess.run(
-        [".\\get-snes-ide-home.exe" if os.name == "nt" else "./get-snes-ide-home"],
+        [platform_manager.get_relative_executable_path("get-snes-ide-home")],
         cwd=get_executable_path(), shell=True, capture_output=True, text=True
     )
 
@@ -126,9 +129,9 @@ def main() -> NoReturn:
         )
         exit(-1)
 
-    dotnetsnes_proj: Path = (
-        Path(snes_ide_home.stdout.strip()) / "libs" / "DotnetSnesLib" / 
-        "template" / "DotnetSnes.Example.HelloWorld"
+    snes_home = Path(snes_ide_home.stdout.strip())
+    dotnetsnes_proj = platform_manager.get_template_path(
+        "DotnetSnesLib/template/DotnetSnes.Example.HelloWorld", snes_home
     )
 
     output_path: Path = Path(str(get_file_path(
@@ -137,17 +140,21 @@ def main() -> NoReturn:
     )))
 
     project_name: str = output_path.name
-
-    try:
-        shutil.copytree(dotnetsnes_proj, output_path / project_name)
-
-    except Exception as e:
-        print(
-            f"Failed to copy dotnetsnes template {dotnetsnes_proj} to {output_path / project_name} duel to {e}."
-        )
+    
+    # Validate project name
+    if not platform_manager.validate_project_name(project_name):
+        print(f"Invalid project name: {project_name}")
         exit(-1)
 
-    exit(0)
+    target_path = output_path / project_name
+    success = platform_manager.copy_template_safely(dotnetsnes_proj, target_path, overwrite=False)
+    
+    if success:
+        print("Successfully copied dotnetsnes template")
+        exit(0)
+    else:
+        print(f"Failed to copy dotnetsnes template {dotnetsnes_proj} to {target_path}")
+        exit(-1)
 
 if __name__ == "__main__":
     main()

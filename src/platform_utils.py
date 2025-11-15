@@ -309,6 +309,137 @@ class PlatformManager:
         else:  # Linux and other Unix-like
             config_home = os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")
             return Path(config_home) / app_name
+    
+    def validate_project_name(self, name: str) -> bool:
+        """
+        Validate project name for cross-platform compatibility
+        
+        Args:
+            name: Project name to validate
+            
+        Returns:
+            True if valid, False otherwise
+        """
+        import re
+        
+        if not name or len(name) == 0:
+            return False
+            
+        # Check for valid characters (alphanumeric, underscore, hyphen)
+        # Must start with letter or underscore (common programming convention)
+        if not re.match(r'^[A-Za-z_][A-Za-z0-9_-]*$', name):
+            return False
+        
+        # Check platform-specific restrictions
+        if self.is_windows():
+            # Windows reserved names
+            reserved = {'CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4', 
+                       'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3', 
+                       'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'}
+            if name.upper() in reserved:
+                return False
+            
+            # Windows doesn't allow paths > 260 chars by default
+            # Leave room for template content
+            if len(name) > 200:
+                return False
+                
+        # Unix-like systems: avoid names starting with dot (hidden)
+        elif name.startswith('.'):
+            return False
+            
+        return True
+    
+    def get_template_path(self, template_subdir: str, snes_home: Path) -> Path:
+        """
+        Get platform-specific template path
+        
+        Args:
+            template_subdir: Template subdirectory (e.g., "pvsneslib/template")
+            snes_home: SNES-IDE home directory
+            
+        Returns:
+            Path to template directory
+        """
+        return snes_home / "libs" / template_subdir
+    
+    def copy_template_safely(self, template_path: Path, target_path: Path, 
+                           overwrite: bool = False) -> bool:
+        """
+        Copy template directory with cross-platform error handling
+        
+        Args:
+            template_path: Source template directory
+            target_path: Destination directory
+            overwrite: Whether to overwrite existing directory
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        import shutil
+        
+        try:
+            # Check if template exists
+            if not template_path.exists():
+                print(f"Template directory {template_path} does not exist")
+                return False
+                
+            if not template_path.is_dir():
+                print(f"Template path {template_path} is not a directory")
+                return False
+            
+            # Handle existing target directory
+            if target_path.exists():
+                if not overwrite:
+                    print(f"Target directory {target_path} already exists")
+                    return False
+                else:
+                    # Remove existing directory
+                    shutil.rmtree(target_path)
+            
+            # Create parent directories if needed
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Copy template
+            shutil.copytree(template_path, target_path)
+            
+            # Set appropriate permissions on Unix-like systems
+            if self.is_unix_like():
+                self._set_template_permissions(target_path)
+                
+            return True
+            
+        except PermissionError as e:
+            print(f"Permission error copying template: {e}")
+            return False
+        except OSError as e:
+            print(f"File system error copying template: {e}")
+            return False
+        except Exception as e:
+            print(f"Unexpected error copying template: {e}")
+            return False
+    
+    def _set_template_permissions(self, target_path: Path):
+        """Set appropriate permissions on template files for Unix systems"""
+        import stat
+        
+        try:
+            # Set directory permissions to 755 (rwxr-xr-x)
+            for dir_path in target_path.rglob('*'):
+                if dir_path.is_dir():
+                    dir_path.chmod(0o755)
+            
+            # Set file permissions to 644 (rw-r--r--) for most files
+            for file_path in target_path.rglob('*'):
+                if file_path.is_file():
+                    # Make build scripts executable (common extensions)
+                    if file_path.suffix in {'.sh', '.py'} or file_path.name in {'Makefile'}:
+                        file_path.chmod(0o755)  # rwxr-xr-x
+                    else:
+                        file_path.chmod(0o644)  # rw-r--r--
+        except Exception as e:
+            # Don't fail the entire operation for permission issues
+            print(f"Warning: Could not set permissions: {e}")
 
 
 # Singleton instance for global use

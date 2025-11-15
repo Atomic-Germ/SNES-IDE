@@ -387,3 +387,152 @@ class TestSingletonInstance:
         platform1 = platform_manager.current_platform
         platform2 = platform_manager.current_platform
         assert platform1 == platform2
+
+
+class TestProjectCreationUtilities:
+    """Test project creation utilities"""
+    
+    def test_validate_project_name_valid(self):
+        """Test valid project names"""
+        manager = PlatformManager()
+        
+        valid_names = [
+            "MyProject",
+            "my_project", 
+            "Project123",
+            "_private_project",
+            "Project-Name",
+            "a",  # Single character
+            "A",  # Single uppercase
+            "_",  # Single underscore
+        ]
+        
+        for name in valid_names:
+            assert manager.validate_project_name(name), f"'{name}' should be valid"
+    
+    def test_validate_project_name_invalid(self):
+        """Test invalid project names"""
+        manager = PlatformManager()
+        
+        invalid_names = [
+            "",  # Empty string
+            "123project",  # Starts with number
+            "-project",  # Starts with hyphen
+            "project with spaces",  # Contains spaces
+            "project/with/slashes",  # Contains slashes
+            "project\\with\\backslashes",  # Contains backslashes
+            "project.name",  # Contains dot
+            "project@name",  # Contains special char
+            ".hidden",  # Starts with dot (Unix hidden)
+        ]
+        
+        for name in invalid_names:
+            assert not manager.validate_project_name(name), f"'{name}' should be invalid"
+    
+    def test_validate_project_name_windows_reserved(self):
+        """Test Windows reserved names are rejected"""
+        manager = PlatformManager()
+        
+        with patch.object(manager, '_platform', Platform.WINDOWS):
+            manager._platform_config = manager._get_platform_config()
+            
+            reserved_names = ["CON", "PRN", "AUX", "NUL", "COM1", "LPT1"]
+            
+            for name in reserved_names:
+                assert not manager.validate_project_name(name), f"'{name}' should be invalid on Windows"
+                assert not manager.validate_project_name(name.lower()), f"'{name.lower()}' should be invalid on Windows"
+    
+    def test_get_template_path(self):
+        """Test template path generation"""
+        manager = PlatformManager()
+        snes_home = Path("/test/snes-ide")
+        
+        # Test different template types
+        pvsneslib_path = manager.get_template_path("pvsneslib/template", snes_home)
+        expected = snes_home / "libs" / "pvsneslib" / "template"
+        assert pvsneslib_path == expected
+        
+        dotnetsnes_path = manager.get_template_path("DotnetSnesLib/template/DotnetSnes.Example.HelloWorld", snes_home)
+        expected = snes_home / "libs" / "DotnetSnesLib" / "template" / "DotnetSnes.Example.HelloWorld"
+        assert dotnetsnes_path == expected
+    
+    def test_copy_template_safely_success(self, tmp_path):
+        """Test successful template copying"""
+        manager = PlatformManager()
+        
+        # Create source template
+        template_dir = tmp_path / "template"
+        template_dir.mkdir()
+        (template_dir / "file1.txt").write_text("Template content")
+        (template_dir / "subdir").mkdir()
+        (template_dir / "subdir" / "file2.txt").write_text("Nested content")
+        
+        # Copy to target
+        target_dir = tmp_path / "target"
+        result = manager.copy_template_safely(template_dir, target_dir)
+        
+        assert result is True
+        assert target_dir.exists()
+        assert (target_dir / "file1.txt").exists()
+        assert (target_dir / "subdir" / "file2.txt").exists()
+        assert (target_dir / "file1.txt").read_text() == "Template content"
+    
+    def test_copy_template_safely_existing_target(self, tmp_path):
+        """Test copying when target already exists"""
+        manager = PlatformManager()
+        
+        # Create source template
+        template_dir = tmp_path / "template"
+        template_dir.mkdir()
+        (template_dir / "file.txt").write_text("Template content")
+        
+        # Create existing target
+        target_dir = tmp_path / "target"
+        target_dir.mkdir()
+        (target_dir / "existing.txt").write_text("Existing content")
+        
+        # Should fail without overwrite
+        result = manager.copy_template_safely(template_dir, target_dir, overwrite=False)
+        assert result is False
+        assert (target_dir / "existing.txt").exists()  # Original content preserved
+        
+        # Should succeed with overwrite
+        result = manager.copy_template_safely(template_dir, target_dir, overwrite=True)
+        assert result is True
+        assert (target_dir / "file.txt").exists()
+        assert not (target_dir / "existing.txt").exists()  # Original content removed
+    
+    def test_copy_template_safely_nonexistent_source(self, tmp_path):
+        """Test copying from non-existent source"""
+        manager = PlatformManager()
+        
+        template_dir = tmp_path / "nonexistent"
+        target_dir = tmp_path / "target"
+        
+        result = manager.copy_template_safely(template_dir, target_dir)
+        assert result is False
+        assert not target_dir.exists()
+    
+    def test_copy_template_safely_permissions(self, tmp_path):
+        """Test that permissions are set correctly on Unix systems"""
+        manager = PlatformManager()
+        
+        with patch.object(manager, '_platform', Platform.LINUX):
+            manager._platform_config = manager._get_platform_config()
+            
+            # Create source template with different file types
+            template_dir = tmp_path / "template"
+            template_dir.mkdir()
+            (template_dir / "script.sh").write_text("#!/bin/bash\necho hello")
+            (template_dir / "Makefile").write_text("all:\n\techo building")
+            (template_dir / "data.txt").write_text("data file")
+            
+            target_dir = tmp_path / "target"
+            
+            # Mock the _set_template_permissions method instead of chmod directly
+            with patch.object(manager, '_set_template_permissions') as mock_perms:
+                result = manager.copy_template_safely(template_dir, target_dir)
+                assert result is True
+                
+                # Verify that _set_template_permissions was called
+                mock_perms.assert_called_once_with(target_dir)

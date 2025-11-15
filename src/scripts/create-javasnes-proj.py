@@ -19,11 +19,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from typing import Union, List, NoReturn, Optional, Tuple
 from tkinter import Tk, filedialog
 from pathlib import Path
-from re import match
 import subprocess
-import shutil
 import sys
 import os
+
+# Import platform utilities
+sys.path.append(str(Path(__file__).parent.parent))
+from platform_utils import platform_manager
 
 def get_file_path(
     title: str = "Select file",
@@ -128,7 +130,7 @@ class ProjectCreator:
     def get_home_path(self) -> str:
         """Get snes-ide home directory, can raise subprocess.CalledProcessError"""
 
-        command: list[str] = ["get-snes-ide-home.exe" if os.name == "nt" else "./get-snes-ide-home"]
+        command: list[str] = [platform_manager.get_relative_executable_path("get-snes-ide-home")]
         cwd: str = self.get_executable_path()
 
         return subprocess.run(command, cwd=cwd, capture_output=True, text=True, check=True).stdout.strip()
@@ -140,7 +142,7 @@ class ProjectCreator:
         if not (
             Path(self.full_path).is_dir() and 
             Path(self.full_path).exists() and 
-            match(r"^[A-Za-z0-9_-]+$", self.project_name)
+            platform_manager.validate_project_name(self.project_name)
         ):
 
             print("Illegal parameter was given to create-javasnes-proj")
@@ -152,22 +154,22 @@ class ProjectCreator:
         target_path: Path = self.full_path / self.project_name
 
         try:
-            template_path: Path = Path(self.get_home_path()) / "libs" / "javasnes" / "template"
+            snes_home = Path(self.get_home_path())
+            template_path = platform_manager.get_template_path("javasnes/template", snes_home)
 
         except subprocess.CalledProcessError:
-
             print("Error while getting path to templates")
             exit(-1)
 
-        try:
-            shutil.copytree(template_path, target_path)
-
-        except Exception as e:
-            print(f"Error while copying the template: {e}")
+        # Use platform_manager's safe copy method
+        success = platform_manager.copy_template_safely(template_path, target_path, overwrite=False)
+        
+        if success:
+            print("Successfully copied template to target path, exiting...")
+            exit(0)
+        else:
+            print("Error while copying the template")
             exit(-1)
-
-        print("Successfully copied template to target path, exiting...")
-        exit(0)
 
 
 if __name__ == "__main__":

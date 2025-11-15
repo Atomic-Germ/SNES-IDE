@@ -266,6 +266,173 @@ class TestCompilationScriptIntegration:
                     assert str(java_path).endswith("java")
 
 
+class TestProjectCreationScriptIntegration:
+    """Integration tests for project creation scripts with platform_utils"""
+    
+    def setup_method(self):
+        """Set up test environment for each test"""
+        self.repo_root = Path(__file__).resolve().parent.parent
+        self.scripts_dir = self.repo_root / "src" / "scripts"
+    
+    def test_project_creation_script_imports(self):
+        """Test that all project creation scripts can be imported successfully"""
+        scripts_to_test = [
+            "create-pvsneslib-proj.py",
+            "create-dotnetsnes-proj.py", 
+            "create-javasnes-proj.py"
+        ]
+        
+        for script_name in scripts_to_test:
+            script_path = self.scripts_dir / script_name
+            assert script_path.exists(), f"Script {script_name} does not exist"
+            
+            # Test that the script can be compiled (syntax check)
+            result = subprocess.run([
+                sys.executable, "-m", "py_compile", str(script_path)
+            ], capture_output=True, text=True)
+            
+            assert result.returncode == 0, f"Script {script_name} has syntax errors: {result.stderr}"
+    
+    @patch('subprocess.run')
+    def test_project_creation_workflow_pvsneslib(self, mock_subprocess, tmp_path):
+        """Test the PvSnesLib project creation workflow"""
+        # Mock get-snes-ide-home output
+        mock_subprocess.return_value.returncode = 0
+        mock_subprocess.return_value.stdout = str(tmp_path / "snes_home")
+        
+        # Create mock template structure
+        snes_home = tmp_path / "snes_home"
+        template_dir = snes_home / "libs" / "pvsneslib" / "template"
+        template_dir.mkdir(parents=True)
+        (template_dir / "main.c").write_text("#include <snes.h>\nint main() {}")
+        (template_dir / "Makefile").write_text("all:\n\techo building")
+        
+        from platform_utils import platform_manager
+        
+        # Test template path generation
+        template_path = platform_manager.get_template_path("pvsneslib/template", snes_home)
+        assert template_path == template_dir
+        
+        # Test project name validation
+        assert platform_manager.validate_project_name("MyProject")
+        assert not platform_manager.validate_project_name("123invalid")
+        
+        # Test template copying
+        target_dir = tmp_path / "MyProject"
+        success = platform_manager.copy_template_safely(template_path, target_dir)
+        assert success
+        assert (target_dir / "main.c").exists()
+        assert (target_dir / "Makefile").exists()
+    
+    @patch('subprocess.run')
+    def test_project_creation_workflow_dotnetsnes(self, mock_subprocess, tmp_path):
+        """Test the DotnetSnes project creation workflow"""
+        # Mock get-snes-ide-home output
+        mock_subprocess.return_value.returncode = 0
+        mock_subprocess.return_value.stdout = str(tmp_path / "snes_home")
+        
+        # Create mock template structure
+        snes_home = tmp_path / "snes_home"
+        template_dir = snes_home / "libs" / "DotnetSnesLib" / "template" / "DotnetSnes.Example.HelloWorld"
+        template_dir.mkdir(parents=True)
+        (template_dir / "Program.cs").write_text("using System; class Program { static void Main() {} }")
+        (template_dir / "project.csproj").write_text("<Project Sdk=\"Microsoft.NET.Sdk\">")
+        
+        from platform_utils import platform_manager
+        
+        # Test template path generation
+        template_path = platform_manager.get_template_path(
+            "DotnetSnesLib/template/DotnetSnes.Example.HelloWorld", snes_home
+        )
+        assert template_path == template_dir
+        
+        # Test template copying
+        target_dir = tmp_path / "MyDotnetProject"
+        success = platform_manager.copy_template_safely(template_path, target_dir)
+        assert success
+        assert (target_dir / "Program.cs").exists()
+        assert (target_dir / "project.csproj").exists()
+    
+    @patch('subprocess.run')
+    def test_project_creation_workflow_javasnes(self, mock_subprocess, tmp_path):
+        """Test the JavaSnes project creation workflow"""
+        # Mock get-snes-ide-home output
+        mock_subprocess.return_value.returncode = 0
+        mock_subprocess.return_value.stdout = str(tmp_path / "snes_home")
+        
+        # Create mock template structure
+        snes_home = tmp_path / "snes_home"
+        template_dir = snes_home / "libs" / "javasnes" / "template"
+        template_dir.mkdir(parents=True)
+        (template_dir / "Main.java").write_text("public class Main { public static void main(String[] args) {} }")
+        (template_dir / "build.gradle").write_text("apply plugin: 'java'")
+        
+        from platform_utils import platform_manager
+        
+        # Test template path generation
+        template_path = platform_manager.get_template_path("javasnes/template", snes_home)
+        assert template_path == template_dir
+        
+        # Test template copying
+        target_dir = tmp_path / "MyJavaProject"
+        success = platform_manager.copy_template_safely(template_path, target_dir)
+        assert success
+        assert (target_dir / "Main.java").exists()
+        assert (target_dir / "build.gradle").exists()
+    
+    def test_project_name_validation_cross_platform(self):
+        """Test project name validation across different platforms"""
+        from platform_utils import platform_manager
+        
+        # Test common valid names
+        valid_names = ["MyProject", "hello_world", "Project123", "_underscore", "Test-Name"]
+        for name in valid_names:
+            assert platform_manager.validate_project_name(name), f"'{name}' should be valid"
+        
+        # Test common invalid names
+        invalid_names = ["", "123start", "-start", "spa ce", "dots.not.allowed", "@special"]
+        for name in invalid_names:
+            assert not platform_manager.validate_project_name(name), f"'{name}' should be invalid"
+        
+        # Test Windows reserved names (should be invalid on Windows)
+        with patch.object(platform_manager, '_platform', Platform.WINDOWS):
+            platform_manager._platform_config = platform_manager._get_platform_config()
+            assert not platform_manager.validate_project_name("CON")
+            assert not platform_manager.validate_project_name("PRN")
+            assert not platform_manager.validate_project_name("nul")  # case insensitive
+    
+    def test_template_copying_edge_cases(self, tmp_path):
+        """Test template copying edge cases"""
+        from platform_utils import platform_manager
+        
+        # Test copying to existing directory (should fail without overwrite)
+        source = tmp_path / "template"
+        source.mkdir()
+        (source / "file.txt").write_text("template content")
+        
+        target = tmp_path / "existing"
+        target.mkdir()
+        (target / "existing.txt").write_text("existing content")
+        
+        # Should fail without overwrite
+        success = platform_manager.copy_template_safely(source, target, overwrite=False)
+        assert not success
+        assert (target / "existing.txt").exists()
+        
+        # Should succeed with overwrite
+        success = platform_manager.copy_template_safely(source, target, overwrite=True)
+        assert success
+        assert (target / "file.txt").exists()
+        assert not (target / "existing.txt").exists()
+        
+        # Test copying non-existent source
+        nonexistent = tmp_path / "nonexistent"
+        target2 = tmp_path / "target2"
+        success = platform_manager.copy_template_safely(nonexistent, target2)
+        assert not success
+        assert not target2.exists()
+
+
 class TestErrorHandling:
     """Test error handling and edge cases in the migrated scripts"""
     
