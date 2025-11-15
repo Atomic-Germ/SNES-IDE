@@ -1,10 +1,10 @@
 # SNES-IDE Makefile
 
-.PHONY: clean build test
+.PHONY: clean test build
 
 test:
 	@echo "Running tests..."
-	python -m pytest tests/ --color=yes --maxfail=1
+	python -m pytest tests/
 	@echo "Tests complete!"
 
 build: clean
