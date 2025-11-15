@@ -33,9 +33,10 @@ import json
 import sys
 import os
 
-# Import platform utilities
+# Import platform utilities and path manager
 sys.path.append(str(Path(__file__).parent.parent / "src"))
 from platform_utils import platform_manager
+from path_utils import path_manager
 
 """
 Print functions
@@ -87,8 +88,38 @@ OK_SYMBOL: Literal['✔', '[OK]'] = "✔" if USE_UNICODE else "[OK]"
 FAIL_SYMBOL: Literal['✖', '[FAIL]'] = "✖" if USE_UNICODE else "[FAIL]"
 STEP_SYMBOL: Literal['==>'] = "==>"
 
-ROOT: Path = Path(__file__).parent.parent.resolve()
+# Enhanced path management using path_manager
+ROOT: Path = path_manager.project_root
 SNESIDEOUT: Path = ROOT / "SNES-IDE-out"
+
+def ensure_directory_exists(path: Path) -> Path:
+    """
+    Ensure directory exists using path_manager's directory creation logic.
+    
+    Args:
+        path: Path to directory or file (will create parent if file)
+    
+    Returns:
+        Path: The directory path that was created/ensured
+    """
+    if path.suffix:  # Has file extension, get parent directory
+        dir_path = path.parent
+    else:
+        dir_path = path
+    
+    return path_manager.ensure_directory_exists(dir_path)
+
+def get_build_resource_path(relative_path: str) -> Path:
+    """
+    Get path to build resources using centralized path management.
+    
+    Args:
+        relative_path: Relative path from project root
+        
+    Returns:
+        Path: Full path to resource
+    """
+    return path_manager.project_root / relative_path
 
 """
 Build python script
@@ -119,7 +150,8 @@ def compile_python(
 
     file_path: Path = target_file_path
     
-    file_path.parent.mkdir(parents=True, exist_ok=True)
+    # Use enhanced directory creation
+    ensure_directory_exists(file_path)
     
     cmd: List[str] = ["pyinstaller", "--onefile"]
     
@@ -483,8 +515,9 @@ def restore_big_files() -> None:
     and uses the FileJoiner class to join the chunks back into a single file. If the joining process is successful,
     it prints a message indicating the file that was reconstructed. If the joining process fails, it raises an exception.
     """
+    resources_dir = get_build_resource_path('resources')
     
-    for file in (ROOT / 'resources').rglob("*.snes.ide.reconstruct.manifest.json"):
+    for file in resources_dir.rglob("*.snes.ide.reconstruct.manifest.json"):
         
         if file.is_dir():
             continue
@@ -509,7 +542,7 @@ def copy_root() -> None:
     """
     Copy all files from the root directory to the SNES-IDE-out directory.
     """
-    SNESIDEOUT.mkdir(exist_ok=True)
+    ensure_directory_exists(SNESIDEOUT)
 
     for file in ROOT.glob("*.*"):
         if file.is_dir():
@@ -524,17 +557,19 @@ def copy_lib() -> None:
     """
     Copy all files from the lib directory to the SNES-IDE-out directory.
     """
+    libs_output_dir = SNESIDEOUT / 'libs'
+    ensure_directory_exists(libs_output_dir)
 
-    (SNESIDEOUT / 'libs').mkdir(exist_ok=True)
+    libs_source = get_build_resource_path('resources/libs')
 
-    for file in (ROOT / 'resources' / 'libs').rglob("*"):
+    for file in libs_source.rglob("*"):
 
         if file.is_dir():
             continue
 
-        rel_path: Path = file.relative_to(ROOT / 'resources' / 'libs')
-        dest_path: Path = SNESIDEOUT / 'libs' / rel_path
-        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        rel_path: Path = file.relative_to(libs_source)
+        dest_path: Path = libs_output_dir / rel_path
+        ensure_directory_exists(dest_path)
         shutil.copy(file, dest_path)
     
     return
@@ -544,17 +579,19 @@ def copy_docs() -> None:
     """
     Copy the docs directory to the SNES-IDE-out directory.
     """
+    docs_output_dir = SNESIDEOUT / 'docs'
+    ensure_directory_exists(docs_output_dir)
 
-    (SNESIDEOUT / 'docs').mkdir(exist_ok=True)
+    docs_source = get_build_resource_path('docs')
 
-    for file in (ROOT / 'docs').rglob("*"):
+    for file in docs_source.rglob("*"):
 
         if file.is_dir():
             continue
 
-        rel_path: Path = file.relative_to(ROOT / 'docs')
-        dest_path: Path = SNESIDEOUT / 'docs' / rel_path
-        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        rel_path: Path = file.relative_to(docs_source)
+        dest_path: Path = docs_output_dir / rel_path
+        ensure_directory_exists(dest_path)
         shutil.copy(file, dest_path)
     
     return
@@ -563,8 +600,8 @@ def copy_bin() -> None:
     """
     Copy the bin files to the SNES-IDE-out directory.
     """
-
-    (SNESIDEOUT / 'bin').mkdir(exist_ok=True)
+    bin_output_dir = SNESIDEOUT / 'bin'
+    ensure_directory_exists(bin_output_dir)
 
     # Get platform-specific directory name
     if platform_manager.is_windows():
@@ -574,13 +611,16 @@ def copy_bin() -> None:
     else:  # Linux
         system = 'linux'
 
-    path: Path = ROOT / 'resources' / 'bin' / 'COPYING.md'
-    dest_path: Path = SNESIDEOUT / 'bin' / 'COPYING.md'
+    # Copy COPYING.md
+    copying_source = get_build_resource_path('resources/bin/COPYING.md')
+    copying_dest = bin_output_dir / 'COPYING.md'
+    ensure_directory_exists(copying_dest)
+    shutil.copy(copying_source, copying_dest)
 
-    dest_path.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy(path, dest_path)
+    # Copy platform-specific binaries
+    platform_bin_source = get_build_resource_path(f'resources/bin/{system}')
 
-    for file in (ROOT / 'resources' / 'bin' / system).rglob("*"):
+    for file in platform_bin_source.rglob("*"):
 
         if file.is_dir():
             continue
@@ -597,10 +637,10 @@ def copy_bin() -> None:
         if ".chunk" in file.suffix:
             continue
 
-        rel_path: Path = file.relative_to(ROOT / 'resources' / 'bin' / system)
-        dest_path: Path = SNESIDEOUT / 'bin' / rel_path
+        rel_path: Path = file.relative_to(platform_bin_source)
+        dest_path: Path = bin_output_dir / rel_path
 
-        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        ensure_directory_exists(dest_path)
         shutil.copy(file, dest_path)
     
     return
@@ -609,21 +649,25 @@ def compile_and_copy_source() -> None:
     """
     Compile and copy the project's main source code.
     """
+    source_dir = get_build_resource_path('src')
 
-    for file in (ROOT / 'src').rglob("*"):
+    for file in source_dir.rglob("*"):
 
         if file.is_dir():
             continue
 
-        rel_path: Path = file.relative_to(ROOT / 'src')
+        rel_path: Path = file.relative_to(source_dir)
         dest_path: Path = SNESIDEOUT / rel_path
-        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        ensure_directory_exists(dest_path)
+
+        # Get icon path using centralized path management
+        icon_path = get_build_resource_path('icon.png')
 
         if file.name == "snes-ide.py":
             compile_python(
                 file, dest_path.parent /
                 (file.stem + ".exe" if platform_manager.is_windows() else file.stem),
-                icon_path=ROOT/"icon.png",
+                icon_path=icon_path,
                 windowed=True, do_chmod_x=not platform_manager.is_windows(), clean_tmp_exec=True
             )
             
@@ -631,7 +675,7 @@ def compile_and_copy_source() -> None:
             compile_python(
                 file, dest_path.parent /
                 (file.stem + ".exe" if platform_manager.is_windows() else file.stem),
-                icon_path=ROOT/"icon.png",
+                icon_path=icon_path,
                 windowed=False, do_chmod_x=not platform_manager.is_windows(), clean_tmp_exec=True
             )
             
