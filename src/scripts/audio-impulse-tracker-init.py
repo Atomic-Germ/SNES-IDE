@@ -19,9 +19,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from subprocess import run, CalledProcessError
 from typing_extensions import Literal
 from pathlib import Path
-import platform
 import sys
 import os
+
+# Import platform utilities
+sys.path.append(str(Path(__file__).parent.parent))
+from platform_utils import platform_manager
 
 def get_executable_path() -> str:
     """Get the path of the executable or script based on whether the script is frozen 
@@ -41,7 +44,7 @@ def get_executable_path() -> str:
 def get_home_path() -> str:
     """Get snes-ide home directory, can raise subprocess.CalledProcessError"""
 
-    command: list[str] = ["get-snes-ide-home.exe" if os.name == "nt" else "./get-snes-ide-home"]
+    command: list[str] = [platform_manager.get_relative_executable_path("get-snes-ide-home")]
     cwd: str = get_executable_path()
 
     return run(command, cwd=cwd, capture_output=True, text=True, check=True).stdout.strip()
@@ -52,10 +55,10 @@ def convert() -> Literal[-1, 0]:
 
     schism: Path
     
-    if platform.system().lower() == "windows":
+    if platform_manager.is_windows():
         schism = Path(get_home_path()) / "bin" / "schismtracker" / "schismtracker.exe"
     
-    elif platform.system().lower() == "darwin":
+    elif platform_manager.is_macos():
         schism = Path(get_home_path()) / "bin" / "schismtracker" / "Schism Tracker.app"
 
     else:
@@ -68,7 +71,7 @@ def convert() -> Literal[-1, 0]:
 
     try:
         
-        if platform.system().lower() == "darwin":
+        if platform_manager.is_macos():
             run(["open", "-a", str(schism)], check=True)
         
         else:

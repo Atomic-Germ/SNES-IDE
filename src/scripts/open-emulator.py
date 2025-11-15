@@ -21,9 +21,12 @@ from subprocess import run, CalledProcessError
 from tkinter import Tk, filedialog
 from typing import NoReturn
 from pathlib import Path
-import platform
 import sys
 import os
+
+# Import platform utilities
+sys.path.append(str(Path(__file__).parent.parent))
+from platform_utils import platform_manager
 
 def get_file_path(
     title: str = "Select file",
@@ -120,9 +123,8 @@ def main() -> NoReturn:
     try:
         home_path = Path(
             run(
-                ["get-snes-ide-home.exe"] if os.name == "nt" 
-                else ["./get-snes-ide-home"], shell=True, text=True,
-                cwd=get_executable_path(), check=True
+                [platform_manager.get_relative_executable_path("get-snes-ide-home")], 
+                shell=True, text=True, cwd=get_executable_path(), check=True
             ).stdout
         )
     except CalledProcessError as e:
@@ -134,10 +136,10 @@ def main() -> NoReturn:
 
     snes_emulator: Path = home_path / "bin" / "snes-emulator"
 
-    if platform.system().lower() == "windows":
+    if platform_manager.is_windows():
         snes_emulator = snes_emulator / "lakesnes.exe"
 
-    elif platform.system().lower() == "darwin":
+    elif platform_manager.is_macos():
         snes_emulator = snes_emulator / "bsnes.app"
 
     else:
@@ -150,7 +152,7 @@ def main() -> NoReturn:
 
     try:
         
-        if platform.system().lower() == "darwin":
+        if platform_manager.is_macos():
             run(["open", "-a", str(snes_emulator)], check=True)
         
         else:

@@ -24,6 +24,10 @@ from pathlib import Path
 import sys
 import os
 
+# Import platform utilities
+sys.path.append(str(Path(__file__).parent.parent))
+from platform_utils import platform_manager
+
 def get_file_path(
     title: str = "Select file",
     file_types: List[Tuple[str, str]] = [("All files", "*.*")],
@@ -116,7 +120,7 @@ def get_executable_path() -> str:
 def get_home_path() -> str:
     """Get snes-ide home directory, can raise subprocess.CalledProcessError"""
 
-    command: list[str] = ["get-snes-ide-home.exe" if os.name == "nt" else "./get-snes-ide-home"]
+    command: list[str] = [platform_manager.get_relative_executable_path("get-snes-ide-home")]
     cwd: str = get_executable_path()
 
     return run(command, cwd=cwd, capture_output=True, text=True, check=True).stdout.strip()
@@ -126,11 +130,10 @@ def convert() -> Literal[-1, 0]:
 
     snesbrr: Path
 
-    if os.name == "nt":
-        snesbrr = Path(get_home_path()) / "bin" / "pvsneslib" / "tools" / "snesbrr.exe"
-    
-    elif os.name == "posix":
-        snesbrr = Path(get_home_path()) / "bin" / "pvsneslib" / "tools" / "snesbrr"
+    snesbrr = (
+        Path(get_home_path()) / "bin" / "pvsneslib" / "tools" 
+        / platform_manager.get_executable_name("snesbrr")
+    )
 
     try:
 
