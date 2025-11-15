@@ -27,6 +27,9 @@ from pathlib import Path
 import subprocess
 import sys
 
+# Import path utilities
+from path_utils import path_manager
+
 class ScriptRunner(QObject):
     
     scriptExecuted: Signal = Signal(str, str)
@@ -43,23 +46,8 @@ class ScriptRunner(QObject):
         """
         
         super().__init__()
-        self.scripts_dir: Path = self.get_executable_path() / "scripts"
+        self.scripts_dir: Path = path_manager.executable_dir / "scripts"
 
-    @staticmethod 
-    def get_executable_path() -> Path:
-        """Get the path of the executable or script based on whether the script is frozen 
-        (PyInstaller) or not."""
-
-        if getattr(sys, 'frozen', False):
-
-            print("executable path mode chosen")
-            return Path(sys.executable).resolve().parent
-        
-        else:
-
-            print("Python script path mode chosen")
-            return Path(__file__).resolve().parent
-    
     @Slot(str)
     def run_script(self, script_name: str) -> None:
         """Execute a Python script from the scripts directory"""
@@ -127,7 +115,7 @@ class MainWindow(QMainWindow):
         self.channel.registerObject("scriptRunner", self.script_runner)
         self.web_view.page().setWebChannel(self.channel)
         
-        html_path: Path = ScriptRunner.get_executable_path() / "assets" / "index.html"
+        html_path: Path = path_manager.executable_dir / "assets" / "index.html"
         self.web_view.load(f"file:///{html_path.resolve()}")
         
         layout.addWidget(self.web_view)

@@ -24,9 +24,10 @@ import subprocess
 import sys
 import os
 
-# Import platform utilities
+# Import platform utilities and path manager
 sys.path.append(str(Path(__file__).parent.parent))
 from platform_utils import platform_manager
+from path_utils import path_manager
 
 def get_file_path(
     title: str = "Select file",
@@ -101,26 +102,12 @@ def get_file_path(
         print(f"Error in file dialog: {e}")
         sys.exit(1)
 
-def get_executable_path() -> str:
-    """Get the path of the executable or script based on whether the script is frozen 
-    (PyInstaller) or not."""
-
-    if getattr(sys, 'frozen', False):
-
-        print("executable path mode chosen")
-        return str(Path(sys.executable).parent)
-        
-    else:
-
-        print("Python script path mode chosen")
-        return str(Path(__file__).resolve().parent)
-
 def main() -> NoReturn:
     """Main logic of the compilation of the javasnes project"""
 
     output: CompletedProcess[str] = subprocess.run(
         [platform_manager.get_relative_executable_path("get-snes-ide-home")],
-        cwd=get_executable_path(), shell=True, capture_output=True, text=True
+        cwd=str(path_manager.executable_dir), shell=True, capture_output=True, text=True
     )
 
     if output.returncode != 0:

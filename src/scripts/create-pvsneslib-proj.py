@@ -23,9 +23,10 @@ import subprocess
 import sys
 import os
 
-# Import platform utilities
+# Import platform utilities and path manager
 sys.path.append(str(Path(__file__).parent.parent))
 from platform_utils import platform_manager
+from path_utils import path_manager
 
 def get_file_path(
     title: str = "Select file",
@@ -114,24 +115,11 @@ class ProjectCreator:
         ))
         self.project_name: str = self.full_path.name
 
-    @staticmethod
-    def get_executable_path() -> str:
-        """Get the path of the executable or script based on whether the script is frozen 
-        (PyInstaller) or not."""
-
-        if getattr(sys, 'frozen', False):
-            print("executable path mode chosen")
-            return str(Path(sys.executable).parent)
-        
-        else:
-            print("Python script path mode chosen")
-            return str(Path(__file__).resolve().parent)
-
     def get_home_path(self) -> str:
         """Get snes-ide home directory, can raise subprocess.CalledProcessError"""
 
         command: list[str] = [platform_manager.get_relative_executable_path("get-snes-ide-home")]
-        cwd: str = self.get_executable_path()
+        cwd: str = str(path_manager.executable_dir)
 
         return subprocess.run(command, cwd=cwd, capture_output=True, text=True, check=True).stdout.strip()
 

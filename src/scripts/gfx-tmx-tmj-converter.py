@@ -25,9 +25,10 @@ import subprocess
 import sys
 import os
 
-# Import platform utilities
+# Import platform utilities and path manager
 sys.path.append(str(Path(__file__).parent.parent))
 from platform_utils import platform_manager
+from path_utils import path_manager
 
 class MainWindow(QMainWindow):
     def __init__(self, web_app: "Path|str") -> None:
@@ -51,24 +52,12 @@ class MainWindow(QMainWindow):
 
         self.showMaximized()
 
-def get_executable_path() -> str:
-    """Get the path of the executable or script based on whether the script is frozen 
-    (PyInstaller) or not."""
-
-    if getattr(sys, 'frozen', False):
-        print("executable path mode chosen")
-        return str(Path(sys.executable).parent)
-        
-    else:
-        print("Python script path mode chosen")
-        return str(Path(__file__).resolve().parent)
-
 def main() -> NoReturn:
     """Init TileSetExtractor from pvsneslib to convert TMX to TMJ"""
 
     output: CompletedProcess[str] = subprocess.run(
         [platform_manager.get_relative_executable_path("get-snes-ide-home")],
-        cwd=get_executable_path(), shell=True, capture_output=True, text=True
+        cwd=str(path_manager.executable_dir), shell=True, capture_output=True, text=True
     )
 
     if output.returncode != 0:

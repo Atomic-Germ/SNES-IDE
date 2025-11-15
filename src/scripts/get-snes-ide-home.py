@@ -19,19 +19,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from pathlib import Path
 import sys
 
-def get_executable_path() -> Path:
-        """Get the path of the executable or script based on whether the script is frozen 
-        (PyInstaller) or not."""
-
-        if getattr(sys, 'frozen', False):
-            print("executable path mode chosen")
-            return Path(sys.executable).resolve().parent
-        
-        else:
-            print("Python script path mode chosen")
-            return Path(__file__).resolve().parent
+# Import path utilities
+sys.path.append(str(Path(__file__).parent.parent))
+from path_utils import path_manager
 
 if __name__ == "__main__":
 
-    snes_ide_home: Path = get_executable_path().parent
+    snes_ide_home: Path = path_manager.executable_dir.parent
     print(snes_ide_home)
