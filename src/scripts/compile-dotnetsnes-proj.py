@@ -21,9 +21,12 @@ from subprocess import CompletedProcess
 from tkinter import Tk, filedialog
 from pathlib import Path
 import subprocess
-import platform
 import sys
 import os
+
+# Import platform utilities
+sys.path.append(str(Path(__file__).parent.parent))
+from platform_utils import platform_manager
 
 def get_file_path(
     title: str = "Select file",
@@ -116,7 +119,7 @@ def main() -> NoReturn:
     """Main logic of the compilation of the dotnetsnes project"""
 
     output: CompletedProcess[str] = subprocess.run(
-        [".\\get-snes-ide-home.exe" if os.name == "nt" else "./get-snes-ide-home"],
+        [platform_manager.get_relative_executable_path("get-snes-ide-home")],
         cwd=get_executable_path(), shell=True, capture_output=True, text=True
     )
 
@@ -131,18 +134,9 @@ def main() -> NoReturn:
     dotnetsnes_home: Path = Path(output.stdout.strip()) / "libs" / "DotnetSnesLib" / "src"
     makefile_defaults: Path = dotnetsnes_home / "Makefile.defaults"
     
-    dotnet_home: Path = Path(output.stdout.strip()) / "bin" / "dotnet8"
-    make: Path = Path(output.stdout.strip()) / "bin" / "make" / \
-        ("make" if os.name == "posix" else "make.exe")
-    
-    if platform.system().lower() == "darwin":
-        dotnet_home = dotnet_home / "dotnet-sdk-8.0.415-osx-arm64" / "dotnet"
-        
-    elif platform.system().lower() == "windows":
-        dotnet_home = dotnet_home / "dotnet-sdk-8.0.415-win-x64" / "dotnet.exe"
-        
-    else:
-        dotnet_home = dotnet_home / "dotnet-sdk-8.0.415-linux-x64" / "dotnet"
+    bin_dir: Path = Path(output.stdout.strip()) / "bin"
+    dotnet_home: Path = platform_manager.get_dotnet_path(bin_dir)
+    make: Path = platform_manager.get_make_path(bin_dir)
 
     os.environ["PVSNESLIB_HOME"] = str(pvsneslib_home)
     os.environ["DNTC_HOME"] = str(dntc_home)

@@ -64,6 +64,8 @@ class PlatformManager:
                 'dotnet_subpath': 'dotnet-sdk-8.0.415-win-x64',
                 'dotnet_executable': 'dotnet.exe',
                 'make_executable': 'make.exe',
+                'java_subpath': 'jdk8/jdk8/bin',
+                'java_executable': 'java.exe',
                 'shell_command': 'cmd',
                 'shell_args': ['/c'],
                 'icon_extension': '.ico',
@@ -77,6 +79,8 @@ class PlatformManager:
                 'dotnet_subpath': 'dotnet-sdk-8.0.415-osx-arm64',
                 'dotnet_executable': 'dotnet',
                 'make_executable': 'make',
+                'java_subpath': 'jdk8/jdk8/zulu-8.jdk/Contents/Home/bin',
+                'java_executable': 'java',
                 'shell_command': 'sh',
                 'shell_args': ['-c'],
                 'icon_extension': '.icns',
@@ -91,6 +95,8 @@ class PlatformManager:
                 'dotnet_subpath': 'dotnet-sdk-8.0.415-linux-x64',
                 'dotnet_executable': 'dotnet',
                 'make_executable': 'make',
+                'java_subpath': 'jdk8/jdk8/bin',
+                'java_executable': 'java',
                 'shell_command': 'sh',
                 'shell_args': ['-c'],
                 'icon_extension': '.png',
@@ -178,6 +184,31 @@ class PlatformManager:
         make_dir = bin_directory / "make"
         return make_dir / self._platform_config['make_executable']
     
+    def get_java_path(self, bin_directory: Path) -> Path:
+        """
+        Get platform-specific Java executable path
+        
+        Args:
+            bin_directory: Base bin directory containing Java
+            
+        Returns:
+            Path to java executable
+        """
+        java_dir = bin_directory / self._platform_config['java_subpath']
+        return java_dir / self._platform_config['java_executable']
+    
+    def get_java_home(self, bin_directory: Path) -> Path:
+        """
+        Get platform-specific Java home directory path
+        
+        Args:
+            bin_directory: Base bin directory containing Java
+            
+        Returns:
+            Path to Java home bin directory
+        """
+        return bin_directory / self._platform_config['java_subpath']
+    
     def get_shell_command(self, command: str) -> list[str]:
         """
         Get platform-specific shell command
@@ -191,6 +222,22 @@ class PlatformManager:
         shell_cmd = self._platform_config['shell_command']
         shell_args = self._platform_config['shell_args']
         return [shell_cmd] + shell_args + [command]
+    
+    def get_relative_executable_path(self, base_name: str) -> str:
+        """
+        Get platform-appropriate relative executable path with correct separators
+        
+        Args:
+            base_name: Base executable name without extension
+            
+        Returns:
+            Relative path to executable (e.g., ".\\tool.exe" on Windows, "./tool" on Unix)
+        """
+        executable_name = self.get_executable_name(base_name)
+        if self.is_windows():
+            return f".\\{executable_name}"
+        else:
+            return f"./{executable_name}"
     
     def get_icon_path(self, base_path: Path, icon_name: str = "icon") -> Optional[Path]:
         """

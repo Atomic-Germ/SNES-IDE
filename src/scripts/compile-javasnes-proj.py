@@ -21,9 +21,12 @@ from subprocess import CompletedProcess
 from tkinter import Tk, filedialog
 from pathlib import Path
 import subprocess
-import platform
 import sys
 import os
+
+# Import platform utilities
+sys.path.append(str(Path(__file__).parent.parent))
+from platform_utils import platform_manager
 
 def get_file_path(
     title: str = "Select file",
@@ -116,7 +119,7 @@ def main() -> NoReturn:
     """Main logic of the compilation of the javasnes project"""
 
     output: CompletedProcess[str] = subprocess.run(
-        [".\\get-snes-ide-home.exe" if os.name == "nt" else "./get-snes-ide-home"],
+        [platform_manager.get_relative_executable_path("get-snes-ide-home")],
         cwd=get_executable_path(), shell=True, capture_output=True, text=True
     )
 
@@ -127,14 +130,8 @@ def main() -> NoReturn:
         exit(-1)
 
     pvsneslib_home: Path = Path(output.stdout.strip()) / "bin" / "pvsneslib"
-    java_home: Path
-
-    if platform.system().lower() == "darwin":
-        java_home = (
-            Path(output.stdout.strip()) / "bin" / "jdk8" / "jdk8" / "zulu-8.jdk" / "Contents" / "Home" / "bin"
-        )
-    else:
-        java_home = Path(output.stdout.strip()) / "bin" / "jdk8" / "jdk8" / "bin"
+    bin_dir: Path = Path(output.stdout.strip()) / "bin"
+    java_home: Path = platform_manager.get_java_home(bin_dir)
 
     os.environ["PVSNESLIB_HOME"] = str(pvsneslib_home)
     os.environ["JAVA_HOME"] = str(java_home)
@@ -152,9 +149,10 @@ def main() -> NoReturn:
         exit(-1)
 
     try:
+        java_path = platform_manager.get_java_path(bin_dir)
         subprocess.run(
             [
-                str(java_home / ("java") if os.name == "posix" else ("java.exe")),
+                str(java_path),
                 "-jar", javasnes_proj_jar
             ],
             shell=True, env=os.environ, check=True
@@ -176,8 +174,7 @@ def main() -> NoReturn:
         print("No Makefile to build project found, exiting...")
         exit(-1)
 
-    make: Path = Path(output.stdout.strip()) / "bin" / "make" / \
-        ("make" if os.name == "posix" else "make.exe")
+    make: Path = platform_manager.get_make_path(bin_dir)
 
     make_output: CompletedProcess[str]
     

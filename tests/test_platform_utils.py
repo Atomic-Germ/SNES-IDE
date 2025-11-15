@@ -123,6 +123,22 @@ class TestExecutableNaming:
             manager._platform_config = manager._get_platform_config()
             assert manager.get_executable_name("test") == "test"
             assert manager.get_executable_name("get-snes-ide-home") == "get-snes-ide-home"
+    
+    def test_windows_relative_executable_path(self):
+        """Test Windows relative executable path generation"""
+        manager = PlatformManager()
+        with patch.object(manager, '_platform', Platform.WINDOWS):
+            manager._platform_config = manager._get_platform_config()
+            assert manager.get_relative_executable_path("get-snes-ide-home") == ".\\get-snes-ide-home.exe"
+            assert manager.get_relative_executable_path("make") == ".\\make.exe"
+    
+    def test_unix_relative_executable_path(self):
+        """Test Unix relative executable path generation"""
+        manager = PlatformManager()
+        with patch.object(manager, '_platform', Platform.LINUX):
+            manager._platform_config = manager._get_platform_config()
+            assert manager.get_relative_executable_path("get-snes-ide-home") == "./get-snes-ide-home"
+            assert manager.get_relative_executable_path("make") == "./make"
 
 
 class TestPathResolution:
@@ -175,6 +191,29 @@ class TestPathResolution:
             manager._platform_config = manager._get_platform_config()
             make_path = manager.get_make_path(bin_dir)
             assert str(make_path).endswith("make")
+    
+    def test_java_path(self):
+        """Test Java executable path resolution"""
+        manager = PlatformManager()
+        bin_dir = Path("/test/bin")
+        
+        with patch.object(manager, '_platform', Platform.WINDOWS):
+            manager._platform_config = manager._get_platform_config()
+            java_path = manager.get_java_path(bin_dir)
+            assert str(java_path).endswith("java.exe")
+            assert "jdk8" in str(java_path)
+        
+        with patch.object(manager, '_platform', Platform.MACOS):
+            manager._platform_config = manager._get_platform_config()
+            java_path = manager.get_java_path(bin_dir)
+            assert str(java_path).endswith("java")
+            assert "zulu-8.jdk/Contents/Home/bin" in str(java_path)
+        
+        with patch.object(manager, '_platform', Platform.LINUX):
+            manager._platform_config = manager._get_platform_config()
+            java_path = manager.get_java_path(bin_dir)
+            assert str(java_path).endswith("java")
+            assert "jdk8" in str(java_path)
 
 
 class TestShellCommands:

@@ -24,6 +24,10 @@ import subprocess
 import sys
 import os
 
+# Import platform utilities
+sys.path.append(str(Path(__file__).parent.parent))
+from platform_utils import platform_manager
+
 def get_file_path(
     title: str = "Select file",
     file_types: List[Tuple[str, str]] = [("All files", "*.*")],
@@ -117,7 +121,7 @@ def main() -> NoReturn:
     """Main logic of the compilation of the pvsneslib project"""
 
     output: CompletedProcess[str] = subprocess.run(
-        [".\\get-snes-ide-home.exe" if os.name == "nt" else "./get-snes-ide-home"],
+        [platform_manager.get_relative_executable_path("get-snes-ide-home")],
         cwd=get_executable_path(), shell=True, capture_output=True, text=True
     )
 
@@ -140,8 +144,8 @@ def main() -> NoReturn:
         print("No Makefile to build project found, exiting...")
         exit(-1)
         
-    make: Path = Path(output.stdout.strip()) / "bin" / "make" / \
-        ("make" if os.name == "posix" else "make.exe")
+    bin_dir: Path = Path(output.stdout.strip()) / "bin"
+    make: Path = platform_manager.get_make_path(bin_dir)
 
     make_output: CompletedProcess[str]
     
