@@ -2,7 +2,7 @@ name: Ubuntu (Build and Test)
 
 on:
   push:
-    branches: [main, develop, ubuntu/**]
+    branches: [main, develop, ubuntu/**, fedora/**]
     tags: ["v*"]
   pull_request:
     branches: [main, develop]
@@ -34,7 +34,10 @@ jobs:
 
       - name: Build
         run: |
-          sudo python build/build.py
+          python build/build.py
+
+      - name: Copy Linux installer to dist
+        run: cp install-linux.sh dist/
 
       - name: Compress dist folder
         run: |

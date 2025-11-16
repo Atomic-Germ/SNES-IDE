@@ -164,6 +164,9 @@ class ScriptRunner(QObject):
             else:
                 error_msg = f"Error: {error_msg}"
                 self.scriptExecuted.emit(script_name, error_msg)
+        
+        self.process.deleteLater()
+        self.process = None
 
 
 class MainWindow(QMainWindow):
