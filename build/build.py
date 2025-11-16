@@ -149,10 +149,19 @@ def compile_python(
 
     file_path: Path = target_file_path
     
-    # Use enhanced directory creation
-    ensure_directory_exists(file_path)
+    # Use enhanced directory creation for the parent directory only
+    ensure_directory_exists(file_path.parent)
     
     cmd: List[str] = ["pyinstaller", "--onefile"]
+    
+    # Add src directory to Python path so utility modules can be found
+    src_dir = get_build_resource_path('src')
+    cmd.extend(["--paths", str(src_dir)])
+    
+    # Add hidden imports for our utility modules
+    utility_modules = ["path_utils", "platform_utils", "subprocess_utils"]
+    for module in utility_modules:
+        cmd.extend(["--hidden-import", module])
     
     if platform_manager.is_macos():
         if windowed:

@@ -67,7 +67,7 @@ def main() -> NoReturn:
 
     if not tmx_editor or not tmx_editor.exists():
         print(f"Failed, tiled does not exist in: {tmx_editor}")
-        exit(-1)
+        sys.exit(-1)
 
     try:
         
@@ -81,14 +81,14 @@ def main() -> NoReturn:
 
         if result.failed:
             print(f"Error while executing {tmx_editor}: {result.stderr}")
-            exit(-1)
+            sys.exit(-1)
 
     except Exception as e:
         print(f"Error while executing {tmx_editor}: {e}")
-        exit(-1)
+        sys.exit(-1)
 
     print("Success")
-    exit(0)
+    sys.exit(0)
 
 if __name__ == "__main__":
     main()

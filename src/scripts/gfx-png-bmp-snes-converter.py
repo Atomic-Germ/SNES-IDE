@@ -348,10 +348,10 @@ class TileConverterGUI:
             )
         except RuntimeError as e:
             showerror("Path Error", f"Failed to get snes-ide home path due to: {e}")
-            exit(-1)
+            sys.exit(-1)
         except Exception as e:
             showerror("Error", f"Unknown error occurred when getting snes-ide home path due to: {e}")
-            exit(-1)
+            sys.exit(-1)
         
         command_line: List[str] = self.build_command_line()
         
@@ -369,11 +369,11 @@ class TileConverterGUI:
             )
         except Exception as e:
             showerror("Execution Error", f"Failed to execute gfx4snes process: {e}")
-            exit(-1)
+            sys.exit(-1)
 
         if result.failed:
             showerror("Conversion Error", f"Failed to convert image to SNES format due to: {result.stderr}")
-            exit(-1)
+            sys.exit(-1)
         
         showinfo("Conversion finished",
                 "Conversion finished successfully!")

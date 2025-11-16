@@ -86,11 +86,11 @@ def get_file_path(
         
         if not selected_path or (isinstance(selected_path, list) and len(selected_path) == 0):
             print("No file/directory selected. Application terminated.")
-            sys.exit(1)
+            sys.sys.exit(1)
         
         if isinstance(selected_path, str) and not os.path.exists(selected_path):
             print(f"Selected path does not exist: {selected_path}")
-            sys.exit(1)
+            sys.sys.exit(1)
         
         return selected_path
         
@@ -102,7 +102,7 @@ def get_file_path(
                 pass
         
         print(f"Error in file dialog: {e}")
-        sys.exit(1)
+        sys.sys.exit(1)
 
 def main() -> NoReturn:
     """Main logic to open a snes emulator in snes-ide"""
@@ -118,10 +118,10 @@ def main() -> NoReturn:
         )
     except CalledProcessError as e:
         print(f"Error while getting snes-ide home folder: {e}, exiting...")
-        exit(-1)
+        sys.exit(-1)
     except Exception as e:
         print(f"Unknown error while getting snes-ide home folder: {e}, exiting...")
-        exit(-1)
+        sys.exit(-1)
 
     snes_emulator: Path = home_path / "bin" / "snes-emulator"
 
@@ -150,9 +150,9 @@ def main() -> NoReturn:
     except CalledProcessError as e:
 
         print(f"Error while executing {snes_emulator}: {e}")
-        exit(-1)
+        sys.exit(-1)
 
-    exit(0)
+    sys.exit(0)
 
 if __name__ == "__main__":
     main()

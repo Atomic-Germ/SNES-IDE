@@ -61,7 +61,7 @@ def main() -> NoReturn:
         print(
             f"get-snes-ide-home failed to execute due to {result.stderr}, exiting..."
         )
-        exit(-1)
+        sys.exit(-1)
 
     pvsneslib_home: Path = Path(result.stdout.strip()) / "bin" / "pvsneslib"
     os.environ["PVSNESLIB_HOME"] = str(pvsneslib_home)
@@ -72,7 +72,7 @@ def main() -> NoReturn:
     window: MainWindow = MainWindow(pvsneslib_tmx_tmj_converter)
 
     window.show()
-    sys.exit(app.exec())
+    sys.sys.exit(app.exec())
 
 if __name__ == "__main__":
     main()

@@ -84,11 +84,11 @@ def get_file_path(
         
         if not selected_path or (isinstance(selected_path, list) and len(selected_path) == 0):
             print("No file/directory selected. Application terminated.")
-            sys.exit(1)
+            sys.sys.exit(1)
         
         if isinstance(selected_path, str) and not os.path.exists(selected_path):
             print(f"Selected path does not exist: {selected_path}")
-            sys.exit(1)
+            sys.sys.exit(1)
         
         return selected_path
         
@@ -100,7 +100,7 @@ def get_file_path(
                 pass
         
         print(f"Error in file dialog: {e}")
-        sys.exit(1)
+        sys.sys.exit(1)
 
 
 class ProjectCreator:
@@ -136,7 +136,7 @@ class ProjectCreator:
         ):
 
             print("Illegal parameter was given to create-pvsneslib-proj")
-            exit(-1)
+            sys.exit(-1)
 
     def run(self) -> NoReturn:
         """Run the project creation process."""
@@ -149,17 +149,17 @@ class ProjectCreator:
 
         except RuntimeError:
             print("Error while getting path to templates")
-            exit(-1)
+            sys.exit(-1)
 
         # Use platform_manager's safe copy method
         success = platform_manager.copy_template_safely(template_path, target_path, overwrite=False)
         
         if success:
             print("Successfully copied template to target path, exiting...")
-            exit(0)
+            sys.exit(0)
         else:
             print("Error while copying the template")
-            exit(-1)
+            sys.exit(-1)
 
 
 if __name__ == "__main__":

@@ -85,11 +85,11 @@ def get_file_path(
         
         if not selected_path or (isinstance(selected_path, list) and len(selected_path) == 0):
             print("No file/directory selected. Application terminated.")
-            sys.exit(1)
+            sys.sys.exit(1)
         
         if isinstance(selected_path, str) and not os.path.exists(selected_path):
             print(f"Selected path does not exist: {selected_path}")
-            sys.exit(1)
+            sys.sys.exit(1)
         
         return selected_path
         
@@ -101,7 +101,7 @@ def get_file_path(
                 pass
         
         print(f"Error in file dialog: {e}")
-        sys.exit(1)
+        sys.sys.exit(1)
 
 
 def main() -> NoReturn:
@@ -114,7 +114,7 @@ def main() -> NoReturn:
         print(
             f"get-snes-ide-home failed to execute due to {result.stderr}, exiting..."
         )
-        exit(-1)
+        sys.exit(-1)
 
     pvsneslib_home: Path = Path(result.stdout.strip()) / "bin" / "pvsneslib"
 
@@ -127,7 +127,7 @@ def main() -> NoReturn:
 
     if not (pvsneslib_proj / "Makefile").exists():
         print("No Makefile to build project found, exiting...")
-        exit(-1)
+        sys.exit(-1)
 
     # Compile project using subprocess_manager
     make_result = subprocess_manager.compile_with_make(
@@ -137,9 +137,9 @@ def main() -> NoReturn:
 
     if make_result.failed:
         print(f"Error while compiling the software {make_result.stderr}, exiting...")
-        exit(-1)
+        sys.exit(-1)
 
-    exit(0)
+    sys.exit(0)
 
 if __name__ == "__main__":
     main()

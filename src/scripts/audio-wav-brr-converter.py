@@ -85,11 +85,11 @@ def get_file_path(
         
         if not selected_path or (isinstance(selected_path, list) and len(selected_path) == 0):
             print("No file/directory selected. Application terminated.")
-            sys.exit(1)
+            sys.sys.exit(1)
         
         if isinstance(selected_path, str) and not os.path.exists(selected_path):
             print(f"Selected path does not exist: {selected_path}")
-            sys.exit(1)
+            sys.sys.exit(1)
         
         return selected_path
         
@@ -101,7 +101,7 @@ def get_file_path(
                 pass
         
         print(f"Error in file dialog: {e}")
-        sys.exit(1)
+        sys.sys.exit(1)
 
 def get_home_path() -> str:
     """Get snes-ide home directory using subprocess_manager"""
@@ -162,4 +162,4 @@ def convert() -> Literal[-1, 0]:
 
 if __name__ == "__main__":
 
-    exit(convert())
+    sys.exit(convert())

@@ -83,11 +83,11 @@ def get_file_path(
         
         if not selected_path or (isinstance(selected_path, list) and len(selected_path) == 0):
             print("No file/directory selected. Application terminated.")
-            sys.exit(1)
+            sys.sys.exit(1)
         
         if isinstance(selected_path, str) and not os.path.exists(selected_path):
             print(f"Selected path does not exist: {selected_path}")
-            sys.exit(1)
+            sys.sys.exit(1)
         
         return selected_path
         
@@ -99,7 +99,7 @@ def get_file_path(
                 pass
         
         print(f"Error in file dialog: {e}")
-        sys.exit(1)
+        sys.sys.exit(1)
 
 def main() -> NoReturn:
     """Main logic to create dotnetsnes project"""
@@ -111,7 +111,7 @@ def main() -> NoReturn:
         print(
             f"get-snes-ide-home failed to execute due to {result.stderr}, exiting..."
         )
-        exit(-1)
+        sys.exit(-1)
 
     snes_home = Path(result.stdout.strip())
     dotnetsnes_proj = platform_manager.get_template_path(
@@ -128,17 +128,17 @@ def main() -> NoReturn:
     # Validate project name
     if not platform_manager.validate_project_name(project_name):
         print(f"Invalid project name: {project_name}")
-        exit(-1)
+        sys.exit(-1)
 
     target_path = output_path / project_name
     success = platform_manager.copy_template_safely(dotnetsnes_proj, target_path, overwrite=False)
     
     if success:
         print("Successfully copied dotnetsnes template")
-        exit(0)
+        sys.exit(0)
     else:
         print(f"Failed to copy dotnetsnes template {dotnetsnes_proj} to {target_path}")
-        exit(-1)
+        sys.exit(-1)
 
 if __name__ == "__main__":
     main()

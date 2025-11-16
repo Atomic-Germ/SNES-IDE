@@ -80,4 +80,4 @@ def convert() -> Literal[-1, 0]:
 
 if __name__ == "__main__":
 
-    exit(convert())
+    sys.exit(convert())
