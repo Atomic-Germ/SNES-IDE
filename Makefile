@@ -4,7 +4,9 @@
 
 build: 
 	@echo "Building SNES-IDE..."
-	cd build && python build.py
+	python -m venv .venv && source .venv/bin/activate
+	pip install -r build/requirements.txt
+	python build/build.py
 	@echo "Build complete!"
 
 test: 
