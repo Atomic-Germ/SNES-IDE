@@ -1,1 +1,76 @@
 resources/** linguist-vendored
+# Cross-platform line ending configuration
+# =======================================
+
+# Auto-detect text files and normalize to LF
+* text=auto eol=lf
+
+# Always use LF for source code files
+*.py text eol=lf
+*.js text eol=lf
+*.ts text eol=lf
+*.cs text eol=lf
+*.c text eol=lf
+*.h text eol=lf
+*.cpp text eol=lf
+*.hpp text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.xml text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.less text eol=lf
+*.scss text eol=lf
+
+# Windows-specific: batch files should use CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary files should not be modified
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg binary
+*.bmp binary
+*.ico binary
+*.mp3 binary
+*.wav binary
+*.mid binary
+*.it binary
+*.zip binary
+*.tar binary
+*.gz binary
+*.dat binary
+*.brr binary
+*.tmj binary
+*.tmx binary
+
+# Documentation
+README.md text eol=lf
+LICENSE.txt text eol=lf
+COPYING.md text eol=lf
+CONTRIBUTING.md text eol=lf
+CODE_OF_CONDUCT.md text eol=lf
+
+# GitHub workflows (already using LF, but ensure consistency)
+.github/workflows/*.yml text eol=lf
+
+# Resources - maintain existing line endings for embedded tools
+resources/bin/windows/** -text
+resources/bin/macos/** -text  
+resources/bin/linux/** -text
+
+# Python source files
+build/*.py text eol=lf
+src/scripts/*.py text eol=lf
+
+# Generated/compiled files should not be tracked as text
+SNES-IDE-out/** -text
+build/** -text
+.snes-ide/** binary
+"
