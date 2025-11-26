@@ -2,6 +2,7 @@
 
 import json
 import logging
+import platform
 import subprocess
 import sys
 import tarfile
@@ -30,6 +31,27 @@ class ToolInstaller:
             raise FileNotFoundError(f"Config file {self.config_file} not found")
         with open(self.config_file, 'r') as f:
             return json.load(f)
+
+    def need_patch(self) -> bool:
+        """Check if we need to patch calloc calls for 16k page systems."""
+        if platform.system() != 'Darwin' or platform.machine() != 'arm64':
+            return False
+        try:
+            result = subprocess.run(['getconf', 'PAGE_SIZE'], capture_output=True, text=True, check=True)
+            page_size = result.stdout.strip()
+            return page_size == '16384'
+        except subprocess.CalledProcessError:
+            return False
+
+    def patch_source(self, build_dir: Path) -> None:
+        """Apply patches to fix calloc argument order."""
+        logger.info("Applying calloc patches for 16k page systems")
+        cmd = [
+            'find', '.', '-name', '*.c', '-exec', 'sed', '-i',
+            's/calloc(sizeof(\\([^,]*\\)), \\([0-9a-zA-Z_()+-]*\\))/calloc(\\2, sizeof(\\1))/g',
+            '{}', ';'
+        ]
+        subprocess.run(cmd, cwd=build_dir, check=True)
 
     def download_file(self, url: str, dest: Path) -> None:
         """Download a file from URL to destination."""
@@ -69,6 +91,10 @@ class ToolInstaller:
             build_dir = subdirs[0]
         else:
             build_dir = extract_dir
+        
+        # Patch for Apple Silicon 16k pages if needed
+        if name == 'wla-dx' and self.need_patch():
+            self.patch_source(build_dir)
         
         build_cmds = tool.get('build_commands', {}).get(sys.platform, [])
         for cmd in build_cmds:

@@ -35,6 +35,30 @@
         "win32": ["make"]
       },
       "configure_commands": []
+    },
+    {
+      "name": "64tass",
+      "description": "6502/65816 assembler",
+      "url": "https://github.com/irmen/64tass/archive/refs/tags/v1.59.3120.zip",
+      "binary_path": "64tass",
+      "build_commands": {
+        "linux": ["make CFLAGS='-O2 -g -W -Wall -Wextra -Wwrite-strings -Wshadow -fstrict-aliasing -Wstrict-aliasing=2 -Werror=missing-prototypes'"],
+        "darwin": ["make CFLAGS='-O2 -g -W -Wall -Wextra -Wwrite-strings -Wshadow -fstrict-aliasing -Wstrict-aliasing=2 -Werror=missing-prototypes'"],
+        "win32": ["make"]
+      },
+      "configure_commands": []
+    },
+    {
+      "name": "wla-dx",
+      "description": "Multi-platform assembler with SNES support",
+      "url": "https://github.com/vhelin/wla-dx/archive/refs/tags/v10.3.zip",
+      "binary_path": "binaries/wla-65816",
+      "build_commands": {
+        "linux": ["cmake . && make"],
+        "darwin": ["cmake . && make"],
+        "win32": ["cmake . && make"]
+      },
+      "configure_commands": []
     }
   ]
 }
