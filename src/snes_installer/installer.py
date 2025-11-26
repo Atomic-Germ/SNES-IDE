@@ -108,11 +108,143 @@ class ToolInstaller:
                 continue
 
 
+def setup_ides() -> None:
+    """Set up IDE integrations for SNES development."""
+    logger.info("Setting up IDE integrations")
+    platform = sys.platform
+    if platform == "win32":
+        setup_vscode_windows()
+        setup_vim_windows()
+        setup_notepad_plus_plus()
+    else:  # linux, darwin
+        setup_vscode_unix()
+        setup_vim_unix()
+        setup_neovim_unix()
+
+
+def setup_vscode_unix() -> None:
+    """Set up VS Code on Unix systems."""
+    import shutil
+    if shutil.which("code"):
+        logger.info("Installing VS Code extensions for SNES development")
+        # Install 6502 assembly extensions
+        subprocess.run(["code", "--install-extension", "enginedesigns.retroassembler"], check=False)
+        subprocess.run(["code", "--install-extension", "tlgkccampbell.code-ca65"], check=False)
+        # Install general assembly support
+        subprocess.run(["code", "--install-extension", "ms-vscode.cpptools"], check=False)
+        logger.info("VS Code setup complete")
+    else:
+        logger.info("VS Code not found. Install VS Code and run: code --install-extension enginedesigns.retroassembler tlgkccampbell.code-ca65")
+
+
+def setup_vscode_windows() -> None:
+    """Set up VS Code on Windows."""
+    import shutil
+    if shutil.which("code"):
+        logger.info("Installing VS Code extensions for SNES development")
+        subprocess.run(["code", "--install-extension", "enginedesigns.retroassembler"], check=False)
+        subprocess.run(["code", "--install-extension", "tlgkccampbell.code-ca65"], check=False)
+        subprocess.run(["code", "--install-extension", "ms-vscode.cpptools"], check=False)
+        logger.info("VS Code setup complete")
+    else:
+        logger.info("VS Code not found. Install VS Code and run: code --install-extension enginedesigns.retroassembler tlgkccampbell.code-ca65")
+
+
+def setup_vim_unix() -> None:
+    """Set up Vim on Unix systems."""
+    vimrc = Path.home() / ".vimrc"
+    syntax_config = '''
+" SNES Assembly syntax
+autocmd BufRead,BufNewFile *.asm set filetype=asm
+autocmd BufRead,BufNewFile *.s set filetype=asm
+syntax on
+'''
+    try:
+        with open(vimrc, 'a') as f:
+            f.write(syntax_config)
+        logger.info("Vim syntax highlighting configured")
+    except Exception as e:
+        logger.warning(f"Could not configure Vim: {e}")
+
+
+def setup_neovim_unix() -> None:
+    """Set up NeoVim on Unix systems."""
+    nvim_config = Path.home() / ".config" / "nvim" / "init.vim"
+    nvim_config.parent.mkdir(parents=True, exist_ok=True)
+    syntax_config = '''
+" SNES Assembly syntax
+autocmd BufRead,BufNewFile *.asm set filetype=asm
+autocmd BufRead,BufNewFile *.s set filetype=asm
+syntax on
+'''
+    try:
+        with open(nvim_config, 'a') as f:
+            f.write(syntax_config)
+        logger.info("NeoVim syntax highlighting configured")
+    except Exception as e:
+        logger.warning(f"Could not configure NeoVim: {e}")
+
+
+def setup_vim_windows() -> None:
+    """Set up Vim on Windows."""
+    vimrc = Path.home() / "_vimrc"
+    syntax_config = '''
+" SNES Assembly syntax
+autocmd BufRead,BufNewFile *.asm set filetype=asm
+autocmd BufRead,BufNewFile *.s set filetype=asm
+syntax on
+'''
+    try:
+        with open(vimrc, 'a') as f:
+            f.write(syntax_config)
+        logger.info("Vim syntax highlighting configured")
+    except Exception as e:
+        logger.warning(f"Could not configure Vim: {e}")
+
+
+def setup_notepad_plus_plus() -> None:
+    """Set up Notepad++ on Windows."""
+    # Notepad++ uses User Defined Languages
+    udl_path = Path.home() / "AppData" / "Roaming" / "Notepad++" / "userDefineLang.xml"
+    udl_path.parent.mkdir(parents=True, exist_ok=True)
+    # Simple assembly syntax definition
+    udl_content = '''<?xml version="1.0" encoding="UTF-8"?>
+<NotepadPlus>
+    <UserLang name="SNES Assembly" ext="asm s">
+        <Settings>
+            <Global caseIgnored="yes"/>
+            <TreatAsSymbol comment="yes" commentLine=";" commentStart="/*" commentEnd="*/"/>
+            <Prefix words1="no" words2="no" words3="no" words4="no"/>
+        </Settings>
+        <KeywordLists>
+            <Keywords name="Comments">; /* */</Keywords>
+            <Keywords name="Numbers">0 1 2 3 4 5 6 7 8 9</Keywords>
+            <Keywords name="Instructions">LDA STA INC DEC ADC SBC CMP AND ORA EOR ASL LSR ROL ROR JMP JSR RTS RTI BRA BEQ BNE BCS BCC BMI BPL BVS BVC CLC SEC CLI SEI CLV CLD SED</Keywords>
+            <Keywords name="Directives">.org .db .dw .byte .word .include .macro .endmacro .if .endif</Keywords>
+        </KeywordLists>
+        <Styles>
+            <WordsStyle name="DEFAULT" styleID="11" fgColor="000000" bgColor="FFFFFF" fontName="" fontStyle="0"/>
+            <WordsStyle name="COMMENTS" styleID="1" fgColor="008000" bgColor="FFFFFF" fontName="" fontStyle="0"/>
+            <WordsStyle name="NUMBERS" styleID="4" fgColor="FF0000" bgColor="FFFFFF" fontName="" fontStyle="0"/>
+            <WordsStyle name="INSTRUCTIONS" styleID="5" fgColor="0000FF" bgColor="FFFFFF" fontName="" fontStyle="1"/>
+            <WordsStyle name="DIRECTIVES" styleID="6" fgColor="800080" bgColor="FFFFFF" fontName="" fontStyle="1"/>
+        </Styles>
+    </UserLang>
+</NotepadPlus>'''
+    try:
+        with open(udl_path, 'w') as f:
+            f.write(udl_content)
+        logger.info("Notepad++ syntax highlighting configured")
+    except Exception as e:
+        logger.warning(f"Could not configure Notepad++: {e}")
+
+
 def main() -> None:
     """Main function."""
     config_file = Path(__file__).parent / "tools_config.json"
     installer = ToolInstaller(config_file)
     installer.install_tools()
+    setup_ides()
 
 
 if __name__ == "__main__":

@@ -14,7 +14,7 @@
 	Otherwise, create the project structure manually using available file creation tools.
 	-->
 
-- [ ] Customize the Project
+- [x] Customize the Project
 	<!--
 	Verify that all previous steps have been completed successfully and you have marked the step as completed.
 	Develop a plan to modify codebase according to user requirements.
@@ -99,3 +99,25 @@ Before starting a new task in the above plan, update progress in the plan.
 - Work through each checklist item systematically.
 - Keep communication concise and focused.
 - Follow development best practices.
+
+## Development Process and Philosophy
+
+### Development Process
+1. **Requirement Clarification**: Understand user needs, specify project type, language, and frameworks.
+2. **Project Scaffolding**: Create directory structure, configuration files (pyproject.toml, requirements.txt), and initial code templates following Python best practices.
+3. **Code Customization**: Implement core functionality with cross-platform compatibility, error handling, and logging.
+4. **Dependency Management**: Use virtual environments, pin versions, and follow security best practices.
+5. **Build and Testing**: Install dependencies, run diagnostics, and validate functionality.
+6. **Task Automation**: Create VS Code tasks for running the application.
+7. **IDE Integration**: Set up syntax highlighting and extensions for popular editors (VS Code, Vim/NeoVim, Notepad++).
+8. **Documentation**: Maintain comprehensive README and configuration files.
+
+### Philosophy
+- **Cross-Platform Compatibility**: Ensure the application works on Windows, macOS, and Linux using Python's standard library and platform detection.
+- **Minimal Dependencies**: Use only essential libraries (requests for downloads) to keep the installer lightweight.
+- **User-Friendly**: Provide clear logging, handle errors gracefully, and offer setup instructions for various editors.
+- **Extensible Design**: Use JSON configuration for tools, allowing easy addition of new assemblers or tools.
+- **Security First**: Validate inputs, use secure downloads, and avoid executing untrusted code.
+- **Best Practices**: Follow PEP 8, use type hints, write maintainable code, and include proper error handling.
+- **IDE Agnostic**: Support multiple editors to accommodate different developer preferences.
+- **Incremental Improvement**: Start with core functionality and add integrations based on user feedback.
