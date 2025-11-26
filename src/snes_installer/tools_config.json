@@ -3,6 +3,7 @@
     {
       "name": "ca65",
       "description": "6502 assembler",
+      "category": "Compilers",
       "url": "https://github.com/cc65/cc65/archive/refs/tags/V2.19.tar.gz",
       "binary_path": "bin/ca65",
       "build_commands": {
@@ -21,6 +22,7 @@
     {
       "name": "asar",
       "description": "SNES assembler",
+      "category": "Compilers",
       "url": "https://github.com/RPGHacker/asar/archive/refs/tags/v1.91.tar.gz",
       "binary_path": "src/asar/bin/asar",
       "build_commands": {
@@ -39,6 +41,7 @@
     {
       "name": "xkas",
       "description": "SNES assembler",
+      "category": "Compilers",
       "url": "https://github.com/devinacker/xkas-plus/archive/refs/heads/master.zip",
       "binary_path": "xkas",
       "build_commands": {
@@ -57,6 +60,7 @@
     {
       "name": "64tass",
       "description": "6502/65816 assembler",
+      "category": "Compilers",
       "url": "https://github.com/irmen/64tass/archive/refs/tags/v1.59.3120.zip",
       "binary_path": "64tass",
       "build_commands": {
@@ -75,6 +79,7 @@
     {
       "name": "wla-dx",
       "description": "Multi-platform assembler with SNES support",
+      "category": "Compilers",
       "url": "https://github.com/vhelin/wla-dx/archive/refs/tags/v10.3.zip",
       "binary_path": "binaries/wla-65816",
       "build_commands": {
@@ -93,6 +98,7 @@
     {
       "name": "libsfx",
       "description": "Super FX library for SNES development",
+      "category": "Compilers",
       "url": "https://github.com/Optiroc/libSFX/archive/refs/heads/master.zip",
       "binary_path": "",
       "build_commands": {
@@ -105,6 +111,7 @@
     {
       "name": "pvsneslib",
       "description": "Complete SNES development framework with C compiler and libraries",
+      "category": "Compilers",
       "url": {
         "linux": "https://github.com/alekmaul/pvsneslib/releases/download/4.4.0/pvsneslib_440_64b_linux.zip",
         "darwin": "https://github.com/alekmaul/pvsneslib/releases/download/4.4.0/pvsneslib_440_64b_darwin.zip",
@@ -121,6 +128,7 @@
     {
       "name": "superfamiconv",
       "description": "Command-line graphics converter for SNES tile formats",
+      "category": "Compilers",
       "url": "https://github.com/Optiroc/SuperFamiconv/archive/refs/heads/master.zip",
       "binary_path": "build/superfamiconv",
       "build_commands": {
@@ -139,6 +147,7 @@
     {
       "name": "bsnes",
       "description": "Accurate SNES emulator with debugging features",
+      "category": "Debugging Tools",
       "url": "https://github.com/bsnes-emu/bsnes/archive/refs/tags/v115.zip",
       "binary_path": "bsnes/out/bsnes",
       "build_commands": {
@@ -157,6 +166,7 @@
     {
       "name": "no$snes",
       "description": "Command-line SNES emulator with debugging features",
+      "category": "Debugging Tools",
       "url": "https://github.com/nocash/no$snes/archive/refs/tags/v1.9.zip",
       "binary_path": "no$snes/no$snes",
       "build_commands": {
@@ -175,6 +185,7 @@
     {
       "name": "ucon64",
       "description": "ROM management tool for patching, header fixing, and format conversion",
+      "category": "Utilities",
       "url": {
         "linux": "https://sourceforge.net/projects/ucon64/files/ucon64/ucon64-2.2.2/ucon64-2.2.2-linux-x86_64-bin.tar.gz/download",
         "darwin": "https://sourceforge.net/projects/ucon64/files/ucon64/ucon64-2.2.2/ucon64-2.2.2-linux-x86_64-bin.tar.gz/download",

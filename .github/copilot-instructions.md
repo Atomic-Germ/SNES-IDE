@@ -1,123 +1,128 @@
-<!-- Use this file to provide workspace-specific custom instructions to Copilot. For more details, visit https://code.visualstudio.com/docs/copilot/copilot-customization#_use-a-githubcopilotinstructionsmd-file -->
-- [x] Verify that the copilot-instructions.md file in the .github directory is created.
+---
+applyTo: '*'
+description: A comprehensive set of safety and consistency rules for Python development, including best practices for virtual environments, coding standards, dependency management, and testing.
+---
+Always check for and create/activate a virtual environment before installing new Python packages or working with Python projects. This helps to manage dependencies and avoid conflicts between different projects, as well as avoid polluting the global Python environment. Use the following commands:
+```bash
+# Create a virtual environment
+python -m venv .venv
+# Activate the virtual environment
+source .venv/bin/activate
+```
 
-- [x] Clarify Project Requirements
-	<!-- Ask for project type, language, and frameworks if not specified. Skip if already provided. -->
+## System Safety Rules
 
-- [x] Scaffold the Project
-	<!--
-	Ensure that the previous step has been marked as completed.
-	Call project setup tool with projectType parameter.
-	Run scaffolding command to create project files and folders.
-	Use '.' as the working directory.
-	If no appropriate projectType is available, search documentation using available tools.
-	Otherwise, create the project structure manually using available file creation tools.
-	-->
+### 1. **Never Run Code from Untrusted Sources**
+- Always review third-party code before executing it
+- Verify libraries from PyPI by checking the package name, author, and download statistics
+- Avoid executing code with `eval()`, `exec()`, or `__import__()` unless absolutely necessary
+- Use static analysis tools like `bandit` to scan for security vulnerabilities
 
-- [x] Customize the Project
-	<!--
-	Verify that all previous steps have been completed successfully and you have marked the step as completed.
-	Develop a plan to modify codebase according to user requirements.
-	Apply modifications using appropriate tools and user-provided references.
-	Skip this step for "Hello World" projects.
-	-->
+### 2. **File System Safety**
+- Use absolute paths for critical operations
+- Validate and sanitize all file paths to prevent directory traversal attacks
+- Never use `os.system()` or `subprocess` with unsanitized user input
+- Set appropriate file permissions (restrict to `0o644` for files, `0o755` for directories)
+- Avoid operations in system directories (e.g., `/`, `/bin`, `/etc`, `/usr`)
 
-- [x] Install Required Extensions
-	<!-- ONLY install extensions provided mentioned in the get_project_setup_info. Skip this step otherwise and mark as completed. -->
+### 3. **Network Safety**
+- Validate all URLs and network addresses before connection attempts
+- Use secure protocols (HTTPS, SSH) instead of insecure ones (HTTP, FTP)
+- Set reasonable timeouts for network operations to prevent hanging
+- Avoid exposing local services to the external network unnecessarily
 
-- [x] Compile the Project
-	<!--
-	Verify that all previous steps have been completed.
-	Install any missing dependencies.
-	Run diagnostics and resolve any issues.
-	Check for markdown files in project folder for relevant instructions on how to do this.
-	-->
+### 4. **Resource Management**
+- Always use context managers (`with` statements) for file and network operations
+- Close database connections and release resources properly
+- Monitor memory usage, especially when processing large files
+- Use generators and iterators for memory-efficient processing of large datasets
 
-- [x] Create and Run Task
-	<!--
-	Verify that all previous steps have been completed.
-	Check https://code.visualstudio.com/docs/debugtest/tasks to determine if the project needs a task. If so, use the create_and_run_task to create and launch a task based on package.json, README.md, and project structure.
-	Skip this step otherwise.
-	 -->
+### 5. **Dependency Safety**
+- Pin versions in `requirements.txt` or `pyproject.toml`: `package==1.2.3` not `package>=1.2.3`
+- Regularly update dependencies using tools like `pip-audit` or `safety`
+- Review changelog and security advisories before updating packages
+- Use tools like `pip-compile` to lock transitive dependencies
 
-- [x] Launch the Project
-	<!--
-	Verify that all previous steps have been completed.
-	Prompt user for debug mode, launch only if confirmed.
-	 -->
+## Consistency Rules
 
-- [x] Ensure Documentation is Complete
+### 1. **Code Style and Formatting**
+- Follow **PEP 8** style guidelines consistently
+- Use `black` for automatic code formatting (line length: 88 characters)
+- Use `isort` for consistent import sorting (alphabetical, grouped by type)
+- Use `flake8` or `ruff` for linting
 
-<!--
-## Execution Guidelines
-PROGRESS TRACKING:
-- If any tools are available to manage the above todo list, use it to track progress through this checklist.
-- After completing each step, mark it complete and add a summary.
-- Read current todo list status before starting each new step.
+### 2. **Project Structure**
+- Use a consistent project layout:
+```
+project-name/
+├── src/                    # Source code
+│   └── package_name/
+├── tests/                  # Test files
+├── docs/                   # Documentation
+├── pyproject.toml          # Project configuration
+├── requirements.txt        # Production dependencies
+├── requirements-dev.txt    # Development dependencies
+└── .venv/                  # Virtual environment
+```
 
-COMMUNICATION RULES:
-- Avoid verbose explanations or printing full command outputs.
-- If a step is skipped, state that briefly (e.g. "No extensions needed").
-- Do not explain project structure unless asked.
-- Keep explanations concise and focused.
+### 3. **Naming Conventions**
+- Use `snake_case` for functions and variables: `def my_function()`
+- Use `PascalCase` for classes: `class MyClass:`
+- Use `UPPER_CASE` for constants: `MAX_RETRIES = 5`
+- Use descriptive names: `user_data` not `ud`
 
-DEVELOPMENT RULES:
-- Use '.' as the working directory unless user specifies otherwise.
-- Avoid adding media or external links unless explicitly requested.
-- Use placeholders only with a note that they should be replaced.
-- Use VS Code API tool only for VS Code extension projects.
-- Once the project is created, it is already opened in Visual Studio Code—do not suggest commands to open this project in Visual Studio again.
-- If the project setup information has additional rules, follow them strictly.
+### 4. **Type Hints**
+- Add type hints for all function parameters and return values
+- Use the `typing` module for complex types
+- Configure static type checking with `mypy` or `pyright`
 
-FOLDER CREATION RULES:
-- Always use the current directory as the project root.
-- If you are running any terminal commands, use the '.' argument to ensure that the current working directory is used ALWAYS.
-- Do not create a new folder unless the user explicitly requests it besides a .vscode folder for a tasks.json file.
-- If any of the scaffolding commands mention that the folder name is not correct, let the user know to create a new folder with the correct name and then reopen it again in vscode.
+### 5. **Error Handling**
+- Use specific exception types, never bare `except:`
+- Log errors with appropriate severity levels (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+- Provide meaningful error messages for users
+- Include exception chaining for better debugging: `raise MyError("Failed") from exc`
 
-EXTENSION INSTALLATION RULES:
-- Only install extension specified by the get_project_setup_info tool. DO NOT INSTALL any other extensions.
+### 6. **Testing**
+- Write unit tests for all functions (aim for >80% coverage)
+- Use `pytest` as the testing framework
+- Follow the `AAA` pattern: Arrange, Act, Assert
+- Name test files as `test_*.py` and test functions as `test_*`
 
-PROJECT CONTENT RULES:
-- If the user has not specified project details, assume they want a "Hello World" project as a starting point.
-- Avoid adding links of any type (URLs, files, folders, etc.) or integrations that are not explicitly required.
-- Avoid generating images, videos, or any other media files unless explicitly requested.
-- If you need to use any media assets as placeholders, let the user know that these are placeholders and should be replaced with the actual assets later.
-- Ensure all generated components serve a clear purpose within the user's requested workflow.
-- If a feature is assumed but not confirmed, prompt the user for clarification before including it.
-- If you are working on a VS Code extension, use the VS Code API tool with a query to find relevant VS Code API references and samples related to that query.
+### 7. **Documentation**
+- Write docstrings for all public functions and classes (follow PEP 257)
+- Include `Args`, `Returns`, and `Raises` sections in docstrings
+- Maintain a `README.md` with setup instructions and usage examples
+- Keep `CHANGELOG.md` updated with version history
 
-TASK COMPLETION RULES:
-- Your task is complete when:
-  - Project is successfully scaffolded and compiled without errors
-  - copilot-instructions.md file in the .github directory exists in the project
-  - README.md file exists and is up to date
-  - User is provided with clear instructions to debug/launch the project
+### 8. **Version Control**
+- Use meaningful commit messages (conventional commits format)
+- Add `.gitignore` for Python projects (use github/gitignore template)
+- Never commit secrets, keys, or credentials to version control
+- Use environment variables or configuration files (e.g., `.env` with `.gitignore`)
 
-Before starting a new task in the above plan, update progress in the plan.
--->
-- Work through each checklist item systematically.
-- Keep communication concise and focused.
-- Follow development best practices.
+### 9. **Logging**
+- Use the `logging` module, never `print()` for production code
+- Configure logging at application startup
+- Use appropriate log levels and provide context in log messages
+- Avoid logging sensitive information (passwords, API keys)
 
-## Development Process and Philosophy
+## Quick Setup Commands
 
-### Development Process
-1. **Requirement Clarification**: Understand user needs, specify project type, language, and frameworks.
-2. **Project Scaffolding**: Create directory structure, configuration files (pyproject.toml, requirements.txt), and initial code templates following Python best practices.
-3. **Code Customization**: Implement core functionality with cross-platform compatibility, error handling, and logging.
-4. **Dependency Management**: Use virtual environments, pin versions, and follow security best practices.
-5. **Build and Testing**: Install dependencies, run diagnostics, and validate functionality.
-6. **Task Automation**: Create VS Code tasks for running the application.
-7. **IDE Integration**: Set up syntax highlighting and extensions for popular editors (VS Code, Vim/NeoVim, Notepad++).
-8. **Documentation**: Maintain comprehensive README and configuration files.
+```bash
+# Setup development environment
+python -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip setuptools wheel
 
-### Philosophy
-- **Cross-Platform Compatibility**: Ensure the application works on Windows, macOS, and Linux using Python's standard library and platform detection.
-- **Minimal Dependencies**: Use only essential libraries (requests for downloads) to keep the installer lightweight.
-- **User-Friendly**: Provide clear logging, handle errors gracefully, and offer setup instructions for various editors.
-- **Extensible Design**: Use JSON configuration for tools, allowing easy addition of new assemblers or tools.
-- **Security First**: Validate inputs, use secure downloads, and avoid executing untrusted code.
-- **Best Practices**: Follow PEP 8, use type hints, write maintainable code, and include proper error handling.
-- **IDE Agnostic**: Support multiple editors to accommodate different developer preferences.
-- **Incremental Improvement**: Start with core functionality and add integrations based on user feedback.
+# Install development tools
+pip install black flake8 isort mypy bandit safety pytest
+
+# Run safety checks
+bandit -r src/
+safety check --json
+pytest tests/
+black src/ tests/
+isort src/ tests/
+flake8 src/ tests/
+mypy src/
+```
