@@ -4,6 +4,7 @@
       "name": "ca65",
       "description": "6502 assembler",
       "url": "https://github.com/cc65/cc65/archive/refs/tags/V2.19.tar.gz",
+      "binary_path": "bin/ca65",
       "build_commands": {
         "linux": ["make"],
         "darwin": ["make"],
@@ -15,6 +16,7 @@
       "name": "asar",
       "description": "SNES assembler",
       "url": "https://github.com/RPGHacker/asar/archive/refs/tags/v1.91.tar.gz",
+      "binary_path": "src/asar/bin/asar",
       "build_commands": {
         "linux": ["cd src && cmake . && make"],
         "darwin": ["cd src && cmake . && make"],
@@ -26,6 +28,7 @@
       "name": "xkas",
       "description": "SNES assembler",
       "url": "https://github.com/devinacker/xkas-plus/archive/refs/heads/master.zip",
+      "binary_path": "xkas",
       "build_commands": {
         "linux": ["make"],
         "darwin": ["make"],

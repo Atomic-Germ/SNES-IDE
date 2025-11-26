@@ -79,9 +79,28 @@ class ToolInstaller:
         """Configure a tool after installation."""
         name = tool['name']
         logger.info(f"Configuring {name}")
-        # Placeholder: could set environment variables, create symlinks, etc.
-        # For now, just log
-        pass
+        # Copy binary to bin directory
+        tool_dir = self.install_dir / name
+        extract_dir = tool_dir / 'source'
+        subdirs = [d for d in extract_dir.iterdir() if d.is_dir()]
+        if subdirs:
+            build_dir = subdirs[0]
+        else:
+            build_dir = extract_dir
+        
+        bin_dir = self.install_dir / "bin"
+        bin_dir.mkdir(parents=True, exist_ok=True)
+        
+        binary_path = build_dir / tool['binary_path']
+        if binary_path.exists():
+            import shutil
+            dest = bin_dir / name
+            if sys.platform == "win32":
+                dest = dest.with_suffix('.exe')
+            shutil.copy(binary_path, dest)
+            logger.info(f"Copied {binary_path} to {dest}")
+        else:
+            logger.warning(f"Binary not found at {binary_path}")
 
     def install_tools(self) -> None:
         """Install all tools defined in config."""
@@ -239,11 +258,47 @@ def setup_notepad_plus_plus() -> None:
         logger.warning(f"Could not configure Notepad++: {e}")
 
 
+def add_to_path() -> None:
+    """Add the tools bin directory to PATH in shell config files."""
+    bin_dir = Path.home() / ".snes_tools" / "bin"
+    path_export = f'\nexport PATH="{bin_dir}:$PATH"\n'
+    
+    # For bash
+    bashrc = Path.home() / ".bashrc"
+    try:
+        with open(bashrc, 'a') as f:
+            f.write(path_export)
+        logger.info("Added to PATH in ~/.bashrc")
+    except Exception as e:
+        logger.warning(f"Could not update ~/.bashrc: {e}")
+    
+    # For zsh
+    zshrc = Path.home() / ".zshrc"
+    try:
+        with open(zshrc, 'a') as f:
+            f.write(path_export)
+        logger.info("Added to PATH in ~/.zshrc")
+    except Exception as e:
+        logger.warning(f"Could not update ~/.zshrc: {e}")
+    
+    # For fish, if exists
+    fish_config = Path.home() / ".config" / "fish" / "config.fish"
+    if fish_config.exists():
+        fish_path = f'\nset -x PATH "{bin_dir}" $PATH\n'
+        try:
+            with open(fish_config, 'a') as f:
+                f.write(fish_path)
+            logger.info("Added to PATH in ~/.config/fish/config.fish")
+        except Exception as e:
+            logger.warning(f"Could not update fish config: {e}")
+
+
 def main() -> None:
     """Main function."""
     config_file = Path(__file__).parent / "tools_config.json"
     installer = ToolInstaller(config_file)
     installer.install_tools()
+    add_to_path()
     setup_ides()
 
 
