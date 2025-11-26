@@ -3,7 +3,7 @@ def test_get_tools_in_category():
     from snes_installer.tui import SNESInstallerTUI
     from pathlib import Path
 
-    config_file = Path(__file__).parent / "tools_config.json"
+    config_file = Path(__file__).parent.parent / 'src' / 'snes_installer' / 'tools_config.json'
     tui = SNESInstallerTUI(config_file)
 
     compilers = tui.get_tools_in_category("Compilers")

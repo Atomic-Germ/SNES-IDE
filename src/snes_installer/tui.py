@@ -54,6 +54,18 @@ class SNESInstallerTUI:
                 missing.append(tool_name)
         return missing
 
+    def get_tools_by_category(self) -> Dict[str, List[Dict[str, Any]]]:
+        """Group tools by their category."""
+        categorized: Dict[str, List[Dict[str, Any]]] = {}
+        for tool in self.tools_config:
+            category = tool.get("category", "Other")
+            categorized.setdefault(category, []).append(tool)
+        return categorized
+
+    def get_tools_in_category(self, category: str) -> List[Dict[str, Any]]:
+        """Return tools in the given category."""
+        return self.get_tools_by_category().get(category, [])
+
     def show_welcome(self) -> None:
         """Show welcome message and current status."""
         welcome_text = Text("SNES Development Tools Installer", style="bold blue")
@@ -61,8 +73,15 @@ class SNESInstallerTUI:
 
         installed_tools = self.get_installed_tools()
         total_tools = len(self.tools_config)
+        categorized = self.get_tools_by_category()
 
-        status_text = f"Installed: {len(installed_tools)}/{total_tools} tools"
+        # Build a summary per category
+        category_summaries = []
+        for cat, tools in categorized.items():
+            installed_count = sum(1 for t in tools if self.is_tool_installed(t["name"]))
+            category_summaries.append(f"{cat}: {installed_count}/{len(tools)}")
+
+        status_text = f"Installed: {len(installed_tools)}/{total_tools} tools | " + ", ".join(category_summaries)
 
         panel = Panel.fit(
             f"[bold]{welcome_text}[/bold]\n[dim]{subtitle}[/dim]\n\n{status_text}",
@@ -71,42 +90,59 @@ class SNESInstallerTUI:
         )
         self.console.print(panel)
         self.console.print()
+        # Show a small dashboard with category panels
+        categorized = self.get_tools_by_category()
+        panels = []
+        for cat, tools in categorized.items():
+            lines = []
+            for t in tools[:4]:
+                name = t["name"]
+                installed = self.is_tool_installed(name)
+                status = "[green]✓[/green]" if installed else "[red]✗[/red]"
+                lines.append(f"{status} {name}")
+            panels.append(Panel("\n".join(lines), title=f"{cat}", expand=True, border_style="dark_blue"))
+        if panels:
+            self.console.print(Columns(panels))
+            self.console.print()
 
     def show_main_menu(self) -> str:
         """Show main menu and return selected option."""
         self.console.print("[bold cyan]Main Menu:[/bold cyan]")
         self.console.print("1. Install all missing tools")
-        self.console.print("2. Install specific tool")
-        self.console.print("3. Reinstall tool")
-        self.console.print("4. Uninstall tool")
-        self.console.print("5. Show tool status")
-        self.console.print("6. Exit")
+        self.console.print("2. Install tools by category")
+        self.console.print("3. Install specific tool")
+        self.console.print("4. Reinstall tool")
+        self.console.print("5. Uninstall tool")
+        self.console.print("6. Show tool status")
+        self.console.print("7. Exit")
         self.console.print()
 
         while True:
-            choice = Prompt.ask("Select an option", choices=["1", "2", "3", "4", "5", "6"])
+            choice = Prompt.ask("Select an option", choices=["1", "2", "3", "4", "5", "6", "7"])
             return choice
 
     def show_tools_table(self, highlight_tools: List[str] = None) -> Table:
-        """Create a table showing all tools with their status."""
-        table = Table(title="Available Tools")
-        table.add_column("Tool", style="cyan", no_wrap=True)
-        table.add_column("Description", style="white")
-        table.add_column("Status", justify="center")
+        """Create a table showing all tools with their status split by category."""
+        categorized = self.get_tools_by_category()
+        main_table = Table(title="Available Tools (Grouped)")
+        main_table.add_column("Category", style="magenta")
+        main_table.add_column("Tools", style="cyan")
 
-        for tool in self.tools_config:
-            name = tool["name"]
-            description = tool.get("description", "No description")
-            installed = self.is_tool_installed(name)
+        for cat, tools in categorized.items():
+            tool_display = []
+            for tool in tools:
+                name = tool["name"]
+                description = tool.get("description", "No description")
+                installed = self.is_tool_installed(name)
+                status = "[green]✓[/green]" if installed else "[red]✗[/red]"
+                display = f"{status} {name} - {description}"
+                if highlight_tools and name in highlight_tools:
+                    display = f"[bold yellow]{display}[/bold yellow]"
+                tool_display.append(display)
 
-            if highlight_tools and name in highlight_tools:
-                name = f"[bold yellow]{name}[/bold yellow]"
-                description = f"[bold yellow]{description}[/bold yellow]"
+            main_table.add_row(cat, "\n".join(tool_display))
 
-            status = "[green]✓ Installed[/green]" if installed else "[red]✗ Not installed[/red]"
-            table.add_row(name, description, status)
-
-        return table
+        return main_table
 
     def select_tool(self, prompt: str, tools_list: List[str]) -> str:
         """Let user select a tool from a list."""
@@ -143,6 +179,90 @@ class SNESInstallerTUI:
 
         if Confirm.ask("\nProceed with installation?", default=True):
             self.install_selected_tools(missing_tools)
+
+    def show_categories_menu(self) -> str:
+        """Show categories to the user and return the selected category."""
+        categories = list(self.get_tools_by_category().keys())
+        if not categories:
+            self.console.print("[yellow]No categories available.[/yellow]")
+            return ""
+
+        self.console.print("[bold cyan]Categories:[/bold cyan]")
+        for i, cat in enumerate(categories, 1):
+            self.console.print(f"{i}. {cat}")
+        self.console.print(f"{len(categories)+1}. Back to main menu")
+
+        while True:
+            try:
+                choice = int(Prompt.ask("Select a category"))
+                if 1 <= choice <= len(categories):
+                    return categories[choice - 1]
+                elif choice == len(categories) + 1:
+                    return ""
+                else:
+                    self.console.print("[red]Invalid choice. Please try again.[/red]")
+            except ValueError:
+                self.console.print("[red]Please enter a number.[/red]")
+
+    def show_category_tools_menu(self, category: str) -> List[str]:
+        """Show tools in a category and let user select tools to install.
+
+        Returns a list of selected tool names (could be empty if none selected).
+        """
+        tools = self.get_tools_in_category(category)
+        if not tools:
+            self.console.print(f"[yellow]No tools in category {category}[/yellow]")
+            return []
+
+        self.console.print(f"[bold cyan]{category} Tools:[/bold cyan]")
+        for i, tool in enumerate(tools, 1):
+            description = tool.get("description", "")
+            installed = self.is_tool_installed(tool["name"])
+            status = "[green]✓ Installed[/green]" if installed else "[red]✗ Not installed[/red]"
+            self.console.print(f"{i}. {tool['name']} - {description} - {status}")
+        self.console.print(f"{len(tools)+1}. Install all")
+        self.console.print(f"{len(tools)+2}. Back to categories")
+
+        while True:
+            choice = Prompt.ask("Enter tool numbers to install (comma-separated), or choose Install all/Back", default="")
+            if not choice:
+                return []
+            choice = choice.strip()
+            if choice.lower() in ["install all", "all", "i"] or choice == str(len(tools)+1):
+                return [t["name"] for t in tools]
+            if choice == str(len(tools)+2):
+                return []
+
+            # Parse comma-separated indices
+            selections = []
+            valid = True
+            for part in choice.split(','):
+                try:
+                    idx = int(part.strip())
+                    if 1 <= idx <= len(tools):
+                        selections.append(tools[idx - 1]["name"]) 
+                    else:
+                        valid = False
+                        break
+                except ValueError:
+                    valid = False
+                    break
+            if valid:
+                return selections
+            else:
+                self.console.print("[red]Invalid selection. Try again.[/red]")
+
+    def install_tools_in_category(self, category: str) -> None:
+        """Install all tools in a given category."""
+        tools = self.get_tools_in_category(category)
+        if not tools:
+            self.console.print(f"[yellow]No tools found in {category}[/yellow]")
+            return
+
+        tool_names = [t["name"] for t in tools]
+        self.console.print(f"Installing {len(tool_names)} tools in category '{category}'")
+        if Confirm.ask("Proceed with installation?", default=True):
+            self.install_selected_tools(tool_names)
 
     def install_specific_tool(self) -> None:
         """Install a specific tool selected by the user."""
@@ -192,14 +312,29 @@ class SNESInstallerTUI:
                     self.console.print(f"[red]✗[/red] Failed to uninstall {tool_name}")
 
     def show_status(self) -> None:
-        """Show detailed status of all tools."""
-        table = self.show_tools_table()
-        self.console.print(table)
-        self.console.print()
+        """Show detailed status of all tools using categorized panels."""
+        categorized = self.get_tools_by_category()
+        panels = []
+        for cat, tools in categorized.items():
+            lines = []
+            for tool in tools:
+                name = tool["name"]
+                desc = tool.get("description", "")
+                installed = self.is_tool_installed(name)
+                status = "[green]✓ Installed[/green]" if installed else "[red]✗ Not installed[/red]"
+                lines.append(f"{status} {name} - {desc}")
+            content = "\n".join(lines)
+            panels.append(Panel(content, title=f"{cat} ({len(tools)})", expand=False, border_style="blue"))
+
+        if panels:
+            self.console.print(Columns(panels))
+        else:
+            self.console.print("[yellow]No tools configured.[/yellow]")
 
         installed = self.get_installed_tools()
         missing = self.get_missing_tools()
         
+        self.console.print()
         self.console.print(f"[green]Installed tools ({len(installed)}):[/green] {', '.join(installed) if installed else 'None'}")
         if missing:
             self.console.print(f"[red]Missing tools ({len(missing)}):[/red] {', '.join(missing)}")
@@ -245,14 +380,20 @@ class SNESInstallerTUI:
                 if choice == "1":
                     self.install_missing_tools()
                 elif choice == "2":
-                    self.install_specific_tool()
+                    category = self.show_categories_menu()
+                    if category:
+                        selections = self.show_category_tools_menu(category)
+                        if selections:
+                            self.install_selected_tools(selections)
                 elif choice == "3":
-                    self.reinstall_tool()
+                    self.install_specific_tool()
                 elif choice == "4":
-                    self.uninstall_tool()
+                    self.reinstall_tool()
                 elif choice == "5":
-                    self.show_status()
+                    self.uninstall_tool()
                 elif choice == "6":
+                    self.show_status()
+                elif choice == "7":
                     self.console.print("[green]Goodbye![/green]")
                     break
 
