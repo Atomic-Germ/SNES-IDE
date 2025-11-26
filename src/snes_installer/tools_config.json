@@ -6,9 +6,15 @@
       "url": "https://github.com/cc65/cc65/archive/refs/tags/V2.19.tar.gz",
       "binary_path": "bin/ca65",
       "build_commands": {
-        "linux": ["make"],
-        "darwin": ["make"],
-        "win32": ["make"]
+        "linux": [
+          "make"
+        ],
+        "darwin": [
+          "make"
+        ],
+        "win32": [
+          "make"
+        ]
       },
       "configure_commands": []
     },
@@ -18,9 +24,15 @@
       "url": "https://github.com/RPGHacker/asar/archive/refs/tags/v1.91.tar.gz",
       "binary_path": "src/asar/bin/asar",
       "build_commands": {
-        "linux": ["cd src && cmake . && make"],
-        "darwin": ["cd src && cmake . && make"],
-        "win32": ["cd src && cmake . && make"]
+        "linux": [
+          "cd src && cmake . && make"
+        ],
+        "darwin": [
+          "cd src && cmake . && make"
+        ],
+        "win32": [
+          "cd src && cmake . && make"
+        ]
       },
       "configure_commands": []
     },
@@ -30,9 +42,15 @@
       "url": "https://github.com/devinacker/xkas-plus/archive/refs/heads/master.zip",
       "binary_path": "xkas",
       "build_commands": {
-        "linux": ["make"],
-        "darwin": ["make"],
-        "win32": ["make"]
+        "linux": [
+          "make"
+        ],
+        "darwin": [
+          "make"
+        ],
+        "win32": [
+          "make"
+        ]
       },
       "configure_commands": []
     },
@@ -42,9 +60,15 @@
       "url": "https://github.com/irmen/64tass/archive/refs/tags/v1.59.3120.zip",
       "binary_path": "64tass",
       "build_commands": {
-        "linux": ["make CFLAGS='-O2 -g -W -Wall -Wextra -Wwrite-strings -Wshadow -fstrict-aliasing -Wstrict-aliasing=2 -Werror=missing-prototypes'"],
-        "darwin": ["make CFLAGS='-O2 -g -W -Wall -Wextra -Wwrite-strings -Wshadow -fstrict-aliasing -Wstrict-aliasing=2 -Werror=missing-prototypes'"],
-        "win32": ["make"]
+        "linux": [
+          "make CFLAGS='-O2 -g -W -Wall -Wextra -Wwrite-strings -Wshadow -fstrict-aliasing -Wstrict-aliasing=2 -Werror=missing-prototypes'"
+        ],
+        "darwin": [
+          "make CFLAGS='-O2 -g -W -Wall -Wextra -Wwrite-strings -Wshadow -fstrict-aliasing -Wstrict-aliasing=2 -Werror=missing-prototypes'"
+        ],
+        "win32": [
+          "make"
+        ]
       },
       "configure_commands": []
     },
@@ -54,9 +78,15 @@
       "url": "https://github.com/vhelin/wla-dx/archive/refs/tags/v10.3.zip",
       "binary_path": "binaries/wla-65816",
       "build_commands": {
-        "linux": ["cmake . && make"],
-        "darwin": ["cmake . && make"],
-        "win32": ["cmake . && make"]
+        "linux": [
+          "cmake . && make"
+        ],
+        "darwin": [
+          "cmake . && make"
+        ],
+        "win32": [
+          "cmake . && make"
+        ]
       },
       "configure_commands": []
     },
@@ -94,21 +124,43 @@
       "url": "https://github.com/Optiroc/SuperFamiconv/archive/refs/heads/master.zip",
       "binary_path": "build/superfamiconv",
       "build_commands": {
-        "linux": ["mkdir -p build && cd build && cmake .. && make"],
-        "darwin": ["mkdir -p build && cd build && cmake .. && make"],
-        "win32": ["mkdir -p build && cd build && cmake .. && make"]
+        "linux": [
+          "mkdir -p build && cd build && cmake .. && make"
+        ],
+        "darwin": [
+          "mkdir -p build && cd build && cmake .. && make"
+        ],
+        "win32": [
+          "mkdir -p build && cd build && cmake .. && make"
+        ]
       },
       "configure_commands": []
     },
     {
       "name": "mesen",
       "description": "SNES emulator with advanced debugging features",
-      "url": {
-        "linux": "https://github.com/SourMesen/Mesen2/releases/download/2.1.1/Mesen_2.1.1_Linux_x64.zip",
-        "darwin": "https://github.com/SourMesen/Mesen2/releases/download/2.1.1/Mesen_2.1.1_macOS_x64_Intel.zip",
-        "win32": "https://github.com/SourMesen/Mesen2/releases/download/2.1.1/Mesen_2.1.1_Windows.zip"
-      },
+      "url": "https://github.com/SourMesen/Mesen2/archive/refs/tags/2.1.1.zip",
       "binary_path": "Mesen",
+      "build_commands": {
+        "linux": [
+          "make"
+        ],
+        "darwin": [
+          "make"
+        ],
+        "win32": []
+      },
+      "configure_commands": []
+    },
+    {
+      "name": "ucon64",
+      "description": "ROM management tool for patching, header fixing, and format conversion",
+      "url": {
+        "linux": "https://sourceforge.net/projects/ucon64/files/ucon64/ucon64-2.2.2/ucon64-2.2.2-linux-x86_64-bin.tar.gz/download",
+        "darwin": "https://sourceforge.net/projects/ucon64/files/ucon64/ucon64-2.2.2/ucon64-2.2.2-linux-x86_64-bin.tar.gz/download",
+        "win32": "https://sourceforge.net/projects/ucon64/files/ucon64/ucon64-2.2.2/ucon64-2.2.2-win32-vc-bin.zip/download"
+      },
+      "binary_path": "ucon64",
       "build_commands": {
         "linux": [],
         "darwin": [],

@@ -71,22 +71,28 @@ python -m snes_installer --list
 ### Utilities
 - **superfamiconv**: Command-line graphics converter for SNES tile formats (2BPP, 4BPP, etc.)
 - **mesen**: SNES emulator with advanced debugging features, breakpoints, and memory viewer
+- **ucon64**: ROM management tool for patching, header fixing, and format conversion
 
-## IDE Integrations
+## Platform Compatibility
 
-The installer automatically configures:
+### ARM64 Linux Support (Apple Silicon, Asahi Linux)
 
-### VS Code
-- Installs `enginedesigns.retroassembler` (6502 assembly support)
-- Installs `tlgkccampbell.code-ca65` (ca65 integration)
-- Installs `ms-vscode.cpptools` (C/C++ development)
+The installer has been successfully tested and validated on ARM64 Linux systems with 16k memory pages (Apple Silicon Macs running Asahi Linux). All tools are fully compatible:
 
-### Vim/NeoVim
-- Adds syntax highlighting for `.asm` and `.s` files
-- Configures assembly filetypes
+- **✓ All CLI Tools**: ca65, asar, xkas, 64tass, libsfx, pvsneslib, superfamiconv, ucon64 work under FEX emulation
+- **✓ Mesen Emulator**: Successfully built from source with calloc patches for 16k page compatibility
+- **✓ IDE Integrations**: VS Code, Vim/NeoVim configurations work correctly
 
-### Notepad++ (Windows)
-- Creates user-defined language for SNES assembly syntax highlighting
+**Key Achievements:**
+- Resolved 16k page size compatibility issues that affected GUI applications like Mesen
+- Implemented efficient calloc patching for both wla-dx and Mesen builds
+- Core library (MesenCore.so) loads successfully with all dependencies resolved
+- Comprehensive testing completed on ARM64 Linux with 16k pages
+
+**Technical Details:**
+- Uses FEX (Fast x86-64 Emulation) for running x86_64 binaries on ARM64
+- Applies source-level patches for 16k page systems during build process
+- SDL2 and .NET 8 dependencies properly configured for ARM64 builds
 
 ## Project Structure
 

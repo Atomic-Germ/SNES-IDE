@@ -34,8 +34,13 @@ class ToolInstaller:
 
     def need_patch(self) -> bool:
         """Check if we need to patch calloc calls for 16k page systems."""
-        if platform.system() != 'Darwin' or platform.machine() != 'arm64':
+        # Check for Apple Silicon (Darwin + ARM64) or Asahi Linux (Linux + ARM64)
+        is_arm64 = platform.machine() == 'arm64' or platform.machine() == 'aarch64'
+        is_supported_os = platform.system() in ['Darwin', 'Linux']
+        
+        if not (is_supported_os and is_arm64):
             return False
+            
         try:
             result = subprocess.run(['getconf', 'PAGE_SIZE'], capture_output=True, text=True, check=True)
             page_size = result.stdout.strip()
@@ -46,12 +51,12 @@ class ToolInstaller:
     def patch_source(self, build_dir: Path) -> None:
         """Apply patches to fix calloc argument order."""
         logger.info("Applying calloc patches for 16k page systems")
+        # Use a more specific pattern that only matches calloc calls
         cmd = [
-            'find', '.', '-name', '*.c', '-exec', 'sed', '-i',
-            's/calloc(sizeof(\\([^,]*\\)), \\([0-9a-zA-Z_()+-]*\\))/calloc(\\2, sizeof(\\1))/g',
-            '{}', ';'
+            'find', '.', '-name', '*.c', '-o', '-name', '*.cpp', '-o', '-name', '*.cc', '|',
+            'xargs', 'sed', '-i', 's/calloc(sizeof(\\([^,]*\\)), \\([^)]*\\))/calloc(\\2, sizeof(\\1))/g'
         ]
-        subprocess.run(cmd, cwd=build_dir, check=True)
+        subprocess.run(cmd, cwd=build_dir, check=True, shell=True)
 
     def download_file(self, url: str, dest: Path) -> None:
         """Download a file from URL to destination."""
@@ -99,7 +104,7 @@ class ToolInstaller:
             build_dir = extract_dir
         
         # Patch for Apple Silicon 16k pages if needed
-        if name == 'wla-dx' and self.need_patch():
+        if (name in ['wla-dx', 'mesen']) and self.need_patch():
             self.patch_source(build_dir)
         
         build_cmds = tool.get('build_commands', {}).get(sys.platform, [])
