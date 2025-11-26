@@ -1,0 +1,26 @@
+{
+  "tools": [
+    {
+      "name": "ca65",
+      "description": "6502 assembler",
+      "url": "https://github.com/cc65/cc65/archive/refs/tags/V2.19.tar.gz",
+      "build_commands": {
+        "linux": ["make"],
+        "darwin": ["make"],
+        "win32": ["make"]
+      },
+      "configure_commands": []
+    },
+    {
+      "name": "asar",
+      "description": "SNES assembler",
+      "url": "https://github.com/RPGHacker/asar/archive/refs/tags/v1.91.tar.gz",
+      "build_commands": {
+        "linux": ["cd src && cmake . && make"],
+        "darwin": ["cd src && cmake . && make"],
+        "win32": ["cd src && cmake . && make"]
+      },
+      "configure_commands": []
+    }
+  ]
+}
