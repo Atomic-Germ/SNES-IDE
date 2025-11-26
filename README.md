@@ -70,6 +70,7 @@ python -m snes_installer --list
 
 ### Utilities
 - **superfamiconv**: Command-line graphics converter for SNES tile formats (2BPP, 4BPP, etc.)
+- **mesen**: SNES emulator with advanced debugging features, breakpoints, and memory viewer
 
 ## IDE Integrations
 

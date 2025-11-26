@@ -99,6 +99,22 @@
         "win32": ["mkdir -p build && cd build && cmake .. && make"]
       },
       "configure_commands": []
+    },
+    {
+      "name": "mesen",
+      "description": "SNES emulator with advanced debugging features",
+      "url": {
+        "linux": "https://github.com/SourMesen/Mesen2/releases/download/2.1.1/Mesen_2.1.1_Linux_x64.zip",
+        "darwin": "https://github.com/SourMesen/Mesen2/releases/download/2.1.1/Mesen_2.1.1_macOS_x64_Intel.zip",
+        "win32": "https://github.com/SourMesen/Mesen2/releases/download/2.1.1/Mesen_2.1.1_Windows.zip"
+      },
+      "binary_path": "Mesen",
+      "build_commands": {
+        "linux": [],
+        "darwin": [],
+        "win32": []
+      },
+      "configure_commands": []
     }
   ]
 }

@@ -131,10 +131,11 @@ class ToolInstaller:
             binary_path = build_dir / binary_path_str
             if binary_path.exists():
                 import shutil
-                dest = bin_dir / name
+                dest = bin_dir / Path(binary_path_str).name
                 if sys.platform == "win32":
                     dest = dest.with_suffix('.exe')
                 shutil.copy(binary_path, dest)
+                dest.chmod(0o755)  # Make executable
                 logger.info(f"Copied {binary_path} to {dest}")
             else:
                 logger.warning(f"Binary not found at {binary_path}")
