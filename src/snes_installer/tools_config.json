@@ -137,18 +137,38 @@
       "configure_commands": []
     },
     {
-      "name": "mesen",
-      "description": "SNES emulator with advanced debugging features",
-      "url": "https://github.com/SourMesen/Mesen2/archive/refs/tags/2.1.1.zip",
-      "binary_path": "Mesen",
+      "name": "bsnes",
+      "description": "Accurate SNES emulator with debugging features",
+      "url": "https://github.com/bsnes-emu/bsnes/archive/refs/tags/v115.zip",
+      "binary_path": "bsnes/out/bsnes",
       "build_commands": {
         "linux": [
-          "make"
+          "make -C bsnes"
         ],
         "darwin": [
-          "make"
+          "make -C bsnes"
         ],
-        "win32": []
+        "win32": [
+          "make -C bsnes"
+        ]
+      },
+      "configure_commands": []
+    },
+    {
+      "name": "no$snes",
+      "description": "Command-line SNES emulator with debugging features",
+      "url": "https://github.com/nocash/no$snes/archive/refs/tags/v1.9.zip",
+      "binary_path": "no$snes/no$snes",
+      "build_commands": {
+        "linux": [
+          "make -C no$snes"
+        ],
+        "darwin": [
+          "make -C no$snes"
+        ],
+        "win32": [
+          "make -C no$snes"
+        ]
       },
       "configure_commands": []
     },

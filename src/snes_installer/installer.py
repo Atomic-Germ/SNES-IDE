@@ -51,22 +51,48 @@ class ToolInstaller:
     def patch_source(self, build_dir: Path) -> None:
         """Apply patches to fix calloc argument order."""
         logger.info("Applying calloc patches for 16k page systems")
-        # Use a more specific pattern that only matches calloc calls
-        cmd = [
-            'find', '.', '-name', '*.c', '-o', '-name', '*.cpp', '-o', '-name', '*.cc', '|',
-            'xargs', 'sed', '-i', 's/calloc(sizeof(\\([^,]*\\)), \\([^)]*\\))/calloc(\\2, sizeof(\\1))/g'
-        ]
-        subprocess.run(cmd, cwd=build_dir, check=True, shell=True)
+        # Safely rewrite source files in Python instead of invoking a fragile shell pipeline.
+        # This avoids issues with shell quoting, xargs, and platform differences.
+        import re
+
+        pattern = re.compile(r"calloc\(\s*sizeof\(\s*([^,\)]+)\s*\)\s*,\s*([^\)]+)\)")
+
+        for ext in ("*.c", "*.cpp", "*.cc"):
+            for file_path in build_dir.rglob(ext):
+                try:
+                    text = file_path.read_text(encoding="utf-8")
+                except Exception:
+                    # Skip binary or unreadable files
+                    continue
+
+                new_text, count = pattern.subn(r"calloc(\2, sizeof(\1))", text)
+                if count:
+                    # Write back changes atomically
+                    file_path.write_text(new_text, encoding="utf-8")
+                    logger.info(f"Patched {count} calloc call(s) in {file_path}")
 
     def download_file(self, url: str, dest: Path) -> None:
         """Download a file from URL to destination."""
         logger.info(f"Downloading {url} to {dest}")
-        response = requests.get(url, stream=True, timeout=30)
-        response.raise_for_status()
         dest.parent.mkdir(parents=True, exist_ok=True)
-        with open(dest, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
+
+        # Simple retry loop to handle transient network issues
+        last_exc = None
+        for attempt in range(1, 4):
+            try:
+                response = requests.get(url, stream=True, timeout=30)
+                response.raise_for_status()
+                with open(dest, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:  # filter out keep-alive chunks
+                            f.write(chunk)
+                return
+            except Exception as exc:  # keep broad here and log higher-level caller
+                logger.warning(f"Download attempt {attempt} failed for {url}: {exc}")
+                last_exc = exc
+        # If we get here, all attempts failed
+        logger.error(f"Failed to download {url} after retries")
+        raise last_exc
 
     def extract_archive(self, archive_path: Path, extract_to: Path) -> None:
         """Extract an archive to the specified directory."""
@@ -94,6 +120,11 @@ class ToolInstaller:
         
         archive_path = tool_dir / Path(url).name
         extract_dir = tool_dir / 'source'
+
+        # Ensure the archive exists before attempting extraction/build
+        if not archive_path.exists():
+            raise FileNotFoundError(f"Archive for {name} not found at {archive_path}")
+
         self.extract_archive(archive_path, extract_dir)
         
         # Find the extracted directory (assuming it's the only one or named after tool)
@@ -104,7 +135,7 @@ class ToolInstaller:
             build_dir = extract_dir
         
         # Patch for Apple Silicon 16k pages if needed
-        if (name in ['wla-dx', 'mesen']) and self.need_patch():
+        if (name in ['wla-dx', 'bsnes']) and self.need_patch():
             self.patch_source(build_dir)
         
         build_cmds = tool.get('build_commands', {}).get(sys.platform, [])
@@ -115,103 +146,123 @@ class ToolInstaller:
         else:
             logger.info(f"No build commands for {name}, skipping build step")
 
+    def _get_build_dir(self, tool_dir: Path) -> Path:
+        """Get the build directory for a tool."""
+        extract_dir = tool_dir / 'source'
+        subdirs = [d for d in extract_dir.iterdir() if d.is_dir()]
+        return subdirs[0] if subdirs else extract_dir
+
+    def _configure_binary_tool(self, build_dir: Path, bin_dir: Path, binary_path_str: str) -> None:
+        """Configure a tool with a single binary."""
+        binary_path = build_dir / binary_path_str
+        if binary_path.exists():
+            import shutil
+            dest = bin_dir / Path(binary_path_str).name
+            if sys.platform == "win32":
+                dest = dest.with_suffix('.exe')
+            shutil.copy(binary_path, dest)
+            dest.chmod(0o755)  # Make executable
+            logger.info(f"Copied {binary_path} to {dest}")
+        else:
+            logger.warning(f"Binary not found at {binary_path}")
+
+    def _copy_compiler_binaries(self, build_dir: Path, bin_dir: Path) -> None:
+        """Copy compiler binaries for pvsneslib."""
+        import shutil
+        compiler_dir = build_dir / "compiler"
+        if compiler_dir.exists():
+            for item in compiler_dir.rglob("*"):
+                if item.is_file() and item.suffix != '':  # executable files
+                    rel_path = item.relative_to(compiler_dir)
+                    dest = bin_dir / rel_path
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy(item, dest)
+                    logger.info(f"Copied compiler binary {item} to {dest}")
+
+    def _copy_devkitsnes_files(self, build_dir: Path, bin_dir: Path) -> None:
+        """Copy devkitsnes binaries and tools."""
+        import shutil
+        devkitsnes_dir = build_dir / "devkitsnes"
+        if devkitsnes_dir.exists():
+            # Copy bin files
+            bin_src = devkitsnes_dir / "bin"
+            if bin_src.exists():
+                for item in bin_src.iterdir():
+                    if item.is_file():
+                        dest = bin_dir / item.name
+                        shutil.copy(item, dest)
+                        logger.info(f"Copied devkitsnes binary {item} to {dest}")
+            
+            # Copy tools
+            tools_dir = devkitsnes_dir / "tools"
+            if tools_dir.exists():
+                for item in tools_dir.rglob("*"):
+                    if item.is_file():
+                        rel_path = item.relative_to(tools_dir)
+                        dest = bin_dir / rel_path
+                        dest.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy(item, dest)
+                        logger.info(f"Copied tool {item} to {dest}")
+
+    def _copy_pvsneslib_libs(self, build_dir: Path, lib_dir: Path) -> None:
+        """Copy pvsneslib library files."""
+        import shutil
+        lib_dir.mkdir(parents=True, exist_ok=True)
+        pvsneslib_dir = build_dir / "pvsneslib"
+        if pvsneslib_dir.exists():
+            for item in pvsneslib_dir.iterdir():
+                if item.is_file():
+                    shutil.copy(item, lib_dir)
+                elif item.is_dir():
+                    shutil.copytree(item, lib_dir / item.name, dirs_exist_ok=True)
+            logger.info(f"Copied library files to {lib_dir}")
+
+    def _copy_pvsneslib_includes(self, build_dir: Path, include_dir: Path) -> None:
+        """Copy pvsneslib include files."""
+        import shutil
+        include_dir.mkdir(parents=True, exist_ok=True)
+        include_src = build_dir / "pvsneslib" / "include"
+        if include_src.exists():
+            shutil.copytree(include_src, include_dir, dirs_exist_ok=True)
+            logger.info(f"Copied include files to {include_dir}")
+
+    def _configure_pvsneslib(self, build_dir: Path, bin_dir: Path) -> None:
+        """Configure pvsneslib with all its components."""
+        # Special handling for PVSnesLib - it's a pre-built framework
+        self._copy_compiler_binaries(build_dir, bin_dir)
+        self._copy_devkitsnes_files(build_dir, bin_dir)
+        self._copy_pvsneslib_libs(build_dir, self.install_dir / "lib" / "pvsneslib")
+        self._copy_pvsneslib_includes(build_dir, self.install_dir / "include" / "pvsneslib")
+
+    def _configure_library_tool(self, build_dir: Path, name: str) -> None:
+        """Configure a library tool by copying include files."""
+        import shutil
+        include_dir = self.install_dir / "include" / name
+        include_dir.mkdir(parents=True, exist_ok=True)
+        # Copy all files from build_dir to include_dir
+        for item in build_dir.iterdir():
+            if item.is_file():
+                shutil.copy(item, include_dir)
+            elif item.is_dir() and not item.name.startswith('.'):
+                shutil.copytree(item, include_dir / item.name, dirs_exist_ok=True)
+        logger.info(f"Copied library files to {include_dir}")
+
     def configure_tool(self, tool: Dict) -> None:
         """Configure a tool after installation."""
         name = tool['name']
         logger.info(f"Configuring {name}")
-        # Copy binary to bin directory
         tool_dir = self.install_dir / name
-        extract_dir = tool_dir / 'source'
-        subdirs = [d for d in extract_dir.iterdir() if d.is_dir()]
-        if subdirs:
-            build_dir = subdirs[0]
-        else:
-            build_dir = extract_dir
-        
+        build_dir = self._get_build_dir(tool_dir)
         bin_dir = self.install_dir / "bin"
         bin_dir.mkdir(parents=True, exist_ok=True)
         
         binary_path_str = tool.get('binary_path', '')
         if binary_path_str:
-            binary_path = build_dir / binary_path_str
-            if binary_path.exists():
-                import shutil
-                dest = bin_dir / Path(binary_path_str).name
-                if sys.platform == "win32":
-                    dest = dest.with_suffix('.exe')
-                shutil.copy(binary_path, dest)
-                dest.chmod(0o755)  # Make executable
-                logger.info(f"Copied {binary_path} to {dest}")
-            else:
-                logger.warning(f"Binary not found at {binary_path}")
+            self._configure_binary_tool(build_dir, bin_dir, binary_path_str)
         elif name == 'pvsneslib':
-            # Special handling for PVSnesLib - it's a pre-built framework
-            import shutil
-            
-            # Copy compiler binaries
-            compiler_dir = build_dir / "compiler"
-            if compiler_dir.exists():
-                for item in compiler_dir.rglob("*"):
-                    if item.is_file() and item.suffix != '':  # executable files
-                        rel_path = item.relative_to(compiler_dir)
-                        dest = bin_dir / rel_path
-                        dest.parent.mkdir(parents=True, exist_ok=True)
-                        shutil.copy(item, dest)
-                        logger.info(f"Copied compiler binary {item} to {dest}")
-            
-            # Copy devkitsnes binaries
-            devkitsnes_dir = build_dir / "devkitsnes"
-            if devkitsnes_dir.exists():
-                bin_src = devkitsnes_dir / "bin"
-                if bin_src.exists():
-                    for item in bin_src.iterdir():
-                        if item.is_file():
-                            dest = bin_dir / item.name
-                            shutil.copy(item, dest)
-                            logger.info(f"Copied devkitsnes binary {item} to {dest}")
-                
-                # Copy tools
-                tools_dir = devkitsnes_dir / "tools"
-                if tools_dir.exists():
-                    for item in tools_dir.rglob("*"):
-                        if item.is_file():
-                            rel_path = item.relative_to(tools_dir)
-                            dest = bin_dir / rel_path
-                            dest.parent.mkdir(parents=True, exist_ok=True)
-                            shutil.copy(item, dest)
-                            logger.info(f"Copied tool {item} to {dest}")
-            
-            # Copy library files
-            lib_dir = self.install_dir / "lib" / name
-            lib_dir.mkdir(parents=True, exist_ok=True)
-            pvsneslib_dir = build_dir / "pvsneslib"
-            if pvsneslib_dir.exists():
-                for item in pvsneslib_dir.iterdir():
-                    if item.is_file():
-                        shutil.copy(item, lib_dir)
-                    elif item.is_dir():
-                        shutil.copytree(item, lib_dir / item.name, dirs_exist_ok=True)
-                logger.info(f"Copied library files to {lib_dir}")
-            
-            # Copy include files
-            include_dir = self.install_dir / "include" / name
-            include_dir.mkdir(parents=True, exist_ok=True)
-            include_src = build_dir / "pvsneslib" / "include"
-            if include_src.exists():
-                shutil.copytree(include_src, include_dir, dirs_exist_ok=True)
-                logger.info(f"Copied include files to {include_dir}")
+            self._configure_pvsneslib(build_dir, bin_dir)
         else:
-            # Handle libraries - copy include files
-            include_dir = self.install_dir / "include" / name
-            include_dir.mkdir(parents=True, exist_ok=True)
-            import shutil
-            # Copy all files from build_dir to include_dir
-            for item in build_dir.iterdir():
-                if item.is_file():
-                    shutil.copy(item, include_dir)
-                elif item.is_dir() and not item.name.startswith('.'):
-                    shutil.copytree(item, include_dir / item.name, dirs_exist_ok=True)
-            logger.info(f"Copied library files to {include_dir}")
+            self._configure_library_tool(build_dir, name)
 
     def install_tools(self) -> None:
         """Install all tools defined in config."""
@@ -310,6 +361,66 @@ class ToolInstaller:
                     continue
             else:
                 logger.warning(f"Tool '{tool_name}' not found in configuration")
+
+
+    def uninstall_tool(self, tool_name: str) -> bool:
+        """Uninstall a specific tool."""
+        tool_config = next((t for t in self.config['tools'] if t["name"] == tool_name), None)
+        if not tool_config:
+            logger.warning(f"Tool '{tool_name}' not found in configuration")
+            return False
+
+        try:
+            logger.info(f"Uninstalling {tool_name}")
+            
+            # Remove tool directory
+            tool_dir = self.install_dir / tool_name
+            if tool_dir.exists():
+                import shutil
+                shutil.rmtree(tool_dir)
+                logger.info(f"Removed tool directory: {tool_dir}")
+            
+            # Remove binaries from bin directory
+            bin_dir = self.install_dir / "bin"
+            if bin_dir.exists():
+                binary_path_str = tool_config.get('binary_path', '')
+                if binary_path_str:
+                    binary_name = Path(binary_path_str).name
+                    binary_path = bin_dir / binary_name
+                    if binary_path.exists():
+                        binary_path.unlink()
+                        logger.info(f"Removed binary: {binary_path}")
+                
+                # Special handling for pvsneslib
+                if tool_name == "pvsneslib":
+                    # Remove compiler binaries
+                    compiler_binaries = ["816-tcc", "816-as", "816-ld", "816-objcopy"]
+                    for binary in compiler_binaries:
+                        bin_path = bin_dir / binary
+                        if bin_path.exists():
+                            bin_path.unlink()
+                            logger.info(f"Removed compiler binary: {bin_path}")
+            
+            # Remove library files
+            lib_dir = self.install_dir / "lib" / tool_name
+            if lib_dir.exists():
+                import shutil
+                shutil.rmtree(lib_dir)
+                logger.info(f"Removed library directory: {lib_dir}")
+            
+            # Remove include files
+            include_dir = self.install_dir / "include" / tool_name
+            if include_dir.exists():
+                import shutil
+                shutil.rmtree(include_dir)
+                logger.info(f"Removed include directory: {include_dir}")
+            
+            logger.info(f"Successfully uninstalled {tool_name}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to uninstall {tool_name}: {e}")
+            return False
 
 
 def setup_ides() -> None:

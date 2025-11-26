@@ -20,7 +20,7 @@ from rich.live import Live
 from rich.spinner import Spinner
 from rich.status import Status
 
-from snes_installer.installer import ToolInstaller
+from snes_installer.installer import ToolInstaller, add_to_path, setup_ides
 
 
 class SNESInstallerTUI:
@@ -34,7 +34,6 @@ class SNESInstallerTUI:
 
     def is_tool_installed(self, tool_name: str) -> bool:
         """Check if a tool is already installed and available in PATH."""
-        # Use the same logic as ToolInstaller.is_tool_installed
         return self.installer.is_tool_installed(tool_name)
 
     def get_installed_tools(self) -> List[str]:
@@ -45,6 +44,15 @@ class SNESInstallerTUI:
             if self.is_tool_installed(tool_name):
                 installed.append(tool_name)
         return installed
+
+    def get_missing_tools(self) -> List[str]:
+        """Get list of tools that are not installed."""
+        missing = []
+        for tool in self.tools_config:
+            tool_name = tool["name"]
+            if not self.is_tool_installed(tool_name):
+                missing.append(tool_name)
+        return missing
 
     def show_welcome(self) -> None:
         """Show welcome message and current status."""
@@ -64,7 +72,22 @@ class SNESInstallerTUI:
         self.console.print(panel)
         self.console.print()
 
-    def show_tools_table(self) -> Table:
+    def show_main_menu(self) -> str:
+        """Show main menu and return selected option."""
+        self.console.print("[bold cyan]Main Menu:[/bold cyan]")
+        self.console.print("1. Install all missing tools")
+        self.console.print("2. Install specific tool")
+        self.console.print("3. Reinstall tool")
+        self.console.print("4. Uninstall tool")
+        self.console.print("5. Show tool status")
+        self.console.print("6. Exit")
+        self.console.print()
+
+        while True:
+            choice = Prompt.ask("Select an option", choices=["1", "2", "3", "4", "5", "6"])
+            return choice
+
+    def show_tools_table(self, highlight_tools: List[str] = None) -> Table:
         """Create a table showing all tools with their status."""
         table = Table(title="Available Tools")
         table.add_column("Tool", style="cyan", no_wrap=True)
@@ -76,39 +99,110 @@ class SNESInstallerTUI:
             description = tool.get("description", "No description")
             installed = self.is_tool_installed(name)
 
+            if highlight_tools and name in highlight_tools:
+                name = f"[bold yellow]{name}[/bold yellow]"
+                description = f"[bold yellow]{description}[/bold yellow]"
+
             status = "[green]✓ Installed[/green]" if installed else "[red]✗ Not installed[/red]"
             table.add_row(name, description, status)
 
         return table
 
-    def select_tools_interactive(self) -> List[str]:
-        """Interactive tool selection using checklist."""
-        self.console.print("[bold]Select tools to install:[/bold]")
-        self.console.print("Use space to toggle selection, enter to confirm")
-        self.console.print()
+    def select_tool(self, prompt: str, tools_list: List[str]) -> str:
+        """Let user select a tool from a list."""
+        if not tools_list:
+            self.console.print("[yellow]No tools available for this operation.[/yellow]")
+            return ""
 
-        # Get all tools
-        all_tools = [tool["name"] for tool in self.tools_config]
-        installed_tools = self.get_installed_tools()
+        self.console.print(f"[bold]{prompt}[/bold]")
+        for i, tool in enumerate(tools_list, 1):
+            tool_config = next((t for t in self.tools_config if t["name"] == tool), None)
+            description = tool_config.get("description", "") if tool_config else ""
+            self.console.print(f"{i}. {tool} - {description}")
 
-        # Pre-select tools that are not installed
-        selected = [tool for tool in all_tools if tool not in installed_tools]
+        while True:
+            try:
+                choice = int(Prompt.ask("Enter tool number"))
+                if 1 <= choice <= len(tools_list):
+                    return tools_list[choice - 1]
+                else:
+                    self.console.print("[red]Invalid choice. Please try again.[/red]")
+            except ValueError:
+                self.console.print("[red]Please enter a number.[/red]")
 
-        # For now, we'll use a simple prompt approach since rich doesn't have a built-in checklist
-        # In a real implementation, you might want to use a library like questionary or inquirer
-
-        if not selected:
+    def install_missing_tools(self) -> None:
+        """Install all tools that are not currently installed."""
+        missing_tools = self.get_missing_tools()
+        if not missing_tools:
             self.console.print("[green]All tools are already installed![/green]")
-            return []
+            return
 
-        self.console.print("The following tools will be installed:")
-        for tool in selected:
+        self.console.print(f"Installing {len(missing_tools)} missing tools:")
+        for tool in missing_tools:
             self.console.print(f"  • [cyan]{tool}[/cyan]")
 
         if Confirm.ask("\nProceed with installation?", default=True):
-            return selected
-        else:
-            return []
+            self.install_selected_tools(missing_tools)
+
+    def install_specific_tool(self) -> None:
+        """Install a specific tool selected by the user."""
+        all_tools = [tool["name"] for tool in self.tools_config]
+        tool_name = self.select_tool("Select a tool to install:", all_tools)
+        if tool_name:
+            if self.is_tool_installed(tool_name):
+                if not Confirm.ask(f"[yellow]{tool_name} is already installed. Reinstall?", default=False):
+                    return
+            self.install_selected_tools([tool_name])
+
+    def reinstall_tool(self) -> None:
+        """Reinstall a tool that is already installed."""
+        installed_tools = self.get_installed_tools()
+        if not installed_tools:
+            self.console.print("[yellow]No tools are currently installed.[/yellow]")
+            return
+
+        tool_name = self.select_tool("Select a tool to reinstall:", installed_tools)
+        if tool_name:
+            if Confirm.ask(f"[yellow]This will uninstall and reinstall {tool_name}. Continue?", default=False):
+                # First uninstall
+                self.console.print(f"Uninstalling {tool_name}...")
+                if self.installer.uninstall_tool(tool_name):
+                    self.console.print(f"[green]✓[/green] Uninstalled {tool_name}")
+                else:
+                    self.console.print(f"[red]✗[/red] Failed to uninstall {tool_name}")
+                    return
+                
+                # Then reinstall
+                self.install_selected_tools([tool_name])
+
+    def uninstall_tool(self) -> None:
+        """Uninstall a tool selected by the user."""
+        installed_tools = self.get_installed_tools()
+        if not installed_tools:
+            self.console.print("[yellow]No tools are currently installed.[/yellow]")
+            return
+
+        tool_name = self.select_tool("Select a tool to uninstall:", installed_tools)
+        if tool_name:
+            if Confirm.ask(f"[red]This will permanently remove {tool_name}. Continue?", default=False):
+                self.console.print(f"Uninstalling {tool_name}...")
+                if self.installer.uninstall_tool(tool_name):
+                    self.console.print(f"[green]✓[/green] Successfully uninstalled {tool_name}")
+                else:
+                    self.console.print(f"[red]✗[/red] Failed to uninstall {tool_name}")
+
+    def show_status(self) -> None:
+        """Show detailed status of all tools."""
+        table = self.show_tools_table()
+        self.console.print(table)
+        self.console.print()
+
+        installed = self.get_installed_tools()
+        missing = self.get_missing_tools()
+        
+        self.console.print(f"[green]Installed tools ({len(installed)}):[/green] {', '.join(installed) if installed else 'None'}")
+        if missing:
+            self.console.print(f"[red]Missing tools ({len(missing)}):[/red] {', '.join(missing)}")
 
     def install_selected_tools(self, tools_to_install: List[str]) -> None:
         """Install the selected tools with progress display."""
@@ -128,7 +222,7 @@ class SNESInstallerTUI:
                         continue
 
                     # Install the tool
-                    self.installer.install_tool(tool_config)
+                    self.installer.install_selected_tools([tool_name])
 
                     self.console.print(f"[green]✓[/green] Successfully installed {tool_name}")
 
@@ -137,28 +231,35 @@ class SNESInstallerTUI:
 
         # Setup PATH and IDEs after installation
         self.console.print("\n[bold]Setting up environment...[/bold]")
-        self.installer.add_to_path()
-        self.installer.setup_ides()
+        add_to_path()
+        setup_ides()
         self.console.print("[green]✓[/green] Environment setup complete")
 
     def run(self) -> None:
         """Main TUI loop."""
         self.show_welcome()
+        try:
+            while True:
+                choice = self.show_main_menu()
 
-        # Show tools table
-        table = self.show_tools_table()
-        self.console.print(table)
-        self.console.print()
+                if choice == "1":
+                    self.install_missing_tools()
+                elif choice == "2":
+                    self.install_specific_tool()
+                elif choice == "3":
+                    self.reinstall_tool()
+                elif choice == "4":
+                    self.uninstall_tool()
+                elif choice == "5":
+                    self.show_status()
+                elif choice == "6":
+                    self.console.print("[green]Goodbye![/green]")
+                    break
 
-        # Select tools to install
-        tools_to_install = self.select_tools_interactive()
-
-        if tools_to_install:
-            self.install_selected_tools(tools_to_install)
-            self.console.print("\n[bold green]Installation complete![/bold]")
-            self.console.print("You can now use the installed tools in your terminal.")
-        else:
-            self.console.print("[yellow]Installation cancelled.[/yellow]")
+                self.console.print()  # Add spacing between operations
+        except (KeyboardInterrupt, EOFError):
+            # Graceful exit on Ctrl-C or EOF
+            self.console.print("\n[green]Goodbye![/green]")
 
 
 def main() -> None:
