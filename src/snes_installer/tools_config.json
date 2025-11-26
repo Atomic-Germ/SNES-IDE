@@ -21,6 +21,17 @@
         "win32": ["cd src && cmake . && make"]
       },
       "configure_commands": []
+    },
+    {
+      "name": "xkas",
+      "description": "SNES assembler",
+      "url": "https://github.com/devinacker/xkas-plus/archive/refs/heads/master.zip",
+      "build_commands": {
+        "linux": ["make"],
+        "darwin": ["make"],
+        "win32": ["make"]
+      },
+      "configure_commands": []
     }
   ]
 }

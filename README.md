@@ -19,6 +19,7 @@ This will download, build, and install the tools, then set up IDE integrations f
 
 - **ca65**: 6502 assembler from the cc65 project
 - **asar**: SNES assembler
+- **xkas**: SNES assembler
 
 ## IDE Integrations
 
