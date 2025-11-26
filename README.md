@@ -1,43 +1,166 @@
-# SNES Installer
+# SNES Development Tools Installer
 
-A cross-platform application that downloads, builds, and configures tools for SNES programming IDE setup.
+A cross-platform Python application that downloads, builds, and configures a comprehensive toolkit for SNES programming and IDE setup.
 
 ## Installation
 
-1. Clone the repository.
-2. Create a virtual environment: `python -m venv .venv`
-3. Activate: `source .venv/bin/activate`
-4. Install dependencies: `pip install -r requirements.txt`
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/Atomic-Germ/SNES-IDE.git
+   cd SNES-IDE
+   ```
+
+2. Create a virtual environment:
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+   ```
+
+3. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
 ## Usage
 
-Run the installer: `python -m snes_installer`
+### Text User Interface (TUI)
+Run the interactive installer:
+```bash
+python -m snes_installer
+```
 
-This will download, build, and install the tools, then set up IDE integrations for VS Code, Vim/NeoVim, and Notepad++ (on Windows).
+The TUI shows a checklist of available tools. Tools already installed (detected in PATH) are checked. Select tools to install and press Enter.
 
-## Tools Configured
+### Command Line Interface (CLI)
+Install specific tools:
+```bash
+python -m snes_installer --tools ca65 asar xkas
+```
 
+Available options:
+- `--tools TOOL [TOOL ...]`: Install specific tools
+- `--all`: Install all tools
+- `--list`: List available tools
+- `--help`: Show help
+
+Examples:
+```bash
+# Install all tools
+python -m snes_installer --all
+
+# Install only assemblers
+python -m snes_installer --tools ca65 asar xkas 64tass wla-dx
+
+# List available tools
+python -m snes_installer --list
+```
+
+## Tools Included
+
+### Assemblers
 - **ca65**: 6502 assembler from the cc65 project
-- **asar**: SNES assembler
-- **xkas**: SNES assembler
-- **64tass**: 6502/65816 assembler
-- **wla-dx**: Multi-platform assembler with SNES support
-- **libsfx**: Super FX library for SNES development
-- **pvsneslib**: Complete SNES development framework with C compiler and libraries
-- **superfamiconv**: Command-line graphics converter for SNES tile formats
+- **asar**: Popular SNES assembler with advanced features
+- **xkas**: Alternative SNES assembler
+- **64tass**: Advanced 6502/65816 assembler with macro support
+- **wla-dx**: Multi-platform assembler with SNES 65816 and SPC-700 support
+
+### Libraries & Frameworks
+- **libsfx**: Super FX library for enhanced SNES graphics processing
+- **pvsneslib**: Complete SNES development framework with C compiler, libraries, and build tools
+
+### Utilities
+- **superfamiconv**: Command-line graphics converter for SNES tile formats (2BPP, 4BPP, etc.)
 
 ## IDE Integrations
 
-The installer automatically configures syntax highlighting for:
-- **VS Code**: Installs 6502 assembly and C++ tools extensions
-- **Vim/NeoVim**: Adds assembly syntax for .asm and .s files
-- **Notepad++** (Windows): Creates user-defined language for SNES assembly
+The installer automatically configures:
+
+### VS Code
+- Installs `enginedesigns.retroassembler` (6502 assembly support)
+- Installs `tlgkccampbell.code-ca65` (ca65 integration)
+- Installs `ms-vscode.cpptools` (C/C++ development)
+
+### Vim/NeoVim
+- Adds syntax highlighting for `.asm` and `.s` files
+- Configures assembly filetypes
+
+### Notepad++ (Windows)
+- Creates user-defined language for SNES assembly syntax highlighting
+
+## Project Structure
+
+```
+src/snes_installer/
+├── __init__.py
+├── __main__.py          # CLI entry point
+├── main.py             # Main application logic with CLI argument parsing
+├── installer.py        # Core installation logic
+├── tools_config.json   # Tool definitions and build configs
+└── tui.py             # Text User Interface
+```
 
 ## Development
 
-Run tests: `pytest`
+### Running Tests
+```bash
+pytest
+```
 
-## Not Yet Implemented
+### Adding New Tools
+1. Add tool configuration to `tools_config.json`
+2. Test the installation manually
+3. Update documentation
+
+### Building for Distribution
+```bash
+pip install build
+python -m build
+```
+
+## Requirements
+
+- Python 3.8+
+- Git
+- Build tools (make, cmake, gcc)
+- Internet connection for downloading tools
+
+## License
+
+This project is open source. See individual tool licenses for their respective components.
+
+## Contributing
+
+Contributions welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch
+3. Add tests for new functionality
+4. Submit a pull request
+
+## Troubleshooting
+
+### Common Issues
+
+**Tools not found after installation:**
+- Restart your terminal or run `source ~/.bashrc` (Linux/macOS)
+- Check that `~/.snes_tools/bin` is in your PATH
+
+**Build failures:**
+- Ensure build dependencies are installed (gcc, make, cmake)
+- Check the tool's repository for specific build requirements
+
+**Permission errors:**
+- The installer creates files in `~/.snes_tools/`
+- Ensure you have write permissions to your home directory
+
+### Getting Help
+
+- Check existing issues on GitHub
+- Create a new issue with:
+  - Your operating system
+  - Python version
+  - Full error output
+  - Steps to reproduce
 Atomic-Germ: Let's create a new cross-platform application; more of an installer. It needs to download and build a set of tools we'll define, and then configure those tools. The whole thing will be used as an IDE setup for SNES programmers.
 
 GitHub Copilot: Using "Create New Workspace"

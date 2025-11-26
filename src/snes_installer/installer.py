@@ -241,6 +241,70 @@ class ToolInstaller:
                 logger.error(f"Failed to install {tool['name']}: {e}")
                 continue
 
+    def is_tool_installed(self, tool_name: str) -> bool:
+        """Check if a tool is already installed and available in PATH."""
+        import shutil
+        
+        # Find the tool config
+        tool_config = next((t for t in self.config['tools'] if t["name"] == tool_name), None)
+        if not tool_config:
+            return False
+            
+        # If binary_path is specified, check if that binary exists in PATH
+        if tool_config.get('binary_path'):
+            binary_name = Path(tool_config['binary_path']).name
+            return shutil.which(binary_name) is not None
+        
+        # For libraries or tools with multiple binaries, check if installation directory exists
+        tool_dir = self.install_dir / tool_name
+        if tool_dir.exists():
+            # For pvsneslib, check for key binaries
+            if tool_name == "pvsneslib":
+                return (self.install_dir / "bin" / "816-tcc").exists()
+            # For libsfx, check for include files
+            elif tool_name == "libsfx":
+                return (self.install_dir / "include" / "libsfx").exists()
+        
+        # Fallback: check if the tool name itself is in PATH
+        return shutil.which(tool_name) is not None
+
+    def install_selected_tools(self, tool_names: List[str]) -> None:
+        """Install only the specified tools."""
+        for tool_name in tool_names:
+            tool_config = next((t for t in self.config['tools'] if t["name"] == tool_name), None)
+            if tool_config:
+                try:
+                    logger.info(f"Installing {tool_name}")
+                    # Download
+                    if 'url' in tool_config:
+                        tool_dir = self.install_dir / tool_config['name']
+                        
+                        # Handle platform-specific URLs
+                        url = tool_config['url']
+                        if isinstance(url, dict):
+                            url = url.get(sys.platform, url.get('linux', ''))  # fallback to linux if platform not found
+                        
+                        if url:
+                            archive_name = Path(url).name
+                            archive_path = tool_dir / archive_name
+                            if not archive_path.exists():
+                                self.download_file(url, archive_path)
+                            else:
+                                logger.info(f"Archive already exists: {archive_path}")
+                        else:
+                            logger.warning(f"No URL found for {tool_config['name']} on platform {sys.platform}")
+                            continue
+                    # Build
+                    self.build_tool(tool_config)
+                    # Configure
+                    self.configure_tool(tool_config)
+                    logger.info(f"Successfully installed {tool_name}")
+                except Exception as e:
+                    logger.error(f"Failed to install {tool_name}: {e}")
+                    continue
+            else:
+                logger.warning(f"Tool '{tool_name}' not found in configuration")
+
 
 def setup_ides() -> None:
     """Set up IDE integrations for SNES development."""
@@ -419,3 +483,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
