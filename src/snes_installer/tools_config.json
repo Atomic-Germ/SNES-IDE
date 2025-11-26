@@ -59,6 +59,46 @@
         "win32": ["cmake . && make"]
       },
       "configure_commands": []
+    },
+    {
+      "name": "libsfx",
+      "description": "Super FX library for SNES development",
+      "url": "https://github.com/Optiroc/libSFX/archive/refs/heads/master.zip",
+      "binary_path": "",
+      "build_commands": {
+        "linux": [],
+        "darwin": [],
+        "win32": []
+      },
+      "configure_commands": []
+    },
+    {
+      "name": "pvsneslib",
+      "description": "Complete SNES development framework with C compiler and libraries",
+      "url": {
+        "linux": "https://github.com/alekmaul/pvsneslib/releases/download/4.4.0/pvsneslib_440_64b_linux.zip",
+        "darwin": "https://github.com/alekmaul/pvsneslib/releases/download/4.4.0/pvsneslib_440_64b_darwin.zip",
+        "win32": "https://github.com/alekmaul/pvsneslib/releases/download/4.4.0/pvsneslib_440_64b_windows.zip"
+      },
+      "binary_path": "",
+      "build_commands": {
+        "linux": [],
+        "darwin": [],
+        "win32": []
+      },
+      "configure_commands": []
+    },
+    {
+      "name": "superfamiconv",
+      "description": "Command-line graphics converter for SNES tile formats",
+      "url": "https://github.com/Optiroc/SuperFamiconv/archive/refs/heads/master.zip",
+      "binary_path": "build/superfamiconv",
+      "build_commands": {
+        "linux": ["mkdir -p build && cd build && cmake .. && make"],
+        "darwin": ["mkdir -p build && cd build && cmake .. && make"],
+        "win32": ["mkdir -p build && cd build && cmake .. && make"]
+      },
+      "configure_commands": []
     }
   ]
 }

@@ -20,6 +20,11 @@ This will download, build, and install the tools, then set up IDE integrations f
 - **ca65**: 6502 assembler from the cc65 project
 - **asar**: SNES assembler
 - **xkas**: SNES assembler
+- **64tass**: 6502/65816 assembler
+- **wla-dx**: Multi-platform assembler with SNES support
+- **libsfx**: Super FX library for SNES development
+- **pvsneslib**: Complete SNES development framework with C compiler and libraries
+- **superfamiconv**: Command-line graphics converter for SNES tile formats
 
 ## IDE Integrations
 

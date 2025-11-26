@@ -81,7 +81,13 @@ class ToolInstaller:
         name = tool['name']
         logger.info(f"Building {name}")
         tool_dir = self.install_dir / name
-        archive_path = tool_dir / Path(tool['url']).name
+        
+        # Handle platform-specific URLs
+        url = tool['url']
+        if isinstance(url, dict):
+            url = url.get(sys.platform, url.get('linux', ''))  # fallback to linux if platform not found
+        
+        archive_path = tool_dir / Path(url).name
         extract_dir = tool_dir / 'source'
         self.extract_archive(archive_path, extract_dir)
         
@@ -97,9 +103,12 @@ class ToolInstaller:
             self.patch_source(build_dir)
         
         build_cmds = tool.get('build_commands', {}).get(sys.platform, [])
-        for cmd in build_cmds:
-            logger.info(f"Running: {cmd}")
-            subprocess.run(cmd, cwd=build_dir, shell=True, check=True)
+        if build_cmds:
+            for cmd in build_cmds:
+                logger.info(f"Running: {cmd}")
+                subprocess.run(cmd, cwd=build_dir, shell=True, check=True)
+        else:
+            logger.info(f"No build commands for {name}, skipping build step")
 
     def configure_tool(self, tool: Dict) -> None:
         """Configure a tool after installation."""
@@ -117,16 +126,86 @@ class ToolInstaller:
         bin_dir = self.install_dir / "bin"
         bin_dir.mkdir(parents=True, exist_ok=True)
         
-        binary_path = build_dir / tool['binary_path']
-        if binary_path.exists():
+        binary_path_str = tool.get('binary_path', '')
+        if binary_path_str:
+            binary_path = build_dir / binary_path_str
+            if binary_path.exists():
+                import shutil
+                dest = bin_dir / name
+                if sys.platform == "win32":
+                    dest = dest.with_suffix('.exe')
+                shutil.copy(binary_path, dest)
+                logger.info(f"Copied {binary_path} to {dest}")
+            else:
+                logger.warning(f"Binary not found at {binary_path}")
+        elif name == 'pvsneslib':
+            # Special handling for PVSnesLib - it's a pre-built framework
             import shutil
-            dest = bin_dir / name
-            if sys.platform == "win32":
-                dest = dest.with_suffix('.exe')
-            shutil.copy(binary_path, dest)
-            logger.info(f"Copied {binary_path} to {dest}")
+            
+            # Copy compiler binaries
+            compiler_dir = build_dir / "compiler"
+            if compiler_dir.exists():
+                for item in compiler_dir.rglob("*"):
+                    if item.is_file() and item.suffix != '':  # executable files
+                        rel_path = item.relative_to(compiler_dir)
+                        dest = bin_dir / rel_path
+                        dest.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy(item, dest)
+                        logger.info(f"Copied compiler binary {item} to {dest}")
+            
+            # Copy devkitsnes binaries
+            devkitsnes_dir = build_dir / "devkitsnes"
+            if devkitsnes_dir.exists():
+                bin_src = devkitsnes_dir / "bin"
+                if bin_src.exists():
+                    for item in bin_src.iterdir():
+                        if item.is_file():
+                            dest = bin_dir / item.name
+                            shutil.copy(item, dest)
+                            logger.info(f"Copied devkitsnes binary {item} to {dest}")
+                
+                # Copy tools
+                tools_dir = devkitsnes_dir / "tools"
+                if tools_dir.exists():
+                    for item in tools_dir.rglob("*"):
+                        if item.is_file():
+                            rel_path = item.relative_to(tools_dir)
+                            dest = bin_dir / rel_path
+                            dest.parent.mkdir(parents=True, exist_ok=True)
+                            shutil.copy(item, dest)
+                            logger.info(f"Copied tool {item} to {dest}")
+            
+            # Copy library files
+            lib_dir = self.install_dir / "lib" / name
+            lib_dir.mkdir(parents=True, exist_ok=True)
+            pvsneslib_dir = build_dir / "pvsneslib"
+            if pvsneslib_dir.exists():
+                for item in pvsneslib_dir.iterdir():
+                    if item.is_file():
+                        shutil.copy(item, lib_dir)
+                    elif item.is_dir():
+                        shutil.copytree(item, lib_dir / item.name, dirs_exist_ok=True)
+                logger.info(f"Copied library files to {lib_dir}")
+            
+            # Copy include files
+            include_dir = self.install_dir / "include" / name
+            include_dir.mkdir(parents=True, exist_ok=True)
+            include_src = build_dir / "pvsneslib" / "include"
+            if include_src.exists():
+                shutil.copytree(include_src, include_dir, dirs_exist_ok=True)
+                logger.info(f"Copied include files to {include_dir}")
         else:
-            logger.warning(f"Binary not found at {binary_path}")
+            # Handle libraries - copy include files
+            include_dir = self.install_dir / "include" / name
+            include_dir.mkdir(parents=True, exist_ok=True)
+            import shutil
+            # Copy all files from build_dir to include_dir
+            for item in build_dir.iterdir():
+                if item.is_file():
+                    shutil.copy(item, include_dir)
+                elif item.is_dir() and not item.name.startswith('.'):
+                    shutil.copytree(item, include_dir / item.name, dirs_exist_ok=True)
+            logger.info(f"Copied library files to {include_dir}")
 
     def install_tools(self) -> None:
         """Install all tools defined in config."""
@@ -137,12 +216,22 @@ class ToolInstaller:
                 # Download
                 if 'url' in tool:
                     tool_dir = self.install_dir / tool['name']
-                    archive_name = Path(tool['url']).name
-                    archive_path = tool_dir / archive_name
-                    if not archive_path.exists():
-                        self.download_file(tool['url'], archive_path)
+                    
+                    # Handle platform-specific URLs
+                    url = tool['url']
+                    if isinstance(url, dict):
+                        url = url.get(sys.platform, url.get('linux', ''))  # fallback to linux if platform not found
+                    
+                    if url:
+                        archive_name = Path(url).name
+                        archive_path = tool_dir / archive_name
+                        if not archive_path.exists():
+                            self.download_file(url, archive_path)
+                        else:
+                            logger.info(f"Archive already exists: {archive_path}")
                     else:
-                        logger.info(f"Archive already exists: {archive_path}")
+                        logger.warning(f"No URL found for {tool['name']} on platform {sys.platform}")
+                        continue
                 # Build
                 self.build_tool(tool)
                 # Configure
