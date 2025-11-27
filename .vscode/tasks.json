@@ -159,6 +159,90 @@
 			"type": "shell",
 			"command": "source .venv/bin/activate && pytest -q || true",
 			"isBackground": false
+		},
+		{
+			"label": "Run tests for TUI changes",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest tests/test_tui_categories_helpers.py -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Compile TUI",
+			"type": "shell",
+			"command": "source .venv/bin/activate && python -m py_compile src/snes_installer/tui.py || true",
+			"isBackground": false
+		},
+		{
+			"label": "Compile TUI After Fix",
+			"type": "shell",
+			"command": "source .venv/bin/activate && python -m py_compile src/snes_installer/tui.py || true",
+			"isBackground": false
+		},
+		{
+			"label": "Compile TUI Final",
+			"type": "shell",
+			"command": "source .venv/bin/activate && python -m py_compile src/snes_installer/tui.py || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run TUI tests",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q tests/test_tui_categories_helpers.py -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run GUI Tests",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q tests/test_tk_gui.py -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run Tk GUI Test",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q tests/test_tk_gui.py -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run Tk GUI Test Again",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q tests/test_tk_gui.py -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run All Tests After TUI & GUI Changes",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run TUI tests again",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q tests/test_tui_categories_helpers.py -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run Settings Tests",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q tests/test_tui_settings.py -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run Tests After Missing Preview Change",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run Tests after TUI & Tk fixes",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run Tests After Fixes",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q || true",
+			"isBackground": false
 		}
 	]
 }

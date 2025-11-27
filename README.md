@@ -31,6 +31,8 @@ python -m snes_installer
 
 The TUI shows a checklist of available tools. Tools already installed (detected in PATH) are checked. Select tools to install and press Enter.
 
+Settings: In the TUI you can select `Settings` to configure the install directory and minimum free space threshold. Settings are saved to `~/.snes_installer/config.json`.
+
 ### Command Line Interface (CLI)
 Install specific tools:
 ```bash
@@ -46,6 +48,16 @@ Available options:
  - `--dry-run`: Run in 'preview' mode (no changes made)
  - `--install-dir DIR`: Install tools in DIR instead of default (~/.snes_tools)
  - `--min-space MB`: Minimum free disk space (in megabytes) required before building tools (defaults to 200 MB)
+
+### Tk GUI
+
+There is also a minimal Tk GUI available (experimental):
+
+```bash
+python -m snes_installer.tk_gui
+```
+
+This GUI lets you check tools, preview actions, and install them using the same underlying installer API.
 
 Examples:
 ```bash

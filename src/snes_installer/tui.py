@@ -104,6 +104,10 @@ class SNESInstallerTUI:
         self.console = Console()
         self.installer = ToolInstaller(config_file, dry_run=dry_run, min_free_bytes=(min_free_bytes or 200 * 1024 * 1024), install_dir=install_dir)
         self.tools_config = self.installer.load_config()['tools']
+        # Load or initialize user settings storage
+        self.user_config_file = Path.home() / '.snes_installer' / 'config.json'
+        self.user_config_file.parent.mkdir(parents=True, exist_ok=True)
+        self.load_user_settings(install_dir, min_free_bytes)
 
     def is_tool_installed(self, tool_name: str) -> bool:
         """Check if a tool is already installed and available in PATH."""
@@ -138,6 +142,58 @@ class SNESInstallerTUI:
     def get_tools_in_category(self, category: str) -> List[Dict[str, Any]]:
         """Return tools in the given category."""
         return self.get_tools_by_category().get(category, [])
+
+    def load_user_settings(self, install_dir_override: Path | None = None, min_free_bytes_override: int | None = None) -> None:
+        """Load user settings from the config file, applying overrides if provided."""
+        if self.user_config_file.exists():
+            try:
+                import json
+                with open(self.user_config_file, 'r') as f:
+                    data = json.load(f)
+                install_dir = data.get('install_dir')
+                min_space = data.get('min_free_bytes')
+                if install_dir and install_dir_override is None:
+                    self.installer.install_dir = Path(install_dir)
+                if min_space and min_free_bytes_override is None:
+                    self.installer.min_free_bytes = int(min_space)
+            except Exception:
+                # Ignore malformed config files
+                pass
+        # Apply overrides from constructor
+        if install_dir_override is not None:
+            self.installer.install_dir = install_dir_override
+        if min_free_bytes_override is not None:
+            self.installer.min_free_bytes = min_free_bytes_override
+
+    def save_user_settings(self) -> None:
+        """Save current installer settings to the user config file."""
+        import json
+        data = {
+            'install_dir': str(self.installer.install_dir),
+            'min_free_bytes': int(self.installer.min_free_bytes),
+        }
+        with open(self.user_config_file, 'w') as f:
+            json.dump(data, f)
+
+    def show_settings_menu(self) -> None:
+        """Show a settings menu to edit installation directory and min-space threshold."""
+        self.console.print("[bold cyan]Settings[/bold cyan]")
+        cur_dir = str(self.installer.install_dir)
+        cur_space = self.installer.min_free_bytes // (1024 * 1024)
+        self.console.print(f"Current install directory: {cur_dir}")
+        self.console.print(f"Current minimum free space: {cur_space} MB")
+        new_dir = Prompt.ask("Enter new install directory (leave blank to keep current)", default="")
+        if new_dir:
+            self.installer.install_dir = Path(new_dir)
+        new_space_str = Prompt.ask("Enter minimum free space in MB (leave blank to keep current)", default="")
+        if new_space_str:
+            try:
+                self.installer.min_free_bytes = int(new_space_str) * 1024 * 1024
+            except ValueError:
+                self.console.print("[red]Invalid number for space; keeping the current value.[/red]")
+        if Confirm.ask("Save settings?", default=True):
+            self.save_user_settings()
+            self.console.print("[green]Settings saved.[/green]")
 
     def show_welcome(self) -> None:
         """Show welcome message and current status."""
@@ -181,18 +237,34 @@ class SNESInstallerTUI:
     def show_main_menu(self) -> str:
         """Show main menu and return selected option."""
         self.console.print("[bold cyan]Main Menu:[/bold cyan]")
-        self.console.print("1. Install all missing tools")
-        self.console.print("2. Install tools by category")
-        self.console.print("3. Install specific tool")
-        self.console.print("4. Reinstall tool")
-        self.console.print("5. Uninstall tool")
-        self.console.print("6. Show tool status")
-        self.console.print("7. Exit")
-        self.console.print()
-
-        while True:
-            choice = Prompt.ask("Select an option", choices=["1", "2", "3", "4", "5", "6", "7"])
-            return choice
+        menu_items = [
+            ("Install all missing tools", "install_all"),
+            ("Install tools by category", "category"),
+            ("Install specific tool", "specific"),
+            ("Reinstall tool", "reinstall"),
+            ("Uninstall tool", "uninstall"),
+            ("Show tool status", "status"),
+            ("Settings", "settings"),
+            ("Exit", "exit"),
+        ]
+        # Use questionary.select for better UX if available
+        try:
+            import questionary
+            selected = questionary.select("Select an option", choices=[m[0] for m in menu_items]).ask()
+            # Map back to value
+            for title, value in menu_items:
+                if title == selected:
+                    return value
+            return "exit"
+        except Exception:
+            # Fallback to numbered Prompt
+            for i, (title, _) in enumerate(menu_items, 1):
+                self.console.print(f"{i}. {title}")
+            self.console.print()
+            while True:
+                choice = Prompt.ask("Select an option", choices=[str(i) for i in range(1, len(menu_items) + 1)])
+                idx = int(choice) - 1
+                return menu_items[idx][1]
 
     def show_tools_table(self, highlight_tools: List[str] = None) -> Table:
         """Create a table showing all tools with their status split by category."""
@@ -250,7 +322,7 @@ class SNESInstallerTUI:
         for tool in missing_tools:
             self.console.print(f"  • [cyan]{tool}[/cyan]")
 
-        if Confirm.ask("\nProceed with installation?", default=True):
+        if self.show_preview_panel(missing_tools):
             self.install_selected_tools(missing_tools)
 
     def show_categories_menu(self) -> str:
@@ -359,15 +431,89 @@ class SNESInstallerTUI:
         if Confirm.ask("Proceed with installation?", default=True):
             self.install_selected_tools(tool_names)
 
+    def generate_preview_info(self, tool_names: List[str]) -> List[Dict[str, Any]]:
+        """Generate a preview info list for the provided tool names.
+
+        Each dict contains: name, description, url, build_commands, requires_cargo, binary_path, installed
+        """
+        preview = []
+        for name in tool_names:
+            tool = next((t for t in self.tools_config if t['name'] == name), None)
+            if not tool:
+                continue
+            build_cmds = tool.get('build_commands', {})
+            # Normalize to platform-specific list
+            platform_cmds = build_cmds.get(sys.platform, []) if isinstance(build_cmds, dict) else build_cmds
+            requires_cargo = any('cargo' in c for c in platform_cmds) or tool.get('name') == 'terrific_audio_driver'
+            preview.append({
+                'name': name,
+                'description': tool.get('description', ''),
+                'url': tool.get('url', ''),
+                'build_commands': platform_cmds,
+                'requires_cargo': requires_cargo,
+                'binary_path': tool.get('binary_path', ''),
+                'installed': self.is_tool_installed(name),
+            })
+        return preview
+
+    def show_preview_panel(self, tool_names: List[str]) -> bool:
+        """Show a preview panel summarizing planned actions for provided tool names.
+
+        Returns True if user confirms to proceed, False otherwise.
+        """
+        if not tool_names:
+            self.console.print("[yellow]No tools selected for preview.[/yellow]")
+            return False
+
+        preview = self.generate_preview_info(tool_names)
+        lines = []
+        warnings = []
+        for entry in preview:
+            name = entry['name']
+            desc = entry['description']
+            url = entry['url']
+            cmds = entry['build_commands'] or []
+            installed = entry['installed']
+            lines.append(f"[bold]{name}[/bold] - {desc}")
+            lines.append(f"  URL: {url}")
+            if cmds:
+                lines.append(f"  Build: {'; '.join(cmds)}")
+            else:
+                lines.append("  Build: (no build commands specified)")
+            if entry['requires_cargo']:
+                warnings.append(f"{name} requires Rust/Cargo. Ensure cargo is installed.")
+            if installed:
+                lines.append("  [green]Already installed[/green]")
+            lines.append("")
+
+        # Add disk space info
+        import shutil
+        try:
+            usage = shutil.disk_usage(str(self.installer.install_dir))
+            free_mb = usage.free // (1024 * 1024)
+            lines.append(f"Disk free at install location: {free_mb} MB")
+            if getattr(self.installer, 'min_free_bytes', 0) and usage.free < self.installer.min_free_bytes:
+                warnings.append(f"Available disk space ({free_mb} MB) is below the minimum configured ({self.installer.min_free_bytes // (1024*1024)} MB).")
+        except Exception:
+            # ignore disk usage failures in preview
+            pass
+
+        if warnings:
+            lines.append('\n[red]Warnings:[/red]')
+            for w in warnings:
+                lines.append(f" - {w}")
+
+        content = '\n'.join(lines)
+        self.console.print(Panel(content, title="Preview: Planned Actions", border_style="cyan"))
+        return Confirm.ask("Proceed with installation for these tools?", default=False)
+
     def install_specific_tool(self) -> None:
         """Install a specific tool selected by the user."""
         all_tools = [tool["name"] for tool in self.tools_config]
         tool_name = self.select_tool("Select a tool to install:", all_tools)
         if tool_name:
-            if self.is_tool_installed(tool_name):
-                if not Confirm.ask(f"[yellow]{tool_name} is already installed. Reinstall?", default=False):
-                    return
-            self.install_selected_tools([tool_name])
+            if self.show_preview_panel([tool_name]):
+                self.install_selected_tools([tool_name])
 
     def reinstall_tool(self) -> None:
         """Reinstall a tool that is already installed."""
@@ -472,23 +618,28 @@ class SNESInstallerTUI:
             while True:
                 choice = self.show_main_menu()
 
-                if choice == "1":
+                # Support both numeric and action string choices (questionary returns action values)
+                if choice in {"1", "install_all"}:
                     self.install_missing_tools()
-                elif choice == "2":
+                elif choice in {"2", "category"}:
                     category = self.show_categories_menu()
                     if category:
                         selections = self.show_category_tools_menu(category)
                         if selections:
-                            self.install_selected_tools(selections)
-                elif choice == "3":
+                            # Show preview and confirm before installing
+                            if self.show_preview_panel(selections):
+                                self.install_selected_tools(selections)
+                elif choice in {"3", "specific"}:
                     self.install_specific_tool()
-                elif choice == "4":
+                elif choice in {"4", "reinstall"}:
                     self.reinstall_tool()
-                elif choice == "5":
+                elif choice in {"5", "uninstall"}:
                     self.uninstall_tool()
-                elif choice == "6":
+                elif choice in {"6", "status"}:
                     self.show_status()
-                elif choice == "7":
+                elif choice in {"7", "settings"}:
+                    self.show_settings_menu()
+                elif choice in {"8", "exit"}:
                     self.console.print("[green]Goodbye![/green]")
                     break
 
