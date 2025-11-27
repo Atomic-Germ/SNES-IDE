@@ -1,6 +1,7 @@
 """SNES Installer main module."""
 
 import json
+import errno
 import logging
 import platform
 import subprocess
@@ -92,20 +93,29 @@ class ToolInstaller:
                 last_exc = exc
         # If we get here, all attempts failed
         logger.error(f"Failed to download {url} after retries")
+        # Re-raise with extra context if network/HTTP errors occurred
         raise last_exc
 
     def extract_archive(self, archive_path: Path, extract_to: Path) -> None:
         """Extract an archive to the specified directory."""
         logger.info(f"Extracting {archive_path} to {extract_to}")
         extract_to.mkdir(parents=True, exist_ok=True)
-        if archive_path.name.endswith('.tar.gz') or archive_path.name.endswith('.tgz'):
-            with tarfile.open(archive_path, 'r:gz') as tar:
-                tar.extractall(extract_to)
-        elif archive_path.suffix == '.zip':
-            with zipfile.ZipFile(archive_path, 'r') as zip_ref:
-                zip_ref.extractall(extract_to)
-        else:
-            raise ValueError(f"Unsupported archive format: {archive_path}")
+        try:
+            if archive_path.name.endswith('.tar.gz') or archive_path.name.endswith('.tgz'):
+                with tarfile.open(archive_path, 'r:gz') as tar:
+                    tar.extractall(extract_to)
+            elif archive_path.suffix == '.zip':
+                with zipfile.ZipFile(archive_path, 'r') as zip_ref:
+                    zip_ref.extractall(extract_to)
+            else:
+                raise ValueError(f"Unsupported archive format: {archive_path}")
+        except OSError as e:
+            # Common cause: no space left on device
+            if getattr(e, 'errno', None) == errno.ENOSPC:
+                logger.error(f"Extraction failed due to insufficient disk space: {e}")
+                raise
+            else:
+                raise
 
     def build_tool(self, tool: Dict) -> None:
         """Build a tool based on its configuration."""
@@ -145,6 +155,23 @@ class ToolInstaller:
                 subprocess.run(cmd, cwd=build_dir, shell=True, check=True)
         else:
             logger.info(f"No build commands for {name}, skipping build step")
+
+        # Special handling for certain builds (e.g., Rust projects using cargo)
+        if name == 'terrific_audio_driver':
+            # Ensure cargo is available
+            import shutil
+            cargo_path = shutil.which('cargo')
+            if not cargo_path:
+                logger.warning("Cargo not found in PATH; cannot build terrific_audio_driver. Please install Rust and cargo.")
+                return
+            # We assume the build commands already include `cargo build --release`, but if not, run it
+            if not any('cargo build' in c for c in build_cmds):
+                try:
+                    logger.info("Running cargo build --release for terrific_audio_driver")
+                    subprocess.run('cargo build --release', cwd=build_dir, shell=True, check=True)
+                except subprocess.CalledProcessError as e:
+                    logger.error(f"Failed to build terrific_audio_driver with cargo: {e}")
+                    raise
 
     def _get_build_dir(self, tool_dir: Path) -> Path:
         """Get the build directory for a tool."""
@@ -263,6 +290,19 @@ class ToolInstaller:
             self._configure_pvsneslib(build_dir, bin_dir)
         else:
             self._configure_library_tool(build_dir, name)
+        
+        # Special-case: copy cargo-built binaries for certain tools if needed
+        if name == 'terrific_audio_driver':
+            # Binary path is expected under crates/tad-compiler/target/release
+            import shutil
+            cargo_bin = build_dir / 'crates' / 'tad-compiler' / 'target' / 'release' / 'tad-compiler'
+            if cargo_bin.exists():
+                dest = bin_dir / cargo_bin.name
+                shutil.copy(cargo_bin, dest)
+                dest.chmod(0o755)
+                logger.info(f"Copied cargo-built binary {cargo_bin} to {dest}")
+            else:
+                logger.warning(f"cargo-built binary not found at {cargo_bin}")
 
     def install_tools(self) -> None:
         """Install all tools defined in config."""
@@ -296,6 +336,9 @@ class ToolInstaller:
                 logger.info(f"Successfully installed {tool['name']}")
             except Exception as e:
                 logger.error(f"Failed to install {tool['name']}: {e}")
+                # Provide actionable guidance for common failures
+                suggestion = self._suggest_action_for_error(e, tool.get('name'))
+                logger.error(f"Failed to install {tool['name']}: {e}. Suggestion: {suggestion}")
                 continue
 
     def is_tool_installed(self, tool_name: str) -> bool:
@@ -358,10 +401,55 @@ class ToolInstaller:
                     logger.info(f"Successfully installed {tool_name}")
                 except Exception as e:
                     logger.error(f"Failed to install {tool_name}: {e}")
+                    suggestion = self._suggest_action_for_error(e, tool_name)
+                    logger.error(f"Failed to install {tool_name}: {e}. Suggestion: {suggestion}")
                     continue
             else:
                 logger.warning(f"Tool '{tool_name}' not found in configuration")
 
+    def _suggest_action_for_error(self, exc: Exception, tool_name: str = None) -> str:
+        """Inspect an exception and return an actionable suggestion string."""
+        import requests
+
+        if isinstance(exc, FileNotFoundError):
+            return "Check the tool's URL in tools_config.json and ensure the archive is reachable or cached locally."
+
+        if isinstance(exc, OSError):
+            if getattr(exc, 'errno', None) == errno.ENOSPC:
+                return ("Not enough disk space. Free up space (eg. `df -h`, remove unused files), or change the install path. "
+                        "See docs/BUILDING.md for recommended minimum disk size.")
+            if getattr(exc, 'errno', None) == errno.EACCES:
+                return "Permission denied; check file permissions or run the installer with appropriate privileges."
+
+        if isinstance(exc, subprocess.CalledProcessError):
+            msg = str(exc)
+            # also inspect stderr/output if present
+            out = getattr(exc, 'output', '') or ''
+            err = getattr(exc, 'stderr', '') or ''
+            combined = f"{msg} {out} {err}"
+            if 'C compiler' in combined or 'Check for working C compiler' in combined:
+                return ("Build failed: Missing C/C++ toolchain. Install build-essential (Debian/Ubuntu), Xcode Command Line Tools (macOS), "
+                        "or Visual Studio Build Tools (Windows).")
+            if 'cmake' in combined.lower() or 'CMake' in combined:
+                return ("Build failed during CMake step. Ensure CMake and a compiler are installed, and check the build log for hints.")
+            if 'cargo' in combined.lower():
+                return ("Rust/Cargo build failed. Ensure Rust toolchain is installed (https://rustup.rs/) and run `cargo build --release` manually to see errors.")
+            return "Build failed; check the build logs for detailed error messages."
+
+        # requests exceptions
+        if hasattr(exc, 'response') and getattr(exc, 'response', None) is not None:
+            try:
+                status = exc.response.status_code
+                if status == 404:
+                    return "Download failed: 404 Not Found. The tool's URL may be incorrect; verify tools_config.json or try a manual download."
+            except Exception:
+                pass
+
+        # network errors
+        if isinstance(exc, requests.exceptions.RequestException):
+            return "Network error: check your internet connection and try again."
+
+        return "Unexpected error; please open an issue with full logs and system info."
 
     def uninstall_tool(self, tool_name: str) -> bool:
         """Uninstall a specific tool."""

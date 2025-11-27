@@ -131,6 +131,30 @@ python -m build
 - Build tools (make, cmake, gcc)
 - Internet connection for downloading tools
 
+## Prerequisites & Build Dependencies
+
+The installer builds many tools from source; ensure you have the following installed before running the installer:
+
+- Disk space: at least 2GB free recommended (larger for full builds)
+- Build essentials: gcc/g++/make
+- CMake (>= 3.10)
+- git, curl, unzip
+- Rust toolchain (if you intend to build Rust projects such as terrific_audio_driver): https://rustup.rs/
+
+On Debian/Ubuntu you can install the basics with:
+```bash
+sudo apt update && sudo apt install -y build-essential cmake git curl unzip python3-pip
+```
+
+On macOS, install Xcode command-line tools:
+```bash
+xcode-select --install
+```
+
+For Windows, using WSL (Windows Subsystem for Linux) is recommended for building the CLI tools.
+
+See `docs/BUILDING.md` for more details and platform-specific tips.
+
 ## License
 
 This project is open source. See individual tool licenses for their respective components.

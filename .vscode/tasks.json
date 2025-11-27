@@ -9,6 +9,108 @@
 			"isBackground": false,
 			"problemMatcher": [],
 			"group": "build"
+		},
+		{
+			"label": "Run Tests",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q",
+			"isBackground": false
+		},
+		{
+			"label": "Run Tests Verbose",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -vv",
+			"isBackground": false
+		},
+		{
+			"label": "Run Tests 2",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q",
+			"isBackground": false
+		},
+		{
+			"label": "Run Tests Verbose 2",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -vv tests/test_tui_categories_helpers.py::test_get_tools_in_category",
+			"isBackground": false
+		},
+		{
+			"label": "Run Specific Test",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q tests/test_tui_categories_helpers.py::test_get_tools_in_category -q",
+			"isBackground": false
+		},
+		{
+			"label": "Compile Python Files",
+			"type": "shell",
+			"command": "source .venv/bin/activate && python -m py_compile src/snes_installer/*.py || true",
+			"isBackground": false
+		},
+		{
+			"label": "Compile tui.py",
+			"type": "shell",
+			"command": "source .venv/bin/activate && python -m py_compile src/snes_installer/tui.py || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run All Tests",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run failing test",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q tests/test_sound_tools_instructions.py::test_sound_tools_have_instructions -vv || true",
+			"isBackground": false
+		},
+		{
+			"label": "Compile Installer",
+			"type": "shell",
+			"command": "source .venv/bin/activate && python -m py_compile src/snes_installer/installer.py || true",
+			"isBackground": false
+		},
+		{
+			"label": "Show File with Lines",
+			"type": "shell",
+			"command": "nl -ba src/snes_installer/installer.py | sed -n '1,220p'",
+			"isBackground": false
+		},
+		{
+			"label": "Show Lines 1-140",
+			"type": "shell",
+			"command": "nl -ba src/snes_installer/installer.py | sed -n '1,140p'",
+			"isBackground": false
+		},
+		{
+			"label": "Show Lines 80-140",
+			"type": "shell",
+			"command": "nl -ba src/snes_installer/installer.py | sed -n '80,140p'",
+			"isBackground": false
+		},
+		{
+			"label": "Show Lines 96-120",
+			"type": "shell",
+			"command": "nl -ba src/snes_installer/installer.py | sed -n '96,120p'",
+			"isBackground": false
+		},
+		{
+			"label": "Free Disk Space",
+			"type": "shell",
+			"command": "rm -rf ~/.snes_tools || true; df -h ~ | sed -n '1,2p'",
+			"isBackground": false
+		},
+		{
+			"label": "Compile All Python Files",
+			"type": "shell",
+			"command": "source .venv/bin/activate && python -m py_compile src/snes_installer/*.py || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run pytest after fixes",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q || true",
+			"isBackground": false
 		}
 	]
 }

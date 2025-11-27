@@ -199,5 +199,51 @@
       },
       "configure_commands": []
     }
+    ,
+    {
+      "name": "snes_gss",
+      "description": "Tracker and sound driver for creating SNES music (MML)",
+      "category": "Sound & Music",
+      "url": "https://github.com/nathancassano/snesgss/archive/refs/heads/master.zip",
+      "binary_path": "snesgss/snesgss",
+      "install_instructions": "Download the release zip from GitHub and use the included snesgss binary for your OS; this is a GUI tool and may require manual installation on Linux/macOS.",
+      "build_commands": {
+        "linux": [],
+        "darwin": [],
+        "win32": []
+      },
+      "configure_commands": []
+    },
+    {
+      "name": "furnace",
+      "description": "Modern chiptune tracker supporting SNES sound chips (furSPC)",
+      "category": "Sound & Music",
+      "url": "https://github.com/AnnoyedArt1256/furSPC/archive/refs/heads/main.zip",
+      "binary_path": "convert.sh",
+      "install_instructions": "furSPC is a converter script and requires Python and the CC65 toolchain; run convert.sh or convert.bat to create test SPC files.",
+      "build_commands": {
+        "linux": [],
+        "darwin": [],
+        "win32": []
+      },
+      "configure_commands": []
+    },
+    {
+      "name": "terrific_audio_driver",
+      "description": "Music driver with MML composition tools and sample management",
+      "category": "Sound & Music",
+      "url": "https://github.com/undisbeliever/terrific-audio-driver/archive/refs/tags/v0.1.1.tar.gz",
+      "binary_path": "crates/tad-compiler/target/release/tad-compiler",
+      "install_instructions": "Requires Rust and cargo; run `cargo build --release` and use the `tad-compiler` to compile songs for the driver.",
+      "build_commands": {
+        "linux": [
+          "git submodule update --init --recursive",
+          "cargo build --release"
+        ],
+        "darwin": [],
+        "win32": []
+      },
+      "configure_commands": []
+    }
   ]
 }

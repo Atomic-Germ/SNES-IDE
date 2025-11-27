@@ -23,6 +23,76 @@ from rich.status import Status
 from snes_installer.installer import ToolInstaller, add_to_path, setup_ides
 
 
+def parse_selection_input(input_str: str, tools: List[Dict[str, Any]]) -> List[str]:
+    """Parse a selection string and return a list of tool names.
+
+    Supported formats:
+    - '1' single index (1-based)
+    - '1,3' comma-separated
+    - '1-3' ranges
+    - 'all' or 'install all' or 'i' for all tools
+    - 'back' or empty string -> []
+
+    Invalid entries are ignored.
+    """
+    if not input_str:
+        return []
+    s = input_str.strip().lower()
+    if s in {"back", "", "b"}:
+        return []
+    if s in {"all", "install all", "i"}:
+        return [t["name"] for t in tools]
+
+    selected: List[str] = []
+    parts = [p.strip() for p in input_str.split(',') if p.strip()]
+    for part in parts:
+        # range
+        if '-' in part:
+            try:
+                start_str, end_str = part.split('-', 1)
+                start = int(start_str)
+                end = int(end_str)
+                if start <= 0:
+                    continue
+                for idx in range(start, min(end, len(tools)) + 1):
+                    name = tools[idx - 1]["name"]
+                    if name not in selected:
+                        selected.append(name)
+            except ValueError:
+                continue
+        else:
+            try:
+                idx = int(part)
+                if 1 <= idx <= len(tools):
+                    name = tools[idx - 1]["name"]
+                    if name not in selected:
+                        selected.append(name)
+            except ValueError:
+                # ignore invalid entries
+                continue
+    return selected
+
+
+def parse_info_input(input_str: str) -> int | None:
+    """Parse info commands like 'info 1', 'i 2', 'details 3', returning the index (1-based) or None."""
+    if not input_str:
+        return None
+    s = input_str.strip().lower()
+    parts = s.split()
+    if not parts:
+        return None
+    if parts[0] not in {"info", "i", "details", "d"}:
+        return None
+    if len(parts) < 2:
+        return None
+    try:
+        idx = int(parts[1])
+        return idx
+    except ValueError:
+        return None
+
+
+
 class SNESInstallerTUI:
     """Text User Interface for SNES development tools installer."""
 
@@ -223,34 +293,56 @@ class SNESInstallerTUI:
         self.console.print(f"{len(tools)+1}. Install all")
         self.console.print(f"{len(tools)+2}. Back to categories")
 
-        while True:
-            choice = Prompt.ask("Enter tool numbers to install (comma-separated), or choose Install all/Back", default="")
-            if not choice:
-                return []
-            choice = choice.strip()
-            if choice.lower() in ["install all", "all", "i"] or choice == str(len(tools)+1):
-                return [t["name"] for t in tools]
-            if choice == str(len(tools)+2):
-                return []
+        # If questionary is available, use its checkbox prompt for better UX
+        try:
+            import questionary
+            # Build choices
+            choices = []
+            for tool in tools:
+                name = tool['name']
+                desc = tool.get('description', '')
+                installed = self.is_tool_installed(name)
+                status = '✓' if installed else '✗'
+                choices.append(questionary.Choice(title=f"[{status}] {name} - {desc}", value=name))
 
-            # Parse comma-separated indices
-            selections = []
-            valid = True
-            for part in choice.split(','):
-                try:
-                    idx = int(part.strip())
-                    if 1 <= idx <= len(tools):
-                        selections.append(tools[idx - 1]["name"]) 
+            selected = questionary.checkbox("Select tools to install", choices=choices).ask()
+            if selected:
+                return selected
+            # If user cancelled or selected nothing, return empty list
+            return []
+        except Exception:
+            # Fallback to textual input parsing
+            while True:
+                choice = Prompt.ask("Enter tool numbers to install (comma-separated), or choose Install all/Back", default="")
+                if not choice:
+                    return []
+                choice = choice.strip()
+                # Support 'info N' to show details about a tool
+                info_idx = parse_info_input(choice)
+                if info_idx is not None:
+                    if 1 <= info_idx <= len(tools):
+                        detail_tool = tools[info_idx - 1]
+                        url = detail_tool.get("url", "")
+                        instructions = detail_tool.get("install_instructions", "No instructions provided.")
+                        build_cmds = detail_tool.get("build_commands", {})
+                        build_text = "" if not build_cmds else f"\nBuild commands: {build_cmds}"
+                        content = f"{detail_tool.get('description', '')}\n\nURL: {url}\n{instructions}{build_text}"
+                        self.console.print(Panel(content, title=f"Details: {detail_tool['name']}", border_style="green"))
+                        continue
                     else:
-                        valid = False
-                        break
-                except ValueError:
-                    valid = False
-                    break
-            if valid:
-                return selections
-            else:
-                self.console.print("[red]Invalid selection. Try again.[/red]")
+                        self.console.print("[red]Invalid tool index for info command.[/red]")
+                        continue
+                if choice.lower() in ["install all", "all", "i"] or choice == str(len(tools)+1):
+                    return [t["name"] for t in tools]
+                if choice == str(len(tools)+2):
+                    return []
+                # Use parsing helper
+                selections = parse_selection_input(choice, tools)
+                if selections:
+                    return selections
+                else:
+                    # If parse returned nothing but the input wasn't empty and wasn't handled above, it's invalid
+                    self.console.print("[red]Invalid selection. Try again.[/red]")
 
     def install_tools_in_category(self, category: str) -> None:
         """Install all tools in a given category."""
