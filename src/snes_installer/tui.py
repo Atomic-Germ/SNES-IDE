@@ -94,12 +94,15 @@ def parse_info_input(input_str: str) -> int | None:
 
 
 class SNESInstallerTUI:
-    """Text User Interface for SNES development tools installer."""
+    """Text User Interface for SNES development tools installer.
 
-    def __init__(self, config_file: Path):
+    Can optionally accept an install_dir and min_free_bytes to pass into the underlying ToolInstaller.
+    """
+
+    def __init__(self, config_file: Path, install_dir: Path | None = None, min_free_bytes: int | None = None, dry_run: bool = False):
         self.config_file = config_file
         self.console = Console()
-        self.installer = ToolInstaller(config_file)
+        self.installer = ToolInstaller(config_file, dry_run=dry_run, min_free_bytes=(min_free_bytes or 200 * 1024 * 1024), install_dir=install_dir)
         self.tools_config = self.installer.load_config()['tools']
 
     def is_tool_installed(self, tool_name: str) -> bool:

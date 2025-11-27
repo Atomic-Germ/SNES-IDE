@@ -44,6 +44,8 @@ Available options:
  - `--dry-run`: Show what would happen without downloading/building/configuring tools
 - `--help`: Show help
  - `--dry-run`: Run in 'preview' mode (no changes made)
+ - `--install-dir DIR`: Install tools in DIR instead of default (~/.snes_tools)
+ - `--min-space MB`: Minimum free disk space (in megabytes) required before building tools (defaults to 200 MB)
 
 Examples:
 ```bash

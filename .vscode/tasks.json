@@ -129,6 +129,36 @@
 			"type": "shell",
 			"command": "source .venv/bin/activate && pytest -q || true",
 			"isBackground": false
+		},
+		{
+			"label": "Run Tests After CLI Flags",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest tests/test_cli_flags.py -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run CLI Flags Tests",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest tests/test_cli_flags.py -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run CLI Flags Test 2",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q tests/test_cli_flags.py -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run full test suite",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run full tests after TUI changes",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q || true",
+			"isBackground": false
 		}
 	]
 }

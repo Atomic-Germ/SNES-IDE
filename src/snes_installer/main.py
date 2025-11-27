@@ -51,10 +51,26 @@ Examples:
         help="Don't download, build, or configure; just show what would happen"
     )
 
+    parser.add_argument(
+        "--install-dir",
+        metavar="DIR",
+        help="Install tools under a specific directory (default ~/.snes_tools)."
+    )
+
+    parser.add_argument(
+        "--min-space",
+        type=int,
+        metavar="MB",
+        default=200,
+        help="Minimum free disk space in MB required before building tools (default 200)."
+    )
+
     args = parser.parse_args()
 
     config_file = Path(__file__).parent / "tools_config.json"
-    installer = ToolInstaller(config_file, dry_run=args.dry_run)
+    install_dir = Path(args.install_dir) if args.install_dir else None
+    min_space_bytes = int(args.min_space) * 1024 * 1024
+    installer = ToolInstaller(config_file, dry_run=args.dry_run, min_free_bytes=min_space_bytes, install_dir=install_dir)
 
     # Handle different modes
     if args.list:
@@ -82,7 +98,7 @@ Examples:
         return
 
     # Default: TUI mode
-    tui = SNESInstallerTUI(config_file)
+    tui = SNESInstallerTUI(config_file, install_dir=install_dir, min_free_bytes=min_space_bytes, dry_run=args.dry_run)
     tui.run()
 
 

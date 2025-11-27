@@ -21,10 +21,10 @@ logger = logging.getLogger(__name__)
 class ToolInstaller:
     """Handles downloading, building, and configuring SNES development tools."""
 
-    def __init__(self, config_file: Path, dry_run: bool = False, min_free_bytes: int = 200 * 1024 * 1024):
+    def __init__(self, config_file: Path, dry_run: bool = False, min_free_bytes: int = 200 * 1024 * 1024, install_dir: Path | None = None):
         self.config_file = config_file
         self.config = self.load_config()
-        self.install_dir = Path.home() / ".snes_tools"
+        self.install_dir = install_dir if install_dir is not None else Path.home() / ".snes_tools"
         self.dry_run = dry_run
         self.min_free_bytes = min_free_bytes
 
