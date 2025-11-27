@@ -45,10 +45,16 @@ Examples:
         help="List available tools"
     )
 
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Don't download, build, or configure; just show what would happen"
+    )
+
     args = parser.parse_args()
 
     config_file = Path(__file__).parent / "tools_config.json"
-    installer = ToolInstaller(config_file)
+    installer = ToolInstaller(config_file, dry_run=args.dry_run)
 
     # Handle different modes
     if args.list:

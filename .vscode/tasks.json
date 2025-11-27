@@ -111,6 +111,24 @@
 			"type": "shell",
 			"command": "source .venv/bin/activate && pytest -q || true",
 			"isBackground": false
+		},
+		{
+			"label": "Run Tests After Dry/Cargo Changes",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run Tests After Disk/Cargo Changes",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run Tests Final",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q || true",
+			"isBackground": false
 		}
 	]
 }

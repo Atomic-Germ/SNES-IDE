@@ -41,7 +41,9 @@ Available options:
 - `--tools TOOL [TOOL ...]`: Install specific tools
 - `--all`: Install all tools
 - `--list`: List available tools
+ - `--dry-run`: Show what would happen without downloading/building/configuring tools
 - `--help`: Show help
+ - `--dry-run`: Run in 'preview' mode (no changes made)
 
 Examples:
 ```bash

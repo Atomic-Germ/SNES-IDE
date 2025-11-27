@@ -21,10 +21,12 @@ logger = logging.getLogger(__name__)
 class ToolInstaller:
     """Handles downloading, building, and configuring SNES development tools."""
 
-    def __init__(self, config_file: Path):
+    def __init__(self, config_file: Path, dry_run: bool = False, min_free_bytes: int = 200 * 1024 * 1024):
         self.config_file = config_file
         self.config = self.load_config()
         self.install_dir = Path.home() / ".snes_tools"
+        self.dry_run = dry_run
+        self.min_free_bytes = min_free_bytes
 
     def load_config(self) -> Dict:
         """Load tool configuration from JSON file."""
@@ -121,6 +123,9 @@ class ToolInstaller:
         """Build a tool based on its configuration."""
         name = tool['name']
         logger.info(f"Building {name}")
+        if self.dry_run:
+            logger.info(f"Dry run: skipping build step for {name}")
+            return
         tool_dir = self.install_dir / name
         
         # Handle platform-specific URLs
@@ -144,6 +149,10 @@ class ToolInstaller:
         else:
             build_dir = extract_dir
         
+        # Pre-check space for build (skip in dry run)
+        if not self.dry_run:
+            self.ensure_enough_space(self.install_dir, min_bytes=self.min_free_bytes)
+
         # Patch for Apple Silicon 16k pages if needed
         if (name in ['wla-dx', 'bsnes']) and self.need_patch():
             self.patch_source(build_dir)
@@ -166,12 +175,18 @@ class ToolInstaller:
                 return
             # We assume the build commands already include `cargo build --release`, but if not, run it
             if not any('cargo build' in c for c in build_cmds):
-                try:
-                    logger.info("Running cargo build --release for terrific_audio_driver")
-                    subprocess.run('cargo build --release', cwd=build_dir, shell=True, check=True)
-                except subprocess.CalledProcessError as e:
-                    logger.error(f"Failed to build terrific_audio_driver with cargo: {e}")
-                    raise
+                # Prefer configured cargo step if present
+                if any('cargo build' in c for c in build_cmds):
+                    logger.info("Configured cargo build command detected; executing configured build commands")
+                else:
+                    try:
+                        logger.info("Running cargo build --release for terrific_audio_driver")
+                        subprocess.run('cargo build --release', cwd=build_dir, shell=True, check=True)
+                    except subprocess.CalledProcessError as e:
+                        logger.error(f"Failed to build terrific_audio_driver with cargo: {e}")
+                        raise
+                # At this point, attempt to copy cargo-built binary if present
+                self._copy_cargo_binary_if_exists(build_dir, 'tad-compiler')
 
     def _get_build_dir(self, tool_dir: Path) -> Path:
         """Get the build directory for a tool."""
@@ -192,6 +207,26 @@ class ToolInstaller:
             logger.info(f"Copied {binary_path} to {dest}")
         else:
             logger.warning(f"Binary not found at {binary_path}")
+
+    def _copy_cargo_binary_if_exists(self, build_dir: Path, binary_name: str) -> None:
+        """Copy a binary built by cargo into the bin directory if it exists."""
+        cargo_bin = build_dir / 'target' / 'release' / binary_name
+        if not cargo_bin.exists():
+            # Some projects use nested crates
+            nested = list(build_dir.rglob(f"target/release/{binary_name}"))
+            if nested:
+                cargo_bin = Path(nested[0])
+
+        if cargo_bin.exists():
+            if self.dry_run:
+                logger.info(f"Dry run: would copy cargo-built binary {cargo_bin} to bin dir")
+                return
+            import shutil
+            dest = self.install_dir / 'bin' / cargo_bin.name
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(cargo_bin, dest)
+            dest.chmod(0o755)
+            logger.info(f"Copied cargo-built binary {cargo_bin} to {dest}")
 
     def _copy_compiler_binaries(self, build_dir: Path, bin_dir: Path) -> None:
         """Copy compiler binaries for pvsneslib."""
@@ -307,6 +342,14 @@ class ToolInstaller:
     def install_tools(self) -> None:
         """Install all tools defined in config."""
         self.install_dir.mkdir(parents=True, exist_ok=True)
+        # Disk space pre-check (skip in dry run)
+        if not self.dry_run:
+            try:
+                self.ensure_enough_space(self.install_dir, min_bytes=self.min_free_bytes)
+            except OSError as e:
+                logger.error(f"Insufficient disk space to install tools: {e}")
+                raise
+
         for tool in self.config['tools']:
             try:
                 logger.info(f"Installing {tool['name']}")
@@ -323,7 +366,10 @@ class ToolInstaller:
                         archive_name = Path(url).name
                         archive_path = tool_dir / archive_name
                         if not archive_path.exists():
-                            self.download_file(url, archive_path)
+                            if self.dry_run:
+                                logger.info(f"Dry run: would download {url} to {archive_path}")
+                            else:
+                                self.download_file(url, archive_path)
                         else:
                             logger.info(f"Archive already exists: {archive_path}")
                     else:
@@ -370,6 +416,14 @@ class ToolInstaller:
 
     def install_selected_tools(self, tool_names: List[str]) -> None:
         """Install only the specified tools."""
+        # Disk space pre-check (skip in dry run)
+        if not self.dry_run:
+            try:
+                self.ensure_enough_space(self.install_dir, min_bytes=self.min_free_bytes)
+            except OSError as e:
+                logger.error(f"Insufficient disk space to install tools: {e}")
+                raise
+
         for tool_name in tool_names:
             tool_config = next((t for t in self.config['tools'] if t["name"] == tool_name), None)
             if tool_config:
@@ -509,6 +563,16 @@ class ToolInstaller:
         except Exception as e:
             logger.error(f"Failed to uninstall {tool_name}: {e}")
             return False
+
+    def ensure_enough_space(self, path: Path, min_bytes: int = 200 * 1024 * 1024) -> None:
+        """Ensure the filesystem containing `path` has at least min_bytes free. Raises OSError(errno.ENOSPC) if not."""
+        import shutil
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        usage = shutil.disk_usage(str(path if path.exists() else Path.home()))
+        free = usage.free
+        if free < min_bytes:
+            raise OSError(errno.ENOSPC, f"Not enough space: {free} bytes available; need at least {min_bytes} bytes.")
 
 
 def setup_ides() -> None:

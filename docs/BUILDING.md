@@ -9,6 +9,8 @@ This document lists the dependencies and suggestions for building tools with the
 
 If you receive a `No space left on device` error, free disk space before running the installer, or change the installation directory to a drive with more space.
 
+You can run the installer in `--dry-run` mode to preview which tools would be processed without downloading or building anything.
+
 ## Linux 
 
 ### Debian / Ubuntu
