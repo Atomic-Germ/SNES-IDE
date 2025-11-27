@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "snes-installer"
+version = "0.1.0"
+description = "Cross-platform installer for SNES development tools"
+authors = [{name = "Casey"}]
+dependencies = [
+    "requests",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,344 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run SNES Installer",
+			"type": "shell",
+			"command": "source .venv/bin/activate && python -m snes_installer",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Run Tests",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q",
+			"isBackground": false
+		},
+		{
+			"label": "Run Tests Verbose",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -vv",
+			"isBackground": false
+		},
+		{
+			"label": "Run Tests 2",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q",
+			"isBackground": false
+		},
+		{
+			"label": "Run Tests Verbose 2",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -vv tests/test_tui_categories_helpers.py::test_get_tools_in_category",
+			"isBackground": false
+		},
+		{
+			"label": "Run Specific Test",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q tests/test_tui_categories_helpers.py::test_get_tools_in_category -q",
+			"isBackground": false
+		},
+		{
+			"label": "Compile Python Files",
+			"type": "shell",
+			"command": "source .venv/bin/activate && python -m py_compile src/snes_installer/*.py || true",
+			"isBackground": false
+		},
+		{
+			"label": "Compile tui.py",
+			"type": "shell",
+			"command": "source .venv/bin/activate && python -m py_compile src/snes_installer/tui.py || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run All Tests",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run failing test",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q tests/test_sound_tools_instructions.py::test_sound_tools_have_instructions -vv || true",
+			"isBackground": false
+		},
+		{
+			"label": "Compile Installer",
+			"type": "shell",
+			"command": "source .venv/bin/activate && python -m py_compile src/snes_installer/installer.py || true",
+			"isBackground": false
+		},
+		{
+			"label": "Show File with Lines",
+			"type": "shell",
+			"command": "nl -ba src/snes_installer/installer.py | sed -n '1,220p'",
+			"isBackground": false
+		},
+		{
+			"label": "Show Lines 1-140",
+			"type": "shell",
+			"command": "nl -ba src/snes_installer/installer.py | sed -n '1,140p'",
+			"isBackground": false
+		},
+		{
+			"label": "Show Lines 80-140",
+			"type": "shell",
+			"command": "nl -ba src/snes_installer/installer.py | sed -n '80,140p'",
+			"isBackground": false
+		},
+		{
+			"label": "Show Lines 96-120",
+			"type": "shell",
+			"command": "nl -ba src/snes_installer/installer.py | sed -n '96,120p'",
+			"isBackground": false
+		},
+		{
+			"label": "Free Disk Space",
+			"type": "shell",
+			"command": "rm -rf ~/.snes_tools || true; df -h ~ | sed -n '1,2p'",
+			"isBackground": false
+		},
+		{
+			"label": "Compile All Python Files",
+			"type": "shell",
+			"command": "source .venv/bin/activate && python -m py_compile src/snes_installer/*.py || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run pytest after fixes",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run Tests After Dry/Cargo Changes",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run Tests After Disk/Cargo Changes",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run Tests Final",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run Tests After CLI Flags",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest tests/test_cli_flags.py -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run CLI Flags Tests",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest tests/test_cli_flags.py -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run CLI Flags Test 2",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q tests/test_cli_flags.py -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run full test suite",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run full tests after TUI changes",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run tests for TUI changes",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest tests/test_tui_categories_helpers.py -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Compile TUI",
+			"type": "shell",
+			"command": "source .venv/bin/activate && python -m py_compile src/snes_installer/tui.py || true",
+			"isBackground": false
+		},
+		{
+			"label": "Compile TUI After Fix",
+			"type": "shell",
+			"command": "source .venv/bin/activate && python -m py_compile src/snes_installer/tui.py || true",
+			"isBackground": false
+		},
+		{
+			"label": "Compile TUI Final",
+			"type": "shell",
+			"command": "source .venv/bin/activate && python -m py_compile src/snes_installer/tui.py || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run TUI tests",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q tests/test_tui_categories_helpers.py -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run GUI Tests",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q tests/test_tk_gui.py -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run Tk GUI Test",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q tests/test_tk_gui.py -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run Tk GUI Test Again",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q tests/test_tk_gui.py -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run All Tests After TUI & GUI Changes",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run TUI tests again",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q tests/test_tui_categories_helpers.py -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run Settings Tests",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q tests/test_tui_settings.py -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run Tests After Missing Preview Change",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run Tests after TUI & Tk fixes",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run Tests After Fixes",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run all tests after installer callback & GUI updates",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run tests after Optional import fix",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest tests/test_installer_progress_callback.py tests/test_tk_gui.py -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Show file with numbers tk_gui.py",
+			"type": "shell",
+			"command": "nl -ba src/snes_installer/tk_gui.py | sed -n '1,260p'",
+			"isBackground": false
+		},
+		{
+			"label": "Show file full tk_gui.py",
+			"type": "shell",
+			"command": "nl -ba src/snes_installer/tk_gui.py | sed -n '1,300p'",
+			"isBackground": false
+		},
+		{
+			"label": "Run new TUI menu tests",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q tests/test_tui_main_menu.py -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run all tests",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run all tests final",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run GUI test again",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q tests/test_tk_gui.py -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run GUI tests again 2",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q tests/test_tk_gui.py -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run GUI tests again 3",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q tests/test_tk_gui.py -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run GUI tests again 4",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q tests/test_tk_gui.py -q -k preview_and_install || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run GUI test revised",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q tests/test_tk_gui.py -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run GUI test headless updates",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q tests/test_tk_gui.py -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run GUI tests again after log fix",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q tests/test_tk_gui.py -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run all tests final 2",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q || true",
+			"isBackground": false
+		},
+		{
+			"label": "Run tests after GUI section/status update",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pytest -q || true",
+			"isBackground": false
+		}
+	]
+}
