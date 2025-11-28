@@ -20,6 +20,7 @@ from rich.spinner import Spinner
 from rich.status import Status
 from rich.table import Table
 from rich.text import Text
+from rich.layout import Layout
 
 from snes_installer.installer import ToolInstaller, add_to_path, setup_ides
 
@@ -122,6 +123,38 @@ class SNESInstallerTUI:
         
         # Initialize operation history
         self.operation_history: List[str] = []
+        self.layout = self.create_layout()
+
+    def create_layout(self) -> Layout:
+        """Create the main layout for the TUI."""
+        layout = Layout()
+        layout.split(
+            Layout(name="header", size=3),
+            Layout(name="main", ratio=1),
+            Layout(name="footer", size=3),
+        )
+        layout["main"].split_row(
+            Layout(name="menu", ratio=1),
+            Layout(name="content", ratio=3),
+        )
+        return layout
+
+    def render_header(self) -> None:
+        """Render the header section."""
+        self.layout["header"].update(Panel("[bold blue]SNES Installer[/bold blue]", expand=True))
+
+    def render_footer(self) -> None:
+        """Render the footer section."""
+        self.layout["footer"].update(Panel("[bold green]Press Ctrl+C to exit[/bold green]", expand=True))
+
+    def render_menu(self) -> None:
+        """Render the menu section."""
+        menu = Panel("[bold yellow]Menu Options[/bold yellow]\n1. Install Tools\n2. Settings\n3. Exit", expand=True)
+        self.layout["menu"].update(menu)
+
+    def render_content(self, content: str) -> None:
+        """Render the content section."""
+        self.layout["content"].update(Panel(content, expand=True))
 
     def get_menu_choice(self, title: str, options: List[str], allow_back: bool = False) -> int | None:
         """Get a menu choice from the user with consistent formatting.
@@ -912,47 +945,52 @@ class SNESInstallerTUI:
         self.console.print("[green]✓[/green] Environment setup complete")
 
     def run(self) -> None:
-        """Main TUI loop."""
-        self.show_welcome()
-        try:
-            while True:
-                choice = self.show_main_menu()
+        """Run the TUI."""
+        console = Console()
+        self.render_header()
+        self.render_footer()
+        self.render_menu()
+        self.render_content("[bold white]Welcome to the SNES Installer![/bold white]")
+        with Live(self.layout, refresh_per_second=10, console=console):
+            try:
+                while True:
+                    choice = self.show_main_menu()
 
-                # Support both numeric and action string choices (questionary returns action values)
-                if choice in {"1", "install_all"}:
-                    self.install_missing_tools()
-                elif choice in {"2", "category"}:
-                    category = self.show_categories_menu()
-                    if category:
-                        selections = self.show_category_tools_menu(category)
+                    # Support both numeric and action string choices (questionary returns action values)
+                    if choice in {"1", "install_all"}:
+                        self.install_missing_tools()
+                    elif choice in {"2", "category"}:
+                        category = self.show_categories_menu()
+                        if category:
+                            selections = self.show_category_tools_menu(category)
+                            if selections:
+                                # Show preview and confirm before installing
+                                if self.show_preview_panel(selections):
+                                    self.install_selected_tools(selections)
+                    elif choice in {"3", "search"}:
+                        selections = self.show_search_menu()
                         if selections:
-                            # Show preview and confirm before installing
-                            if self.show_preview_panel(selections):
-                                self.install_selected_tools(selections)
-                elif choice in {"3", "search"}:
-                    selections = self.show_search_menu()
-                    if selections:
-                        self.install_selected_tools(selections)
-                elif choice in {"4", "specific"}:
-                    self.install_specific_tool()
-                elif choice in {"5", "reinstall"}:
-                    self.reinstall_tool()
-                elif choice in {"6", "uninstall"}:
-                    self.uninstall_tool()
-                elif choice in {"7", "status"}:
-                    self.show_status()
-                elif choice in {"8", "history"}:
-                    self.show_operation_history()
-                elif choice in {"9", "settings"}:
-                    self.show_settings_menu()
-                elif choice in {"0", "exit"}:
-                    self.console.print("[green]Goodbye![/green]")
-                    break
+                            self.install_selected_tools(selections)
+                    elif choice in {"4", "specific"}:
+                        self.install_specific_tool()
+                    elif choice in {"5", "reinstall"}:
+                        self.reinstall_tool()
+                    elif choice in {"6", "uninstall"}:
+                        self.uninstall_tool()
+                    elif choice in {"7", "status"}:
+                        self.show_status()
+                    elif choice in {"8", "history"}:
+                        self.show_operation_history()
+                    elif choice in {"9", "settings"}:
+                        self.show_settings_menu()
+                    elif choice in {"0", "exit"}:
+                        self.console.print("[green]Goodbye![/green]")
+                        break
 
-                self.console.print()  # Add spacing between operations
-        except (KeyboardInterrupt, EOFError):
-            # Graceful exit on Ctrl-C or EOF
-            self.console.print("\n[green]Goodbye![/green]")
+                    self.console.print()  # Add spacing between operations
+            except (KeyboardInterrupt, EOFError):
+                # Graceful exit on Ctrl-C or EOF
+                self.console.print("\n[green]Goodbye![/green]")
 
 
 def main() -> None:
