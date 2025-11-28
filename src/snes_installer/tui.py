@@ -15,6 +15,7 @@ from rich.console import Console
 from rich.live import Live
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
 from rich.spinner import Spinner
 from rich.status import Status
 from rich.table import Table
@@ -118,6 +119,39 @@ class SNESInstallerTUI:
         self.user_config_file = Path.home() / ".snes_installer" / "config.json"
         self.user_config_file.parent.mkdir(parents=True, exist_ok=True)
         self.load_user_settings(install_dir, min_free_bytes)
+        
+        # Initialize operation history
+        self.operation_history: List[str] = []
+
+    def get_menu_choice(self, title: str, options: List[str], allow_back: bool = False) -> int | None:
+        """Get a menu choice from the user with consistent formatting.
+        
+        Returns the 1-based index of the choice, or None if cancelled/back.
+        """
+        self.console.print(f"[bold cyan]{title}[/bold cyan]")
+        for i, option in enumerate(options, 1):
+            self.console.print(f"{i}. {option}")
+        if allow_back:
+            self.console.print(f"{len(options) + 1}. Back")
+        
+        while True:
+            try:
+                choice = int(Prompt.ask("Select an option (number)"))
+                if allow_back and choice == len(options) + 1:
+                    return None
+                if 1 <= choice <= len(options):
+                    return choice
+                self.console.print("[red]Invalid choice. Please try again.[/red]")
+            except ValueError:
+                self.console.print("[red]Please enter a number.[/red]")
+
+    def get_text_input(self, prompt: str, default: str = "") -> str:
+        """Get text input from the user with consistent formatting."""
+        return Prompt.ask(prompt, default=default).strip()
+
+    def get_confirmation(self, message: str, default: bool = False) -> bool:
+        """Get a yes/no confirmation from the user."""
+        return Confirm.ask(message, default=default)
 
     def is_tool_installed(self, tool_name: str) -> bool:
         """Check if a tool is already installed and available in PATH."""
@@ -193,32 +227,43 @@ class SNESInstallerTUI:
 
     def show_settings_menu(self) -> None:
         """Show a settings menu to edit installation directory and min-space threshold."""
+        self.console.clear()
         self.console.print("[bold cyan]Settings[/bold cyan]")
         cur_dir = str(self.installer.install_dir)
         cur_space = self.installer.min_free_bytes // (1024 * 1024)
         self.console.print(f"Current install directory: {cur_dir}")
         self.console.print(f"Current minimum free space: {cur_space} MB")
-        new_dir = Prompt.ask(
-            "Enter new install directory (leave blank to keep current)", default=""
-        )
+        
+        new_dir = self.get_text_input("Enter new install directory (leave blank to keep current)", default="")
         if new_dir:
             self.installer.install_dir = Path(new_dir)
-        new_space_str = Prompt.ask(
-            "Enter minimum free space in MB (leave blank to keep current)", default=""
-        )
+            
+        new_space_str = self.get_text_input("Enter minimum free space in MB (leave blank to keep current)", default="")
         if new_space_str:
             try:
                 self.installer.min_free_bytes = int(new_space_str) * 1024 * 1024
             except ValueError:
-                self.console.print(
-                    "[red]Invalid number for space; keeping the current value.[/red]"
-                )
-        if Confirm.ask("Save settings?", default=True):
+                self.console.print("[red]Invalid number for space; keeping the current value.[/red]")
+                
+        if self.get_confirmation("Save settings?", default=True):
             self.save_user_settings()
             self.console.print("[green]Settings saved.[/green]")
 
+    def show_operation_history(self) -> None:
+        """Show recent operations performed in this session."""
+        self.console.clear()
+        if not self.operation_history:
+            self.console.print("[yellow]No operations performed in this session yet.[/yellow]")
+            return
+
+        self.console.print("[bold cyan]Recent Operations:[/bold cyan]")
+        for i, operation in enumerate(reversed(self.operation_history[-10:]), 1):  # Show last 10
+            self.console.print(f"{i}. {operation}")
+        self.console.print()
+
     def show_welcome(self) -> None:
         """Show welcome message and current status."""
+        self.console.clear()
         welcome_text = Text("SNES Development Tools Installer", style="bold blue")
         subtitle = Text("Cross-platform toolkit for SNES programming", style="dim")
 
@@ -268,41 +313,63 @@ class SNESInstallerTUI:
 
     def show_main_menu(self) -> str:
         """Show main menu and return selected option."""
+        self.console.clear()
         self.console.print("[bold cyan]Main Menu:[/bold cyan]")
-        menu_items = [
-            ("Install all missing tools", "install_all"),
-            ("Install tools by category", "category"),
-            ("Install specific tool", "specific"),
-            ("Reinstall tool", "reinstall"),
-            ("Uninstall tool", "uninstall"),
-            ("Show tool status", "status"),
-            ("Settings", "settings"),
-            ("Exit", "exit"),
+        self.console.print("[dim]Tip: Use numbers or first letters for quick selection[/dim]\n")
+        
+        menu_options = [
+            "Install all missing tools",
+            "Install tools by category", 
+            "Search and install tools",
+            "Install specific tool",
+            "Reinstall tool",
+            "Uninstall tool",
+            "Show tool status",
+            "Show operation history",
+            "Settings",
+            "Exit"
         ]
-        # Use questionary.select for better UX if available
+        
+        menu_values = [
+            "install_all", "category", "search", "specific", 
+            "reinstall", "uninstall", "status", "history", "settings", "exit"
+        ]
+        
+        for i, option in enumerate(menu_options, 1):
+            shortcuts = ["1/a", "2/c", "3/s", "4/i", "5/r", "6/u", "7/t", "8/h", "9/e", "0/x"][i-1]
+            self.console.print(f"{i}. {option} [{shortcuts}]")
+        
+        # Try questionary first for better UX
         try:
             import questionary
-
-            selected = questionary.select(
-                "Select an option", choices=[m[0] for m in menu_items]
-            ).ask()
-            # Map back to value
-            for title, value in menu_items:
-                if title == selected:
-                    return value
+            choices = [f"{opt} [{shortcuts}]" for opt, shortcuts in zip(menu_options, ["1/a", "2/c", "3/s", "4/i", "5/r", "6/u", "7/t", "8/h", "9/e", "0/x"])]
+            selected = questionary.select("Select an option", choices=choices).ask()
+            for i, choice in enumerate(choices):
+                if choice == selected:
+                    return menu_values[i]
             return "exit"
         except Exception:
-            # Fallback to numbered Prompt
-            for i, (title, _) in enumerate(menu_items, 1):
-                self.console.print(f"{i}. {title}")
-            self.console.print()
+            # Fallback to consistent input handling
             while True:
-                choice = Prompt.ask(
-                    "Select an option",
-                    choices=[str(i) for i in range(1, len(menu_items) + 1)],
-                )
-                idx = int(choice) - 1
-                return menu_items[idx][1]
+                choice = self.get_text_input("Select an option (number or letter)")
+                if not choice:
+                    continue
+                    
+                # Handle numeric choices
+                try:
+                    idx = int(choice) - 1
+                    if 0 <= idx < len(menu_values):
+                        return menu_values[idx]
+                except ValueError:
+                    pass
+                
+                # Handle letter shortcuts
+                shortcuts = ["1", "a", "2", "c", "3", "s", "4", "i", "5", "r", "6", "u", "7", "t", "8", "h", "9", "e", "0", "x"]
+                for i, (val, short) in enumerate(zip(menu_values, shortcuts)):
+                    if choice.lower() == short.lower():
+                        return val
+                
+                self.console.print("[red]Invalid choice. Please try again.[/red]")
 
     def show_tools_table(self, highlight_tools: List[str] = None) -> Table:
         """Create a table showing all tools with their status split by category."""
@@ -327,31 +394,81 @@ class SNESInstallerTUI:
 
         return main_table
 
-    def select_tool(self, prompt: str, tools_list: List[str]) -> str:
-        """Let user select a tool from a list."""
-        if not tools_list:
-            self.console.print(
-                "[yellow]No tools available for this operation.[/yellow]"
-            )
-            return ""
+    def search_tools(self, query: str) -> List[Dict[str, Any]]:
+        """Search for tools by name or description."""
+        query_lower = query.lower()
+        results = []
+        for tool in self.tools_config:
+            name = tool["name"].lower()
+            description = tool.get("description", "").lower()
+            category = tool.get("category", "").lower()
+            if query_lower in name or query_lower in description or query_lower in category:
+                results.append(tool)
+        return results
 
-        self.console.print(f"[bold]{prompt}[/bold]")
-        for i, tool in enumerate(tools_list, 1):
-            tool_config = next(
-                (t for t in self.tools_config if t["name"] == tool), None
-            )
-            description = tool_config.get("description", "") if tool_config else ""
-            self.console.print(f"{i}. {tool} - {description}")
-
+    def show_search_menu(self) -> List[str]:
+        """Show search interface and return selected tool names."""
+        self.console.clear()
+        self.console.print("[bold cyan]Search Tools[/bold cyan]")
+        
         while True:
-            try:
-                choice = int(Prompt.ask("Enter tool number"))
-                if 1 <= choice <= len(tools_list):
-                    return tools_list[choice - 1]
-                else:
-                    self.console.print("[red]Invalid choice. Please try again.[/red]")
-            except ValueError:
-                self.console.print("[red]Please enter a number.[/red]")
+            query = self.get_text_input("Enter search terms (name, description, or category)")
+            if not query:
+                return []
+            
+            results = self.search_tools(query)
+            if not results:
+                self.console.print(f"[yellow]No tools found matching '{query}'[/yellow]")
+                if not self.get_confirmation("Try a different search?", default=True):
+                    return []
+                continue
+            
+            self.console.print(f"\n[green]Found {len(results)} tool(s):[/green]")
+            result_names = []
+            for i, tool in enumerate(results, 1):
+                name = tool["name"]
+                desc = tool.get("description", "")
+                category = tool.get("category", "")
+                installed = self.is_tool_installed(name)
+                status = "[green]✓[/green]" if installed else "[red]✗[/red]"
+                self.console.print(f"{i}. {status} {name} - {desc} ({category})")
+                result_names.append(name)
+            
+            self.console.print(f"{len(results)+1}. Search again")
+            self.console.print(f"{len(results)+2}. Back to main menu")
+            
+            while True:
+                choice_input = self.get_text_input("Select tools to install (comma-separated) or choose option")
+                if not choice_input:
+                    continue
+                    
+                # Handle special options
+                try:
+                    choice = int(choice_input)
+                    if choice == len(results) + 1:
+                        break  # Search again
+                    elif choice == len(results) + 2:
+                        return []  # Back to main menu
+                    elif 1 <= choice <= len(results):
+                        # Single tool selection
+                        tool_name = results[choice - 1]["name"]
+                        if self.show_preview_panel([tool_name]):
+                            return [tool_name]
+                        return []
+                    else:
+                        self.console.print("[red]Invalid choice.[/red]")
+                        continue
+                except ValueError:
+                    pass
+                
+                # Try parsing as comma-separated selections
+                selections = parse_selection_input(choice_input, results)
+                if selections:
+                    if self.show_preview_panel(selections):
+                        return selections
+                    return []
+                
+                self.console.print("[red]Invalid input. Please enter numbers or 'back'.[/red]")
 
     def install_missing_tools(self) -> None:
         """Install all tools that are not currently installed."""
@@ -369,39 +486,30 @@ class SNESInstallerTUI:
 
     def show_categories_menu(self) -> str:
         """Show categories to the user and return the selected category."""
+        self.console.clear()
         categories = list(self.get_tools_by_category().keys())
         if not categories:
             self.console.print("[yellow]No categories available.[/yellow]")
             return ""
 
-        self.console.print("[bold cyan]Categories:[/bold cyan]")
-        for i, cat in enumerate(categories, 1):
-            self.console.print(f"{i}. {cat}")
-        self.console.print(f"{len(categories)+1}. Back to main menu")
-
-        while True:
-            try:
-                choice = int(Prompt.ask("Select a category"))
-                if 1 <= choice <= len(categories):
-                    return categories[choice - 1]
-                elif choice == len(categories) + 1:
-                    return ""
-                else:
-                    self.console.print("[red]Invalid choice. Please try again.[/red]")
-            except ValueError:
-                self.console.print("[red]Please enter a number.[/red]")
+        choice = self.get_menu_choice("Categories", categories, allow_back=True)
+        if choice is None:
+            return ""
+        return categories[choice - 1]
 
     def show_category_tools_menu(self, category: str) -> List[str]:
         """Show tools in a category and let user select tools to install.
 
         Returns a list of selected tool names (could be empty if none selected).
         """
+        self.console.clear()
         tools = self.get_tools_in_category(category)
         if not tools:
             self.console.print(f"[yellow]No tools in category {category}[/yellow]")
             return []
 
         self.console.print(f"[bold cyan]{category} Tools:[/bold cyan]")
+        tool_options = []
         for i, tool in enumerate(tools, 1):
             description = tool.get("description", "")
             installed = self.is_tool_installed(tool["name"])
@@ -410,82 +518,76 @@ class SNESInstallerTUI:
                 if installed
                 else "[red]✗ Not installed[/red]"
             )
-            self.console.print(f"{i}. {tool['name']} - {description} - {status}")
+            option = f"{tool['name']} - {description} - {status}"
+            tool_options.append(option)
+            self.console.print(f"{i}. {option}")
+        
         self.console.print(f"{len(tools)+1}. Install all")
-        self.console.print(f"{len(tools)+2}. Back to categories")
+        self.console.print(f"{len(tools)+2}. Show details for a tool")
+        self.console.print(f"{len(tools)+3}. Back to categories")
 
-        # If questionary is available, use its checkbox prompt for better UX
+        # Try questionary first for multi-select
         try:
             import questionary
-
-            # Build choices
             choices = []
             for tool in tools:
                 name = tool["name"]
                 desc = tool.get("description", "")
                 installed = self.is_tool_installed(name)
                 status = "✓" if installed else "✗"
-                choices.append(
-                    questionary.Choice(title=f"[{status}] {name} - {desc}", value=name)
-                )
-
-            selected = questionary.checkbox(
-                "Select tools to install", choices=choices
-            ).ask()
+                choices.append(questionary.Choice(title=f"[{status}] {name} - {desc}", value=name))
+            
+            selected = questionary.checkbox("Select tools to install", choices=choices).ask()
             if selected:
                 return selected
-            # If user cancelled or selected nothing, return empty list
             return []
         except Exception:
-            # Fallback to textual input parsing
+            # Fallback to consistent input handling
             while True:
-                choice = Prompt.ask(
-                    "Enter tool numbers to install (comma-separated), or choose Install all/Back",
-                    default="",
-                )
-                if not choice:
-                    return []
-                choice = choice.strip()
-                # Support 'info N' to show details about a tool
-                info_idx = parse_info_input(choice)
+                choice_input = self.get_text_input("Enter tool numbers (comma-separated), 'all', or choose option", default="")
+                if not choice_input:
+                    continue
+                    
+                # Handle special commands
+                if choice_input.lower() in ["install all", "all", "i"]:
+                    return [t["name"] for t in tools]
+                elif choice_input == str(len(tools) + 3):
+                    return []  # Back
+                
+                # Handle info command
+                info_idx = parse_info_input(choice_input)
                 if info_idx is not None:
                     if 1 <= info_idx <= len(tools):
-                        detail_tool = tools[info_idx - 1]
-                        url = detail_tool.get("url", "")
-                        instructions = detail_tool.get(
-                            "install_instructions", "No instructions provided."
-                        )
-                        build_cmds = detail_tool.get("build_commands", {})
-                        build_text = (
-                            "" if not build_cmds else f"\nBuild commands: {build_cmds}"
-                        )
-                        content = f"{detail_tool.get('description', '')}\n\nURL: {url}\n{instructions}{build_text}"
-                        self.console.print(
-                            Panel(
-                                content,
-                                title=f"Details: {detail_tool['name']}",
-                                border_style="green",
-                            )
-                        )
+                        self.show_tool_details(tools[info_idx - 1]["name"])
                         continue
                     else:
-                        self.console.print(
-                            "[red]Invalid tool index for info command.[/red]"
-                        )
+                        self.console.print("[red]Invalid tool index for info command.[/red]")
                         continue
-                if choice.lower() in ["install all", "all", "i"] or choice == str(
-                    len(tools) + 1
-                ):
-                    return [t["name"] for t in tools]
-                if choice == str(len(tools) + 2):
-                    return []
-                # Use parsing helper
-                selections = parse_selection_input(choice, tools)
+                
+                # Handle details option
+                try:
+                    choice_num = int(choice_input)
+                    if choice_num == len(tools) + 2:
+                        detail_idx = self.get_text_input("Enter tool number to show details")
+                        try:
+                            idx = int(detail_idx)
+                            if 1 <= idx <= len(tools):
+                                self.show_tool_details(tools[idx - 1]["name"])
+                                continue
+                            else:
+                                self.console.print("[red]Invalid tool number.[/red]")
+                        except ValueError:
+                            self.console.print("[red]Please enter a valid number.[/red]")
+                        continue
+                except ValueError:
+                    pass
+                
+                # Try parsing as selections
+                selections = parse_selection_input(choice_input, tools)
                 if selections:
                     return selections
-                else:
-                    # If parse returned nothing but the input wasn't empty and wasn't handled above, it's invalid
-                    self.console.print("[red]Invalid selection. Try again.[/red]")
+                
+                self.console.print("[red]Invalid selection. Try again.[/red]")
 
     def install_tools_in_category(self, category: str) -> None:
         """Install all tools in a given category."""
@@ -498,7 +600,7 @@ class SNESInstallerTUI:
         self.console.print(
             f"Installing {len(tool_names)} tools in category '{category}'"
         )
-        if Confirm.ask("Proceed with installation?", default=True):
+        if self.get_confirmation("Proceed with installation?", default=True):
             self.install_selected_tools(tool_names)
 
     def generate_preview_info(self, tool_names: List[str]) -> List[Dict[str, Any]]:
@@ -535,11 +637,58 @@ class SNESInstallerTUI:
             )
         return preview
 
+    def show_tool_details(self, tool_name: str) -> None:
+        """Show detailed information about a specific tool."""
+        self.console.clear()
+        tool = next((t for t in self.tools_config if t["name"] == tool_name), None)
+        if not tool:
+            self.console.print(f"[red]Tool '{tool_name}' not found.[/red]")
+            return
+
+        installed = self.is_tool_installed(tool_name)
+        status = "[green]Installed[/green]" if installed else "[red]Not Installed[/red]"
+        
+        content = f"""[bold]Name:[/bold] {tool['name']}
+[bold]Description:[/bold] {tool.get('description', 'No description')}
+[bold]Category:[/bold] {tool.get('category', 'Uncategorized')}
+[bold]Status:[/bold] {status}
+[bold]URL:[/bold] {tool.get('url', 'N/A')}
+
+[bold]Installation Details:[/bold]
+• Binary Path: {tool.get('binary_path', 'N/A')}
+• Requires Cargo: {'Yes' if tool.get('name') == 'terrific_audio_driver' else 'No'}
+"""
+
+        build_cmds = tool.get("build_commands", {})
+        if build_cmds:
+            platform_cmds = (
+                build_cmds.get(sys.platform, [])
+                if isinstance(build_cmds, dict)
+                else build_cmds
+            )
+            if platform_cmds:
+                content += f"\n[bold]Build Commands:[/bold]\n"
+                for cmd in platform_cmds:
+                    content += f"  • {cmd}\n"
+
+        instructions = tool.get("install_instructions", "")
+        if instructions:
+            content += f"\n[bold]Install Instructions:[/bold]\n{instructions}"
+
+        panel = Panel(
+            content,
+            title=f"Tool Details: {tool_name}",
+            border_style="blue",
+            expand=False
+        )
+        self.console.print(panel)
+
     def show_preview_panel(self, tool_names: List[str]) -> bool:
         """Show a preview panel summarizing planned actions for provided tool names.
 
         Returns True if user confirms to proceed, False otherwise.
         """
+        self.console.clear()
         if not tool_names:
             self.console.print("[yellow]No tools selected for preview.[/yellow]")
             return False
@@ -594,15 +743,42 @@ class SNESInstallerTUI:
         self.console.print(
             Panel(content, title="Preview: Planned Actions", border_style="cyan")
         )
-        return Confirm.ask("Proceed with installation for these tools?", default=False)
+        return self.get_confirmation("Proceed with installation for these tools?", default=False)
+
+    def select_tool(self, prompt: str, tool_list: List[str]) -> str | None:
+        """Select a tool from the provided list using interactive prompt."""
+        self.console.clear()
+        if not tool_list:
+            return None
+        
+        choice = self.get_menu_choice(prompt, tool_list, allow_back=True)
+        if choice is None:
+            return None
+        return tool_list[choice - 1]
 
     def install_specific_tool(self) -> None:
         """Install a specific tool selected by the user."""
-        all_tools = [tool["name"] for tool in self.tools_config]
+        all_tools = [t["name"] for t in self.tools_config]
+        if not all_tools:
+            self.console.print("[yellow]No tools configured.[/yellow]")
+            return
+
         tool_name = self.select_tool("Select a tool to install:", all_tools)
         if tool_name:
-            if self.show_preview_panel([tool_name]):
-                self.install_selected_tools([tool_name])
+            installed = self.is_tool_installed(tool_name)
+            if installed:
+                if not self.get_confirmation(f"{tool_name} is already installed. Reinstall?", default=False):
+                    return
+                # Uninstall first
+                self.console.print(f"Uninstalling {tool_name}...")
+                if self.installer.uninstall_tool(tool_name):
+                    self.console.print(f"[green]✓[/green] Uninstalled {tool_name}")
+                else:
+                    self.console.print(f"[red]✗[/red] Failed to uninstall {tool_name}")
+                    return
+            
+            # Install
+            self.install_selected_tools([tool_name])
 
     def reinstall_tool(self) -> None:
         """Reinstall a tool that is already installed."""
@@ -613,14 +789,12 @@ class SNESInstallerTUI:
 
         tool_name = self.select_tool("Select a tool to reinstall:", installed_tools)
         if tool_name:
-            if Confirm.ask(
-                f"[yellow]This will uninstall and reinstall {tool_name}. Continue?",
-                default=False,
-            ):
+            if self.get_confirmation(f"[yellow]This will uninstall and reinstall {tool_name}. Continue?", default=False):
                 # First uninstall
                 self.console.print(f"Uninstalling {tool_name}...")
                 if self.installer.uninstall_tool(tool_name):
                     self.console.print(f"[green]✓[/green] Uninstalled {tool_name}")
+                    self.operation_history.append(f"Uninstalled {tool_name} for reinstall")
                 else:
                     self.console.print(f"[red]✗[/red] Failed to uninstall {tool_name}")
                     return
@@ -637,20 +811,18 @@ class SNESInstallerTUI:
 
         tool_name = self.select_tool("Select a tool to uninstall:", installed_tools)
         if tool_name:
-            if Confirm.ask(
-                f"[red]This will permanently remove {tool_name}. Continue?",
-                default=False,
-            ):
+            if self.get_confirmation(f"[red]This will permanently remove {tool_name}. Continue?", default=False):
                 self.console.print(f"Uninstalling {tool_name}...")
                 if self.installer.uninstall_tool(tool_name):
-                    self.console.print(
-                        f"[green]✓[/green] Successfully uninstalled {tool_name}"
-                    )
+                    self.console.print(f"[green]✓[/green] Successfully uninstalled {tool_name}")
+                    self.operation_history.append(f"Uninstalled {tool_name}")
                 else:
                     self.console.print(f"[red]✗[/red] Failed to uninstall {tool_name}")
+                    self.operation_history.append(f"Failed to uninstall {tool_name}")
 
     def show_status(self) -> None:
         """Show detailed status of all tools using categorized panels."""
+        self.console.clear()
         categorized = self.get_tools_by_category()
         panels = []
         for cat, tools in categorized.items():
@@ -698,34 +870,40 @@ class SNESInstallerTUI:
             self.console.print("[green]No tools to install.[/green]")
             return
 
-        with self.console.status(
-            f"[bold green]Installing {len(tools_to_install)} tools..."
-        ) as status:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeElapsedColumn(),
+            console=self.console,
+        ) as progress:
+            overall_task = progress.add_task("Installing tools...", total=len(tools_to_install))
+            
             for tool_name in tools_to_install:
-                status.update(f"[bold green]Installing {tool_name}...")
-
+                tool_task = progress.add_task(f"Installing {tool_name}...", total=1)
+                
                 try:
                     # Find the tool config
                     tool_config = next(
                         (t for t in self.tools_config if t["name"] == tool_name), None
                     )
                     if not tool_config:
-                        self.console.print(
-                            f"[red]Configuration not found for {tool_name}[/red]"
-                        )
+                        progress.update(tool_task, description=f"[red]Configuration not found for {tool_name}[/red]")
+                        progress.update(overall_task, advance=1)
                         continue
 
                     # Install the tool
                     self.installer.install_selected_tools([tool_name])
 
-                    self.console.print(
-                        f"[green]✓[/green] Successfully installed {tool_name}"
-                    )
+                    progress.update(tool_task, description=f"[green]✓[/green] Successfully installed {tool_name}", completed=1)
+                    progress.update(overall_task, advance=1)
+                    self.operation_history.append(f"Installed {tool_name}")
 
                 except Exception as e:
-                    self.console.print(
-                        f"[red]✗[/red] Failed to install {tool_name}: {str(e)}"
-                    )
+                    progress.update(tool_task, description=f"[red]✗[/red] Failed to install {tool_name}: {str(e)}", completed=1)
+                    progress.update(overall_task, advance=1)
+                    self.operation_history.append(f"Failed to install {tool_name}: {str(e)}")
 
         # Setup PATH and IDEs after installation
         self.console.print("\n[bold]Setting up environment...[/bold]")
@@ -751,17 +929,23 @@ class SNESInstallerTUI:
                             # Show preview and confirm before installing
                             if self.show_preview_panel(selections):
                                 self.install_selected_tools(selections)
-                elif choice in {"3", "specific"}:
+                elif choice in {"3", "search"}:
+                    selections = self.show_search_menu()
+                    if selections:
+                        self.install_selected_tools(selections)
+                elif choice in {"4", "specific"}:
                     self.install_specific_tool()
-                elif choice in {"4", "reinstall"}:
+                elif choice in {"5", "reinstall"}:
                     self.reinstall_tool()
-                elif choice in {"5", "uninstall"}:
+                elif choice in {"6", "uninstall"}:
                     self.uninstall_tool()
-                elif choice in {"6", "status"}:
+                elif choice in {"7", "status"}:
                     self.show_status()
-                elif choice in {"7", "settings"}:
+                elif choice in {"8", "history"}:
+                    self.show_operation_history()
+                elif choice in {"9", "settings"}:
                     self.show_settings_menu()
-                elif choice in {"8", "exit"}:
+                elif choice in {"0", "exit"}:
                     self.console.print("[green]Goodbye![/green]")
                     break
 
