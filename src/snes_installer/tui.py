@@ -10,21 +10,28 @@ from typing import Any, Dict, List
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from typing import Tuple
+
 from rich.columns import Columns
 from rich.console import Console
+from rich.layout import Layout
 from rich.live import Live
 from rich.panel import Panel
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
 from rich.prompt import Confirm, Prompt
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
 from rich.spinner import Spinner
 from rich.status import Status
 from rich.table import Table
 from rich.text import Text
-from rich.layout import Layout
 
 from snes_installer.installer import ToolInstaller, add_to_path, setup_ides
 
-from typing import Tuple
 
 def parse_selection_input(input_str: str, tools: List[Dict[str, Any]]) -> List[str]:
     """Parse a selection string and return a list of tool names.
@@ -121,7 +128,7 @@ class SNESInstallerTUI:
         self.user_config_file = Path.home() / ".snes_installer" / "config.json"
         self.user_config_file.parent.mkdir(parents=True, exist_ok=True)
         self.load_user_settings(install_dir, min_free_bytes)
-        
+
         # Initialize operation history
         self.operation_history: List[str] = []
         self.layout = self.create_layout()
@@ -142,24 +149,33 @@ class SNESInstallerTUI:
 
     def render_header(self) -> None:
         """Render the header section."""
-        self.layout["header"].update(Panel("[bold blue]SNES Installer[/bold blue]", expand=True))
+        self.layout["header"].update(
+            Panel("[bold blue]SNES Installer[/bold blue]", expand=True)
+        )
 
     def render_footer(self) -> None:
         """Render the footer section."""
-        self.layout["footer"].update(Panel("[bold green]Press Ctrl+C to exit[/bold green]", expand=True))
+        self.layout["footer"].update(
+            Panel("[bold green]Press Ctrl+C to exit[/bold green]", expand=True)
+        )
 
     def render_menu(self) -> None:
         """Render the menu section."""
-        menu = Panel("[bold yellow]Menu Options[/bold yellow]\n1. Install Tools\n2. Settings\n3. Exit", expand=True)
+        menu = Panel(
+            "[bold yellow]Menu Options[/bold yellow]\n1. Install Tools\n2. Settings\n3. Exit",
+            expand=True,
+        )
         self.layout["menu"].update(menu)
 
     def render_content(self, content: str) -> None:
         """Render the content section."""
         self.layout["content"].update(Panel(content, expand=True))
 
-    def get_menu_choice(self, title: str, options: List[str], allow_back: bool = False) -> int | None:
+    def get_menu_choice(
+        self, title: str, options: List[str], allow_back: bool = False
+    ) -> int | None:
         """Get a menu choice from the user with consistent formatting.
-        
+
         Returns the 1-based index of the choice, or None if cancelled/back.
         """
         self.console.print(f"[bold cyan]{title}[/bold cyan]")
@@ -167,7 +183,7 @@ class SNESInstallerTUI:
             self.console.print(f"{i}. {option}")
         if allow_back:
             self.console.print(f"{len(options) + 1}. Back")
-        
+
         while True:
             try:
                 choice = int(Prompt.ask("Select an option (number)"))
@@ -215,7 +231,9 @@ class SNESInstallerTUI:
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
-    def _interactive_select(self, title: str, options: List[str], allow_back: bool = True) -> Tuple[int | None, str | None]:
+    def _interactive_select(
+        self, title: str, options: List[str], allow_back: bool = True
+    ) -> Tuple[int | None, str | None]:
         """Render a navigable selection list and return (index, value) when selected.
 
         Navigation: Up/Down arrows or 'k'/'j', numbers to jump, Enter to select, 'q' or Back to cancel.
@@ -234,12 +252,16 @@ class SNESInstallerTUI:
                 lines.append(f"{prefix} {i+1}. {opt}")
 
             if allow_back:
-                lines.append("\nPress Enter to select, arrows/j/k to move, 'q' to go back")
+                lines.append(
+                    "\nPress Enter to select, arrows/j/k to move, 'q' to go back"
+                )
             else:
                 lines.append("\nPress Enter to select, arrows/j/k to move")
 
             content = "\n".join(lines)
-            self.layout["content"].update(Panel(content, title=title, border_style="blue"))
+            self.layout["content"].update(
+                Panel(content, title=title, border_style="blue")
+            )
 
             key = self._read_key()
             # handle arrow up / 'k'
@@ -354,18 +376,24 @@ class SNESInstallerTUI:
         cur_space = self.installer.min_free_bytes // (1024 * 1024)
         self.console.print(f"Current install directory: {cur_dir}")
         self.console.print(f"Current minimum free space: {cur_space} MB")
-        
-        new_dir = self.get_text_input("Enter new install directory (leave blank to keep current)", default="")
+
+        new_dir = self.get_text_input(
+            "Enter new install directory (leave blank to keep current)", default=""
+        )
         if new_dir:
             self.installer.install_dir = Path(new_dir)
-            
-        new_space_str = self.get_text_input("Enter minimum free space in MB (leave blank to keep current)", default="")
+
+        new_space_str = self.get_text_input(
+            "Enter minimum free space in MB (leave blank to keep current)", default=""
+        )
         if new_space_str:
             try:
                 self.installer.min_free_bytes = int(new_space_str) * 1024 * 1024
             except ValueError:
-                self.console.print("[red]Invalid number for space; keeping the current value.[/red]")
-                
+                self.console.print(
+                    "[red]Invalid number for space; keeping the current value.[/red]"
+                )
+
         if self.get_confirmation("Save settings?", default=True):
             self.save_user_settings()
             self.console.print("[green]Settings saved.[/green]")
@@ -374,11 +402,15 @@ class SNESInstallerTUI:
         """Show recent operations performed in this session."""
         self.console.clear()
         if not self.operation_history:
-            self.console.print("[yellow]No operations performed in this session yet.[/yellow]")
+            self.console.print(
+                "[yellow]No operations performed in this session yet.[/yellow]"
+            )
             return
 
         self.console.print("[bold cyan]Recent Operations:[/bold cyan]")
-        for i, operation in enumerate(reversed(self.operation_history[-10:]), 1):  # Show last 10
+        for i, operation in enumerate(
+            reversed(self.operation_history[-10:]), 1
+        ):  # Show last 10
             self.console.print(f"{i}. {operation}")
         self.console.print()
 
@@ -521,7 +553,9 @@ class SNESInstallerTUI:
                     isatty = False
 
                 if isatty:
-                    idx, _ = self._interactive_select("Main Menu", menu_options, allow_back=False)
+                    idx, _ = self._interactive_select(
+                        "Main Menu", menu_options, allow_back=False
+                    )
                     if idx is None:
                         return "exit"
                     return menu_values[idx]
@@ -562,7 +596,11 @@ class SNESInstallerTUI:
             name = tool["name"].lower()
             description = tool.get("description", "").lower()
             category = tool.get("category", "").lower()
-            if query_lower in name or query_lower in description or query_lower in category:
+            if (
+                query_lower in name
+                or query_lower in description
+                or query_lower in category
+            ):
                 results.append(tool)
         return results
 
@@ -570,19 +608,23 @@ class SNESInstallerTUI:
         """Show search interface and return selected tool names."""
         self.console.clear()
         self.console.print("[bold cyan]Search Tools[/bold cyan]")
-        
+
         while True:
-            query = self.get_text_input("Enter search terms (name, description, or category)")
+            query = self.get_text_input(
+                "Enter search terms (name, description, or category)"
+            )
             if not query:
                 return []
-            
+
             results = self.search_tools(query)
             if not results:
-                self.console.print(f"[yellow]No tools found matching '{query}'[/yellow]")
+                self.console.print(
+                    f"[yellow]No tools found matching '{query}'[/yellow]"
+                )
                 if not self.get_confirmation("Try a different search?", default=True):
                     return []
                 continue
-            
+
             self.console.print(f"\n[green]Found {len(results)} tool(s):[/green]")
             result_names = []
             for i, tool in enumerate(results, 1):
@@ -593,15 +635,17 @@ class SNESInstallerTUI:
                 status = "[green]✓[/green]" if installed else "[red]✗[/red]"
                 self.console.print(f"{i}. {status} {name} - {desc} ({category})")
                 result_names.append(name)
-            
+
             self.console.print(f"{len(results)+1}. Search again")
             self.console.print(f"{len(results)+2}. Back to main menu")
-            
+
             while True:
-                choice_input = self.get_text_input("Select tools to install (comma-separated) or choose option")
+                choice_input = self.get_text_input(
+                    "Select tools to install (comma-separated) or choose option"
+                )
                 if not choice_input:
                     continue
-                    
+
                 # Handle special options
                 try:
                     choice = int(choice_input)
@@ -620,15 +664,17 @@ class SNESInstallerTUI:
                         continue
                 except ValueError:
                     pass
-                
+
                 # Try parsing as comma-separated selections
                 selections = parse_selection_input(choice_input, results)
                 if selections:
                     if self.show_preview_panel(selections):
                         return selections
                     return []
-                
-                self.console.print("[red]Invalid input. Please enter numbers or 'back'.[/red]")
+
+                self.console.print(
+                    "[red]Invalid input. Please enter numbers or 'back'.[/red]"
+                )
 
     def install_missing_tools(self) -> None:
         """Install all tools that are not currently installed."""
@@ -680,7 +726,7 @@ class SNESInstallerTUI:
             option = f"{tool['name']} - {description} - {status}"
             tool_options.append(option)
             self.console.print(f"{i}. {option}")
-        
+
         self.console.print(f"{len(tools)+1}. Install all")
         self.console.print(f"{len(tools)+2}. Show details for a tool")
         self.console.print(f"{len(tools)+3}. Back to categories")
@@ -688,6 +734,7 @@ class SNESInstallerTUI:
         # Present a navigable multi-select: space toggles selection, Enter confirms
         names = [t["name"] for t in tools]
         selected = []
+
         # Use multiselect UI
         def _multiselect(title: str, options: List[str]) -> List[str]:
             if not options:
@@ -700,9 +747,13 @@ class SNESInstallerTUI:
                     mark = "[x]" if opt in chosen else "[ ]"
                     pointer = ">" if i == cur else " "
                     lines.append(f"{pointer} {i+1}. {mark} {opt}")
-                lines.append("\nSpace: toggle, Enter: confirm, d: details, a: toggle all, q: back")
+                lines.append(
+                    "\nSpace: toggle, Enter: confirm, d: details, a: toggle all, q: back"
+                )
                 content = "\n".join(lines)
-                self.layout["content"].update(Panel(content, title=title, border_style="blue"))
+                self.layout["content"].update(
+                    Panel(content, title=title, border_style="blue")
+                )
                 key = self._read_key()
                 if key in ("\x1b[A", "k"):
                     cur = (cur - 1) % len(options)
@@ -803,7 +854,7 @@ class SNESInstallerTUI:
 
         installed = self.is_tool_installed(tool_name)
         status = "[green]Installed[/green]" if installed else "[red]Not Installed[/red]"
-        
+
         content = f"""[bold]Name:[/bold] {tool['name']}
 [bold]Description:[/bold] {tool.get('description', 'No description')}
 [bold]Category:[/bold] {tool.get('category', 'Uncategorized')}
@@ -835,7 +886,7 @@ class SNESInstallerTUI:
             content,
             title=f"Tool Details: {tool_name}",
             border_style="blue",
-            expand=False
+            expand=False,
         )
         self.console.print(panel)
 
@@ -899,7 +950,9 @@ class SNESInstallerTUI:
         self.console.print(
             Panel(content, title="Preview: Planned Actions", border_style="cyan")
         )
-        return self.get_confirmation("Proceed with installation for these tools?", default=False)
+        return self.get_confirmation(
+            "Proceed with installation for these tools?", default=False
+        )
 
     def select_tool(self, prompt: str, tool_list: List[str]) -> str | None:
         """Select a tool from the provided list using interactive prompt."""
@@ -922,7 +975,9 @@ class SNESInstallerTUI:
         if tool_name:
             installed = self.is_tool_installed(tool_name)
             if installed:
-                if not self.get_confirmation(f"{tool_name} is already installed. Reinstall?", default=False):
+                if not self.get_confirmation(
+                    f"{tool_name} is already installed. Reinstall?", default=False
+                ):
                     return
                 # Uninstall first
                 self.console.print(f"Uninstalling {tool_name}...")
@@ -931,7 +986,7 @@ class SNESInstallerTUI:
                 else:
                     self.console.print(f"[red]✗[/red] Failed to uninstall {tool_name}")
                     return
-            
+
             # Install
             self.install_selected_tools([tool_name])
 
@@ -944,12 +999,17 @@ class SNESInstallerTUI:
 
         tool_name = self.select_tool("Select a tool to reinstall:", installed_tools)
         if tool_name:
-            if self.get_confirmation(f"[yellow]This will uninstall and reinstall {tool_name}. Continue?", default=False):
+            if self.get_confirmation(
+                f"[yellow]This will uninstall and reinstall {tool_name}. Continue?",
+                default=False,
+            ):
                 # First uninstall
                 self.console.print(f"Uninstalling {tool_name}...")
                 if self.installer.uninstall_tool(tool_name):
                     self.console.print(f"[green]✓[/green] Uninstalled {tool_name}")
-                    self.operation_history.append(f"Uninstalled {tool_name} for reinstall")
+                    self.operation_history.append(
+                        f"Uninstalled {tool_name} for reinstall"
+                    )
                 else:
                     self.console.print(f"[red]✗[/red] Failed to uninstall {tool_name}")
                     return
@@ -966,10 +1026,15 @@ class SNESInstallerTUI:
 
         tool_name = self.select_tool("Select a tool to uninstall:", installed_tools)
         if tool_name:
-            if self.get_confirmation(f"[red]This will permanently remove {tool_name}. Continue?", default=False):
+            if self.get_confirmation(
+                f"[red]This will permanently remove {tool_name}. Continue?",
+                default=False,
+            ):
                 self.console.print(f"Uninstalling {tool_name}...")
                 if self.installer.uninstall_tool(tool_name):
-                    self.console.print(f"[green]✓[/green] Successfully uninstalled {tool_name}")
+                    self.console.print(
+                        f"[green]✓[/green] Successfully uninstalled {tool_name}"
+                    )
                     self.operation_history.append(f"Uninstalled {tool_name}")
                 else:
                     self.console.print(f"[red]✗[/red] Failed to uninstall {tool_name}")
@@ -1033,32 +1098,47 @@ class SNESInstallerTUI:
             TimeElapsedColumn(),
             console=self.console,
         ) as progress:
-            overall_task = progress.add_task("Installing tools...", total=len(tools_to_install))
-            
+            overall_task = progress.add_task(
+                "Installing tools...", total=len(tools_to_install)
+            )
+
             for tool_name in tools_to_install:
                 tool_task = progress.add_task(f"Installing {tool_name}...", total=1)
-                
+
                 try:
                     # Find the tool config
                     tool_config = next(
                         (t for t in self.tools_config if t["name"] == tool_name), None
                     )
                     if not tool_config:
-                        progress.update(tool_task, description=f"[red]Configuration not found for {tool_name}[/red]")
+                        progress.update(
+                            tool_task,
+                            description=f"[red]Configuration not found for {tool_name}[/red]",
+                        )
                         progress.update(overall_task, advance=1)
                         continue
 
                     # Install the tool
                     self.installer.install_selected_tools([tool_name])
 
-                    progress.update(tool_task, description=f"[green]✓[/green] Successfully installed {tool_name}", completed=1)
+                    progress.update(
+                        tool_task,
+                        description=f"[green]✓[/green] Successfully installed {tool_name}",
+                        completed=1,
+                    )
                     progress.update(overall_task, advance=1)
                     self.operation_history.append(f"Installed {tool_name}")
 
                 except Exception as e:
-                    progress.update(tool_task, description=f"[red]✗[/red] Failed to install {tool_name}: {str(e)}", completed=1)
+                    progress.update(
+                        tool_task,
+                        description=f"[red]✗[/red] Failed to install {tool_name}: {str(e)}",
+                        completed=1,
+                    )
                     progress.update(overall_task, advance=1)
-                    self.operation_history.append(f"Failed to install {tool_name}: {str(e)}")
+                    self.operation_history.append(
+                        f"Failed to install {tool_name}: {str(e)}"
+                    )
 
         # Setup PATH and IDEs after installation
         self.console.print("\n[bold]Setting up environment...[/bold]")

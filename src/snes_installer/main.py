@@ -9,6 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from snes_installer.installer import ToolInstaller, add_to_path, setup_ides
+
 # Defer importing the TUI until it's needed to keep CLI-only runs lightweight
 SNESInstallerTUI = None
 
@@ -122,6 +123,7 @@ Examples:
     # Default: TUI mode — import the TUI implementation only when required
     if SNESInstallerTUI is None:
         from snes_installer.tui import SNESInstallerTUI as _TUIClass
+
         SNESInstallerTUI = _TUIClass
 
     tui = SNESInstallerTUI(

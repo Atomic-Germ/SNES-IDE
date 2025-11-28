@@ -4,16 +4,17 @@ This module provides a modern keyboard-driven terminal UI using Textual.
 It is invoked from `snes_installer.tui.SNESInstallerTUI.run()` when Textual
 is available and the process is attached to a real TTY.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Dict, List, Set
 
+from textual import events
 from textual.app import App, ComposeResult
-from textual.widgets import Header, Footer, Static, ListView, ListItem, Button
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
-from textual import events
+from textual.widgets import Button, Footer, Header, ListItem, ListView, Static
 
 
 class SNESInstallerTextualApp(App):
@@ -132,7 +133,9 @@ class SNESInstallerTextualApp(App):
         desc = t.get("description", "No description")
         url = t.get("url", "N/A")
         build_cmds = t.get("build_commands", "(no build commands)")
-        installed = self.tui.is_tool_installed(t["name"]) or t["name"] in self.selected_tools
+        installed = (
+            self.tui.is_tool_installed(t["name"]) or t["name"] in self.selected_tools
+        )
         installed_status = "Installed" if installed else "Not installed"
         content = f"Name: {t['name']}\nStatus: {installed_status}\nURL: {url}\n\n{desc}\n\nBuild: {build_cmds}"
         self.detail_box.update(content)
@@ -168,7 +171,8 @@ class SNESInstallerTextualApp(App):
                 event.stop()
                 return
         if event.key == "tab":
-            await self.action_focus_next()
+            # action_focus_next is synchronous; don't await
+            self.action_focus_next()
             event.stop()
             return
         if event.key == "escape" or event.key == "backspace":
@@ -192,16 +196,16 @@ class SNESInstallerTextualApp(App):
             return
         fv = getattr(self.focused, "id", None)
         if fv == "cat_list":
-            self.cat_list.index = (self.cat_list.index or 0) + delta
-            # clamp
-            if self.cat_list.index is None:
-                self.cat_list.index = 0
-            if self.cat_list.index < 0:
-                self.cat_list.index = 0
-            if self.cat_list.index >= len(self.categories):
-                self.cat_list.index = len(self.categories) - 1
-            # cause selection event to refresh tools
-            await self.cat_list.emit_selected()
+            # move category selection and refresh tools immediately
+            idx = (self.cat_list.index or 0) + delta
+            if idx < 0:
+                idx = 0
+            if idx >= len(self.categories):
+                idx = len(self.categories) - 1
+            self.cat_list.index = idx
+            # update current category and refresh tools
+            self.current_category = self.categories[idx]
+            self.refresh_tools()
         elif fv == "tools_list":
             total = len(self.tui.get_tools_in_category(self.current_category))
             idx = (self.tools_list.index or 0) + delta
@@ -210,7 +214,9 @@ class SNESInstallerTextualApp(App):
             if idx >= total:
                 idx = total - 1
             self.tools_list.index = idx
-            await self.tools_list.emit_selected()
+            # update highlight index and detail box
+            self.highlight_index[self.current_category] = idx
+            self.update_detail()
 
     async def _toggle_current_tool(self) -> None:
         tools = self.tui.get_tools_in_category(self.current_category)
@@ -231,8 +237,8 @@ class SNESInstallerTextualApp(App):
         elif event.button.id == "quit":
             await self.action_quit()
         elif event.button.id == "settings":
-            # For now, show a simple message
-            await self.push_screen(Static("Settings not implemented yet"))
+            # For now, show a simple message in the detail box
+            self.detail_box.update("Settings not implemented yet")
 
     async def _do_install(self) -> None:
         # collect selected tools from all categories if none selected in current, install them
@@ -271,7 +277,8 @@ class SNESInstallerTextualApp(App):
 
     async def action_go_back(self) -> None:
         # A simple back action: focus categories
-        await self.set_focus(self.cat_list)
+        # set_focus is synchronous
+        self.set_focus(self.cat_list)
 
     async def action_quit_graceful(self) -> None:
         # Print goodbye and exit
