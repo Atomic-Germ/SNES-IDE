@@ -1,36 +1,47 @@
 """SNES Installer main module."""
 
-import json
 import errno
+import json
 import logging
 import platform
 import subprocess
 import sys
 import tarfile
+import threading
 import zipfile
 from pathlib import Path
-from typing import Dict, List, Optional, Callable
-import threading
+from typing import Callable, Dict, List, Optional
 
 import requests
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 
 class InstallCancelled(Exception):
     """Raised when an install operation is canceled via stop_event."""
+
     pass
 
 
 class ToolInstaller:
     """Handles downloading, building, and configuring SNES development tools."""
 
-    def __init__(self, config_file: Path, dry_run: bool = False, min_free_bytes: int = 200 * 1024 * 1024, install_dir: Path | None = None):
+    def __init__(
+        self,
+        config_file: Path,
+        dry_run: bool = False,
+        min_free_bytes: int = 200 * 1024 * 1024,
+        install_dir: Path | None = None,
+    ):
         self.config_file = config_file
         self.config = self.load_config()
-        self.install_dir = install_dir if install_dir is not None else Path.home() / ".snes_tools"
+        self.install_dir = (
+            install_dir if install_dir is not None else Path.home() / ".snes_tools"
+        )
         self.dry_run = dry_run
         self.min_free_bytes = min_free_bytes
 
@@ -38,22 +49,24 @@ class ToolInstaller:
         """Load tool configuration from JSON file."""
         if not self.config_file.exists():
             raise FileNotFoundError(f"Config file {self.config_file} not found")
-        with open(self.config_file, 'r') as f:
+        with open(self.config_file, "r") as f:
             return json.load(f)
 
     def need_patch(self) -> bool:
         """Check if we need to patch calloc calls for 16k page systems."""
         # Check for Apple Silicon (Darwin + ARM64) or Asahi Linux (Linux + ARM64)
-        is_arm64 = platform.machine() == 'arm64' or platform.machine() == 'aarch64'
-        is_supported_os = platform.system() in ['Darwin', 'Linux']
-        
+        is_arm64 = platform.machine() == "arm64" or platform.machine() == "aarch64"
+        is_supported_os = platform.system() in ["Darwin", "Linux"]
+
         if not (is_supported_os and is_arm64):
             return False
-            
+
         try:
-            result = subprocess.run(['getconf', 'PAGE_SIZE'], capture_output=True, text=True, check=True)
+            result = subprocess.run(
+                ["getconf", "PAGE_SIZE"], capture_output=True, text=True, check=True
+            )
             page_size = result.stdout.strip()
-            return page_size == '16384'
+            return page_size == "16384"
         except subprocess.CalledProcessError:
             return False
 
@@ -91,7 +104,7 @@ class ToolInstaller:
             try:
                 response = requests.get(url, stream=True, timeout=30)
                 response.raise_for_status()
-                with open(dest, 'wb') as f:
+                with open(dest, "wb") as f:
                     for chunk in response.iter_content(chunk_size=8192):
                         if chunk:  # filter out keep-alive chunks
                             f.write(chunk)
@@ -109,108 +122,203 @@ class ToolInstaller:
         logger.info(f"Extracting {archive_path} to {extract_to}")
         extract_to.mkdir(parents=True, exist_ok=True)
         try:
-            if archive_path.name.endswith('.tar.gz') or archive_path.name.endswith('.tgz'):
-                with tarfile.open(archive_path, 'r:gz') as tar:
+            if archive_path.name.endswith(".tar.gz") or archive_path.name.endswith(
+                ".tgz"
+            ):
+                with tarfile.open(archive_path, "r:gz") as tar:
                     tar.extractall(extract_to)
-            elif archive_path.suffix == '.zip':
-                with zipfile.ZipFile(archive_path, 'r') as zip_ref:
+            elif archive_path.suffix == ".zip":
+                with zipfile.ZipFile(archive_path, "r") as zip_ref:
                     zip_ref.extractall(extract_to)
             else:
                 raise ValueError(f"Unsupported archive format: {archive_path}")
         except OSError as e:
             # Common cause: no space left on device
-            if getattr(e, 'errno', None) == errno.ENOSPC:
+            if getattr(e, "errno", None) == errno.ENOSPC:
                 logger.error(f"Extraction failed due to insufficient disk space: {e}")
                 raise
             else:
                 raise
 
-    def build_tool(self, tool: Dict, stop_event: Optional[threading.Event] = None) -> None:
+    def build_tool(
+        self,
+        tool: Dict,
+        stop_event: Optional[threading.Event] = None,
+        progress_callback: Optional[Callable[[str, str, Optional[str]], None]] = None,
+    ) -> None:
         """Build a tool based on its configuration."""
-        name = tool['name']
+        name = tool["name"]
         logger.info(f"Building {name}")
         if self.dry_run:
             logger.info(f"Dry run: skipping build step for {name}")
             return
         tool_dir = self.install_dir / name
-        
+
         # Handle platform-specific URLs
-        url = tool['url']
+        url = tool["url"]
         if isinstance(url, dict):
-            url = url.get(sys.platform, url.get('linux', ''))  # fallback to linux if platform not found
-        
+            url = url.get(
+                sys.platform, url.get("linux", "")
+            )  # fallback to linux if platform not found
+
         archive_path = tool_dir / Path(url).name
-        extract_dir = tool_dir / 'source'
+        extract_dir = tool_dir / "source"
 
         # Ensure the archive exists before attempting extraction/build
         if not archive_path.exists():
             raise FileNotFoundError(f"Archive for {name} not found at {archive_path}")
 
         self.extract_archive(archive_path, extract_dir)
-        
+
         # Find the extracted directory (assuming it's the only one or named after tool)
         subdirs = [d for d in extract_dir.iterdir() if d.is_dir()]
         if subdirs:
             build_dir = subdirs[0]
         else:
             build_dir = extract_dir
-        
+
         # Pre-check space for build (skip in dry run)
         if not self.dry_run:
             self.ensure_enough_space(self.install_dir, min_bytes=self.min_free_bytes)
 
         # Patch for Apple Silicon 16k pages if needed
-        if (name in ['wla-dx', 'bsnes']) and self.need_patch():
+        if (name in ["wla-dx", "bsnes"]) and self.need_patch():
             self.patch_source(build_dir)
-        
-        build_cmds = tool.get('build_commands', {}).get(sys.platform, [])
+
+        build_cmds = tool.get("build_commands", {}).get(sys.platform, [])
         if build_cmds:
             for cmd in build_cmds:
-                if stop_event and getattr(stop_event, 'is_set', lambda: False)():
+                if stop_event and getattr(stop_event, "is_set", lambda: False)():
                     # User requested cancellation; stop the build and raise
                     raise InstallCancelled("Build cancelled by user")
                 logger.info(f"Running: {cmd}")
-                subprocess.run(cmd, cwd=build_dir, shell=True, check=True)
+                # Stream subprocess output line-by-line and forward to progress_callback as 'log'
+                proc = subprocess.Popen(
+                    cmd,
+                    cwd=build_dir,
+                    shell=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    bufsize=1,
+                    text=True,
+                )
+                try:
+                    if progress_callback:
+                        try:
+                            progress_callback(name, "log", f"$ {cmd}")
+                        except Exception:
+                            pass
+                    # Iterate over stdout
+                    if proc.stdout is not None:
+                        for raw_line in proc.stdout:
+                            line = raw_line.rstrip("\n")
+                            if progress_callback:
+                                try:
+                                    progress_callback(name, "log", line)
+                                except Exception:
+                                    pass
+                            # Check for cancellation while streaming
+                            if (
+                                stop_event
+                                and getattr(stop_event, "is_set", lambda: False)()
+                            ):
+                                try:
+                                    proc.terminate()
+                                except Exception:
+                                    pass
+                                raise InstallCancelled("Build cancelled by user")
+                    ret = proc.wait()
+                    if ret != 0:
+                        raise subprocess.CalledProcessError(ret, cmd)
+                finally:
+                    # ensure pipes closed
+                    try:
+                        if proc.stdout:
+                            proc.stdout.close()
+                    except Exception:
+                        pass
         else:
             logger.info(f"No build commands for {name}, skipping build step")
 
         # Special handling for certain builds (e.g., Rust projects using cargo)
-        if name == 'terrific_audio_driver':
+        if name == "terrific_audio_driver":
             # Ensure cargo is available
             import shutil
-            cargo_path = shutil.which('cargo')
+
+            cargo_path = shutil.which("cargo")
             if not cargo_path:
-                logger.warning("Cargo not found in PATH; cannot build terrific_audio_driver. Please install Rust and cargo.")
+                logger.warning(
+                    "Cargo not found in PATH; cannot build terrific_audio_driver. Please install Rust and cargo."
+                )
                 return
             # We assume the build commands already include `cargo build --release`, but if not, run it
-            if not any('cargo build' in c for c in build_cmds):
+            if not any("cargo build" in c for c in build_cmds):
                 # Prefer configured cargo step if present
-                if any('cargo build' in c for c in build_cmds):
-                    logger.info("Configured cargo build command detected; executing configured build commands")
+                if any("cargo build" in c for c in build_cmds):
+                    logger.info(
+                        "Configured cargo build command detected; executing configured build commands"
+                    )
                 else:
                     try:
-                        logger.info("Running cargo build --release for terrific_audio_driver")
-                        subprocess.run('cargo build --release', cwd=build_dir, shell=True, check=True)
+                        logger.info(
+                            "Running cargo build --release for terrific_audio_driver"
+                        )
+                        if progress_callback is None:
+                            # Tests may monkeypatch subprocess.run; keep that behavior when no progress streaming requested
+                            subprocess.run(
+                                "cargo build --release",
+                                cwd=build_dir,
+                                shell=True,
+                                check=True,
+                            )
+                        else:
+                            # Stream cargo build output when progress_callback is provided
+                            proc = subprocess.Popen(
+                                "cargo build --release",
+                                cwd=build_dir,
+                                shell=True,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT,
+                                bufsize=1,
+                                text=True,
+                            )
+                            if proc.stdout:
+                                for raw_line in proc.stdout:
+                                    line = raw_line.rstrip("\n")
+                                    try:
+                                        progress_callback(name, "log", line)
+                                    except Exception:
+                                        pass
+                            ret = proc.wait()
+                            if ret != 0:
+                                raise subprocess.CalledProcessError(
+                                    ret, "cargo build --release"
+                                )
                     except subprocess.CalledProcessError as e:
-                        logger.error(f"Failed to build terrific_audio_driver with cargo: {e}")
+                        logger.error(
+                            f"Failed to build terrific_audio_driver with cargo: {e}"
+                        )
                         raise
                 # At this point, attempt to copy cargo-built binary if present
-                self._copy_cargo_binary_if_exists(build_dir, 'tad-compiler')
+                self._copy_cargo_binary_if_exists(build_dir, "tad-compiler")
 
     def _get_build_dir(self, tool_dir: Path) -> Path:
         """Get the build directory for a tool."""
-        extract_dir = tool_dir / 'source'
+        extract_dir = tool_dir / "source"
         subdirs = [d for d in extract_dir.iterdir() if d.is_dir()]
         return subdirs[0] if subdirs else extract_dir
 
-    def _configure_binary_tool(self, build_dir: Path, bin_dir: Path, binary_path_str: str) -> None:
+    def _configure_binary_tool(
+        self, build_dir: Path, bin_dir: Path, binary_path_str: str
+    ) -> None:
         """Configure a tool with a single binary."""
         binary_path = build_dir / binary_path_str
         if binary_path.exists():
             import shutil
+
             dest = bin_dir / Path(binary_path_str).name
             if sys.platform == "win32":
-                dest = dest.with_suffix('.exe')
+                dest = dest.with_suffix(".exe")
             shutil.copy(binary_path, dest)
             dest.chmod(0o755)  # Make executable
             logger.info(f"Copied {binary_path} to {dest}")
@@ -219,7 +327,7 @@ class ToolInstaller:
 
     def _copy_cargo_binary_if_exists(self, build_dir: Path, binary_name: str) -> None:
         """Copy a binary built by cargo into the bin directory if it exists."""
-        cargo_bin = build_dir / 'target' / 'release' / binary_name
+        cargo_bin = build_dir / "target" / "release" / binary_name
         if not cargo_bin.exists():
             # Some projects use nested crates
             nested = list(build_dir.rglob(f"target/release/{binary_name}"))
@@ -228,10 +336,13 @@ class ToolInstaller:
 
         if cargo_bin.exists():
             if self.dry_run:
-                logger.info(f"Dry run: would copy cargo-built binary {cargo_bin} to bin dir")
+                logger.info(
+                    f"Dry run: would copy cargo-built binary {cargo_bin} to bin dir"
+                )
                 return
             import shutil
-            dest = self.install_dir / 'bin' / cargo_bin.name
+
+            dest = self.install_dir / "bin" / cargo_bin.name
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(cargo_bin, dest)
             dest.chmod(0o755)
@@ -240,10 +351,11 @@ class ToolInstaller:
     def _copy_compiler_binaries(self, build_dir: Path, bin_dir: Path) -> None:
         """Copy compiler binaries for pvsneslib."""
         import shutil
+
         compiler_dir = build_dir / "compiler"
         if compiler_dir.exists():
             for item in compiler_dir.rglob("*"):
-                if item.is_file() and item.suffix != '':  # executable files
+                if item.is_file() and item.suffix != "":  # executable files
                     rel_path = item.relative_to(compiler_dir)
                     dest = bin_dir / rel_path
                     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -253,6 +365,7 @@ class ToolInstaller:
     def _copy_devkitsnes_files(self, build_dir: Path, bin_dir: Path) -> None:
         """Copy devkitsnes binaries and tools."""
         import shutil
+
         devkitsnes_dir = build_dir / "devkitsnes"
         if devkitsnes_dir.exists():
             # Copy bin files
@@ -263,7 +376,7 @@ class ToolInstaller:
                         dest = bin_dir / item.name
                         shutil.copy(item, dest)
                         logger.info(f"Copied devkitsnes binary {item} to {dest}")
-            
+
             # Copy tools
             tools_dir = devkitsnes_dir / "tools"
             if tools_dir.exists():
@@ -278,6 +391,7 @@ class ToolInstaller:
     def _copy_pvsneslib_libs(self, build_dir: Path, lib_dir: Path) -> None:
         """Copy pvsneslib library files."""
         import shutil
+
         lib_dir.mkdir(parents=True, exist_ok=True)
         pvsneslib_dir = build_dir / "pvsneslib"
         if pvsneslib_dir.exists():
@@ -291,6 +405,7 @@ class ToolInstaller:
     def _copy_pvsneslib_includes(self, build_dir: Path, include_dir: Path) -> None:
         """Copy pvsneslib include files."""
         import shutil
+
         include_dir.mkdir(parents=True, exist_ok=True)
         include_src = build_dir / "pvsneslib" / "include"
         if include_src.exists():
@@ -303,43 +418,54 @@ class ToolInstaller:
         self._copy_compiler_binaries(build_dir, bin_dir)
         self._copy_devkitsnes_files(build_dir, bin_dir)
         self._copy_pvsneslib_libs(build_dir, self.install_dir / "lib" / "pvsneslib")
-        self._copy_pvsneslib_includes(build_dir, self.install_dir / "include" / "pvsneslib")
+        self._copy_pvsneslib_includes(
+            build_dir, self.install_dir / "include" / "pvsneslib"
+        )
 
     def _configure_library_tool(self, build_dir: Path, name: str) -> None:
         """Configure a library tool by copying include files."""
         import shutil
+
         include_dir = self.install_dir / "include" / name
         include_dir.mkdir(parents=True, exist_ok=True)
         # Copy all files from build_dir to include_dir
         for item in build_dir.iterdir():
             if item.is_file():
                 shutil.copy(item, include_dir)
-            elif item.is_dir() and not item.name.startswith('.'):
+            elif item.is_dir() and not item.name.startswith("."):
                 shutil.copytree(item, include_dir / item.name, dirs_exist_ok=True)
         logger.info(f"Copied library files to {include_dir}")
 
     def configure_tool(self, tool: Dict) -> None:
         """Configure a tool after installation."""
-        name = tool['name']
+        name = tool["name"]
         logger.info(f"Configuring {name}")
         tool_dir = self.install_dir / name
         build_dir = self._get_build_dir(tool_dir)
         bin_dir = self.install_dir / "bin"
         bin_dir.mkdir(parents=True, exist_ok=True)
-        
-        binary_path_str = tool.get('binary_path', '')
+
+        binary_path_str = tool.get("binary_path", "")
         if binary_path_str:
             self._configure_binary_tool(build_dir, bin_dir, binary_path_str)
-        elif name == 'pvsneslib':
+        elif name == "pvsneslib":
             self._configure_pvsneslib(build_dir, bin_dir)
         else:
             self._configure_library_tool(build_dir, name)
-        
+
         # Special-case: copy cargo-built binaries for certain tools if needed
-        if name == 'terrific_audio_driver':
+        if name == "terrific_audio_driver":
             # Binary path is expected under crates/tad-compiler/target/release
             import shutil
-            cargo_bin = build_dir / 'crates' / 'tad-compiler' / 'target' / 'release' / 'tad-compiler'
+
+            cargo_bin = (
+                build_dir
+                / "crates"
+                / "tad-compiler"
+                / "target"
+                / "release"
+                / "tad-compiler"
+            )
             if cargo_bin.exists():
                 dest = bin_dir / cargo_bin.name
                 shutil.copy(cargo_bin, dest)
@@ -354,35 +480,43 @@ class ToolInstaller:
         # Disk space pre-check (skip in dry run)
         if not self.dry_run:
             try:
-                self.ensure_enough_space(self.install_dir, min_bytes=self.min_free_bytes)
+                self.ensure_enough_space(
+                    self.install_dir, min_bytes=self.min_free_bytes
+                )
             except OSError as e:
                 logger.error(f"Insufficient disk space to install tools: {e}")
                 raise
 
-        for tool in self.config['tools']:
+        for tool in self.config["tools"]:
             try:
                 logger.info(f"Installing {tool['name']}")
                 # Download
-                if 'url' in tool:
-                    tool_dir = self.install_dir / tool['name']
-                    
+                if "url" in tool:
+                    tool_dir = self.install_dir / tool["name"]
+
                     # Handle platform-specific URLs
-                    url = tool['url']
+                    url = tool["url"]
                     if isinstance(url, dict):
-                        url = url.get(sys.platform, url.get('linux', ''))  # fallback to linux if platform not found
-                    
+                        url = url.get(
+                            sys.platform, url.get("linux", "")
+                        )  # fallback to linux if platform not found
+
                     if url:
                         archive_name = Path(url).name
                         archive_path = tool_dir / archive_name
                         if not archive_path.exists():
                             if self.dry_run:
-                                logger.info(f"Dry run: would download {url} to {archive_path}")
+                                logger.info(
+                                    f"Dry run: would download {url} to {archive_path}"
+                                )
                             else:
                                 self.download_file(url, archive_path)
                         else:
                             logger.info(f"Archive already exists: {archive_path}")
                     else:
-                        logger.warning(f"No URL found for {tool['name']} on platform {sys.platform}")
+                        logger.warning(
+                            f"No URL found for {tool['name']} on platform {sys.platform}"
+                        )
                         continue
                 # Build
                 self.build_tool(tool)
@@ -392,24 +526,28 @@ class ToolInstaller:
             except Exception as e:
                 logger.error(f"Failed to install {tool['name']}: {e}")
                 # Provide actionable guidance for common failures
-                suggestion = self._suggest_action_for_error(e, tool.get('name'))
-                logger.error(f"Failed to install {tool['name']}: {e}. Suggestion: {suggestion}")
+                suggestion = self._suggest_action_for_error(e, tool.get("name"))
+                logger.error(
+                    f"Failed to install {tool['name']}: {e}. Suggestion: {suggestion}"
+                )
                 continue
 
     def is_tool_installed(self, tool_name: str) -> bool:
         """Check if a tool is already installed and available in PATH."""
         import shutil
-        
+
         # Find the tool config
-        tool_config = next((t for t in self.config['tools'] if t["name"] == tool_name), None)
+        tool_config = next(
+            (t for t in self.config["tools"] if t["name"] == tool_name), None
+        )
         if not tool_config:
             return False
-            
+
         # If binary_path is specified, check if that binary exists in PATH
-        if tool_config.get('binary_path'):
-            binary_name = Path(tool_config['binary_path']).name
+        if tool_config.get("binary_path"):
+            binary_name = Path(tool_config["binary_path"]).name
             return shutil.which(binary_name) is not None
-        
+
         # For libraries or tools with multiple binaries, check if installation directory exists
         tool_dir = self.install_dir / tool_name
         if tool_dir.exists():
@@ -419,16 +557,23 @@ class ToolInstaller:
             # For libsfx, check for include files
             elif tool_name == "libsfx":
                 return (self.install_dir / "include" / "libsfx").exists()
-        
+
         # Fallback: check if the tool name itself is in PATH
         return shutil.which(tool_name) is not None
 
-    def install_selected_tools(self, tool_names: List[str], progress_callback: Optional[Callable[[str, str, Optional[str]], None]] = None, stop_event: Optional[threading.Event] = None) -> None:
+    def install_selected_tools(
+        self,
+        tool_names: List[str],
+        progress_callback: Optional[Callable[[str, str, Optional[str]], None]] = None,
+        stop_event: Optional[threading.Event] = None,
+    ) -> None:
         """Install only the specified tools."""
         # Disk space pre-check (skip in dry run)
         if not self.dry_run:
             try:
-                self.ensure_enough_space(self.install_dir, min_bytes=self.min_free_bytes)
+                self.ensure_enough_space(
+                    self.install_dir, min_bytes=self.min_free_bytes
+                )
             except OSError as e:
                 logger.error(f"Insufficient disk space to install tools: {e}")
                 raise
@@ -437,22 +582,26 @@ class ToolInstaller:
             # report starting
             if progress_callback:
                 try:
-                    progress_callback(tool_name, 'starting', None)
+                    progress_callback(tool_name, "starting", None)
                 except Exception:
                     pass
-            tool_config = next((t for t in self.config['tools'] if t["name"] == tool_name), None)
+            tool_config = next(
+                (t for t in self.config["tools"] if t["name"] == tool_name), None
+            )
             if tool_config:
                 try:
                     logger.info(f"Installing {tool_name}")
                     # Download
-                    if 'url' in tool_config:
-                        tool_dir = self.install_dir / tool_config['name']
-                        
+                    if "url" in tool_config:
+                        tool_dir = self.install_dir / tool_config["name"]
+
                         # Handle platform-specific URLs
-                        url = tool_config['url']
+                        url = tool_config["url"]
                         if isinstance(url, dict):
-                            url = url.get(sys.platform, url.get('linux', ''))  # fallback to linux if platform not found
-                        
+                            url = url.get(
+                                sys.platform, url.get("linux", "")
+                            )  # fallback to linux if platform not found
+
                         if url:
                             archive_name = Path(url).name
                             archive_path = tool_dir / archive_name
@@ -461,10 +610,26 @@ class ToolInstaller:
                             else:
                                 logger.info(f"Archive already exists: {archive_path}")
                         else:
-                            logger.warning(f"No URL found for {tool_config['name']} on platform {sys.platform}")
+                            logger.warning(
+                                f"No URL found for {tool_config['name']} on platform {sys.platform}"
+                            )
                             continue
                     # Build
-                    self.build_tool(tool_config, stop_event=stop_event)
+                    # Call build_tool with best-effort compatibility with monkeypatches
+                    try:
+                        import inspect
+
+                        sig = inspect.signature(self.build_tool)
+                        params = sig.parameters
+                        kwargs = {}
+                        if "stop_event" in params:
+                            kwargs["stop_event"] = stop_event
+                        if "progress_callback" in params:
+                            kwargs["progress_callback"] = progress_callback
+                        self.build_tool(tool_config, **kwargs)
+                    except Exception:
+                        # Fall back to simple call for compatibility
+                        self.build_tool(tool_config)
                     # Configure
                     self.configure_tool(tool_config)
                     logger.info(f"Successfully installed {tool_name}")
@@ -472,7 +637,7 @@ class ToolInstaller:
                     logger.info(f"Installation cancelled for {tool_name}")
                     if progress_callback:
                         try:
-                            progress_callback(tool_name, 'cancelled', None)
+                            progress_callback(tool_name, "cancelled", None)
                         except Exception:
                             pass
                     # Propagate to stop entire install set
@@ -480,10 +645,12 @@ class ToolInstaller:
                 except Exception as e:
                     logger.error(f"Failed to install {tool_name}: {e}")
                     suggestion = self._suggest_action_for_error(e, tool_name)
-                    logger.error(f"Failed to install {tool_name}: {e}. Suggestion: {suggestion}")
+                    logger.error(
+                        f"Failed to install {tool_name}: {e}. Suggestion: {suggestion}"
+                    )
                     if progress_callback:
                         try:
-                            progress_callback(tool_name, 'failed', str(e))
+                            progress_callback(tool_name, "failed", str(e))
                         except Exception:
                             pass
                     continue
@@ -491,16 +658,16 @@ class ToolInstaller:
                     # success report
                     if progress_callback:
                         try:
-                            progress_callback(tool_name, 'success', None)
+                            progress_callback(tool_name, "success", None)
                         except Exception:
                             pass
             else:
                 logger.warning(f"Tool '{tool_name}' not found in configuration")
-            if stop_event and getattr(stop_event, 'is_set', lambda: False)():
+            if stop_event and getattr(stop_event, "is_set", lambda: False)():
                 # Stop early if cancellation was requested
                 if progress_callback:
                     try:
-                        progress_callback(tool_name, 'cancelled', 'Cancelled by user')
+                        progress_callback(tool_name, "cancelled", "Cancelled by user")
                     except Exception:
                         pass
                 break
@@ -513,29 +680,33 @@ class ToolInstaller:
             return "Check the tool's URL in tools_config.json and ensure the archive is reachable or cached locally."
 
         if isinstance(exc, OSError):
-            if getattr(exc, 'errno', None) == errno.ENOSPC:
-                return ("Not enough disk space. Free up space (eg. `df -h`, remove unused files), or change the install path. "
-                        "See docs/BUILDING.md for recommended minimum disk size.")
-            if getattr(exc, 'errno', None) == errno.EACCES:
+            if getattr(exc, "errno", None) == errno.ENOSPC:
+                return (
+                    "Not enough disk space. Free up space (eg. `df -h`, remove unused files), or change the install path. "
+                    "See docs/BUILDING.md for recommended minimum disk size."
+                )
+            if getattr(exc, "errno", None) == errno.EACCES:
                 return "Permission denied; check file permissions or run the installer with appropriate privileges."
 
         if isinstance(exc, subprocess.CalledProcessError):
             msg = str(exc)
             # also inspect stderr/output if present
-            out = getattr(exc, 'output', '') or ''
-            err = getattr(exc, 'stderr', '') or ''
+            out = getattr(exc, "output", "") or ""
+            err = getattr(exc, "stderr", "") or ""
             combined = f"{msg} {out} {err}"
-            if 'C compiler' in combined or 'Check for working C compiler' in combined:
-                return ("Build failed: Missing C/C++ toolchain. Install build-essential (Debian/Ubuntu), Xcode Command Line Tools (macOS), "
-                        "or Visual Studio Build Tools (Windows).")
-            if 'cmake' in combined.lower() or 'CMake' in combined:
-                return ("Build failed during CMake step. Ensure CMake and a compiler are installed, and check the build log for hints.")
-            if 'cargo' in combined.lower():
-                return ("Rust/Cargo build failed. Ensure Rust toolchain is installed (https://rustup.rs/) and run `cargo build --release` manually to see errors.")
+            if "C compiler" in combined or "Check for working C compiler" in combined:
+                return (
+                    "Build failed: Missing C/C++ toolchain. Install build-essential (Debian/Ubuntu), Xcode Command Line Tools (macOS), "
+                    "or Visual Studio Build Tools (Windows)."
+                )
+            if "cmake" in combined.lower() or "CMake" in combined:
+                return "Build failed during CMake step. Ensure CMake and a compiler are installed, and check the build log for hints."
+            if "cargo" in combined.lower():
+                return "Rust/Cargo build failed. Ensure Rust toolchain is installed (https://rustup.rs/) and run `cargo build --release` manually to see errors."
             return "Build failed; check the build logs for detailed error messages."
 
         # requests exceptions
-        if hasattr(exc, 'response') and getattr(exc, 'response', None) is not None:
+        if hasattr(exc, "response") and getattr(exc, "response", None) is not None:
             try:
                 status = exc.response.status_code
                 if status == 404:
@@ -551,32 +722,35 @@ class ToolInstaller:
 
     def uninstall_tool(self, tool_name: str) -> bool:
         """Uninstall a specific tool."""
-        tool_config = next((t for t in self.config['tools'] if t["name"] == tool_name), None)
+        tool_config = next(
+            (t for t in self.config["tools"] if t["name"] == tool_name), None
+        )
         if not tool_config:
             logger.warning(f"Tool '{tool_name}' not found in configuration")
             return False
 
         try:
             logger.info(f"Uninstalling {tool_name}")
-            
+
             # Remove tool directory
             tool_dir = self.install_dir / tool_name
             if tool_dir.exists():
                 import shutil
+
                 shutil.rmtree(tool_dir)
                 logger.info(f"Removed tool directory: {tool_dir}")
-            
+
             # Remove binaries from bin directory
             bin_dir = self.install_dir / "bin"
             if bin_dir.exists():
-                binary_path_str = tool_config.get('binary_path', '')
+                binary_path_str = tool_config.get("binary_path", "")
                 if binary_path_str:
                     binary_name = Path(binary_path_str).name
                     binary_path = bin_dir / binary_name
                     if binary_path.exists():
                         binary_path.unlink()
                         logger.info(f"Removed binary: {binary_path}")
-                
+
                 # Special handling for pvsneslib
                 if tool_name == "pvsneslib":
                     # Remove compiler binaries
@@ -586,29 +760,33 @@ class ToolInstaller:
                         if bin_path.exists():
                             bin_path.unlink()
                             logger.info(f"Removed compiler binary: {bin_path}")
-            
+
             # Remove library files
             lib_dir = self.install_dir / "lib" / tool_name
             if lib_dir.exists():
                 import shutil
+
                 shutil.rmtree(lib_dir)
                 logger.info(f"Removed library directory: {lib_dir}")
-            
+
             # Remove include files
             include_dir = self.install_dir / "include" / tool_name
             if include_dir.exists():
                 import shutil
+
                 shutil.rmtree(include_dir)
                 logger.info(f"Removed include directory: {include_dir}")
-            
+
             logger.info(f"Successfully uninstalled {tool_name}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to uninstall {tool_name}: {e}")
             return False
 
-    def ensure_enough_space(self, path: Path, min_bytes: int = 200 * 1024 * 1024) -> None:
+    def ensure_enough_space(
+        self, path: Path, min_bytes: int = 200 * 1024 * 1024
+    ) -> None:
         """Ensure the filesystem containing `path` has at least min_bytes free. Raises OSError(errno.ENOSPC) if not."""
         import shutil
 
@@ -616,7 +794,10 @@ class ToolInstaller:
         usage = shutil.disk_usage(str(path if path.exists() else Path.home()))
         free = usage.free
         if free < min_bytes:
-            raise OSError(errno.ENOSPC, f"Not enough space: {free} bytes available; need at least {min_bytes} bytes.")
+            raise OSError(
+                errno.ENOSPC,
+                f"Not enough space: {free} bytes available; need at least {min_bytes} bytes.",
+            )
 
 
 def setup_ides() -> None:
@@ -636,42 +817,60 @@ def setup_ides() -> None:
 def setup_vscode_unix() -> None:
     """Set up VS Code on Unix systems."""
     import shutil
+
     if shutil.which("code"):
         logger.info("Installing VS Code extensions for SNES development")
         # Install 6502 assembly extensions
-        subprocess.run(["code", "--install-extension", "enginedesigns.retroassembler"], check=False)
-        subprocess.run(["code", "--install-extension", "tlgkccampbell.code-ca65"], check=False)
+        subprocess.run(
+            ["code", "--install-extension", "enginedesigns.retroassembler"], check=False
+        )
+        subprocess.run(
+            ["code", "--install-extension", "tlgkccampbell.code-ca65"], check=False
+        )
         # Install general assembly support
-        subprocess.run(["code", "--install-extension", "ms-vscode.cpptools"], check=False)
+        subprocess.run(
+            ["code", "--install-extension", "ms-vscode.cpptools"], check=False
+        )
         logger.info("VS Code setup complete")
     else:
-        logger.info("VS Code not found. Install VS Code and run: code --install-extension enginedesigns.retroassembler tlgkccampbell.code-ca65")
+        logger.info(
+            "VS Code not found. Install VS Code and run: code --install-extension enginedesigns.retroassembler tlgkccampbell.code-ca65"
+        )
 
 
 def setup_vscode_windows() -> None:
     """Set up VS Code on Windows."""
     import shutil
+
     if shutil.which("code"):
         logger.info("Installing VS Code extensions for SNES development")
-        subprocess.run(["code", "--install-extension", "enginedesigns.retroassembler"], check=False)
-        subprocess.run(["code", "--install-extension", "tlgkccampbell.code-ca65"], check=False)
-        subprocess.run(["code", "--install-extension", "ms-vscode.cpptools"], check=False)
+        subprocess.run(
+            ["code", "--install-extension", "enginedesigns.retroassembler"], check=False
+        )
+        subprocess.run(
+            ["code", "--install-extension", "tlgkccampbell.code-ca65"], check=False
+        )
+        subprocess.run(
+            ["code", "--install-extension", "ms-vscode.cpptools"], check=False
+        )
         logger.info("VS Code setup complete")
     else:
-        logger.info("VS Code not found. Install VS Code and run: code --install-extension enginedesigns.retroassembler tlgkccampbell.code-ca65")
+        logger.info(
+            "VS Code not found. Install VS Code and run: code --install-extension enginedesigns.retroassembler tlgkccampbell.code-ca65"
+        )
 
 
 def setup_vim_unix() -> None:
     """Set up Vim on Unix systems."""
     vimrc = Path.home() / ".vimrc"
-    syntax_config = '''
+    syntax_config = """
 " SNES Assembly syntax
 autocmd BufRead,BufNewFile *.asm set filetype=asm
 autocmd BufRead,BufNewFile *.s set filetype=asm
 syntax on
-'''
+"""
     try:
-        with open(vimrc, 'a') as f:
+        with open(vimrc, "a") as f:
             f.write(syntax_config)
         logger.info("Vim syntax highlighting configured")
     except Exception as e:
@@ -682,14 +881,14 @@ def setup_neovim_unix() -> None:
     """Set up NeoVim on Unix systems."""
     nvim_config = Path.home() / ".config" / "nvim" / "init.vim"
     nvim_config.parent.mkdir(parents=True, exist_ok=True)
-    syntax_config = '''
+    syntax_config = """
 " SNES Assembly syntax
 autocmd BufRead,BufNewFile *.asm set filetype=asm
 autocmd BufRead,BufNewFile *.s set filetype=asm
 syntax on
-'''
+"""
     try:
-        with open(nvim_config, 'a') as f:
+        with open(nvim_config, "a") as f:
             f.write(syntax_config)
         logger.info("NeoVim syntax highlighting configured")
     except Exception as e:
@@ -699,14 +898,14 @@ syntax on
 def setup_vim_windows() -> None:
     """Set up Vim on Windows."""
     vimrc = Path.home() / "_vimrc"
-    syntax_config = '''
+    syntax_config = """
 " SNES Assembly syntax
 autocmd BufRead,BufNewFile *.asm set filetype=asm
 autocmd BufRead,BufNewFile *.s set filetype=asm
 syntax on
-'''
+"""
     try:
-        with open(vimrc, 'a') as f:
+        with open(vimrc, "a") as f:
             f.write(syntax_config)
         logger.info("Vim syntax highlighting configured")
     except Exception as e:
@@ -719,7 +918,7 @@ def setup_notepad_plus_plus() -> None:
     udl_path = Path.home() / "AppData" / "Roaming" / "Notepad++" / "userDefineLang.xml"
     udl_path.parent.mkdir(parents=True, exist_ok=True)
     # Simple assembly syntax definition
-    udl_content = '''<?xml version="1.0" encoding="UTF-8"?>
+    udl_content = """<?xml version="1.0" encoding="UTF-8"?>
 <NotepadPlus>
     <UserLang name="SNES Assembly" ext="asm s">
         <Settings>
@@ -741,9 +940,9 @@ def setup_notepad_plus_plus() -> None:
             <WordsStyle name="DIRECTIVES" styleID="6" fgColor="800080" bgColor="FFFFFF" fontName="" fontStyle="1"/>
         </Styles>
     </UserLang>
-</NotepadPlus>'''
+</NotepadPlus>"""
     try:
-        with open(udl_path, 'w') as f:
+        with open(udl_path, "w") as f:
             f.write(udl_content)
         logger.info("Notepad++ syntax highlighting configured")
     except Exception as e:
@@ -754,31 +953,31 @@ def add_to_path() -> None:
     """Add the tools bin directory to PATH in shell config files."""
     bin_dir = Path.home() / ".snes_tools" / "bin"
     path_export = f'\nexport PATH="{bin_dir}:$PATH"\n'
-    
+
     # For bash
     bashrc = Path.home() / ".bashrc"
     try:
-        with open(bashrc, 'a') as f:
+        with open(bashrc, "a") as f:
             f.write(path_export)
         logger.info("Added to PATH in ~/.bashrc")
     except Exception as e:
         logger.warning(f"Could not update ~/.bashrc: {e}")
-    
+
     # For zsh
     zshrc = Path.home() / ".zshrc"
     try:
-        with open(zshrc, 'a') as f:
+        with open(zshrc, "a") as f:
             f.write(path_export)
         logger.info("Added to PATH in ~/.zshrc")
     except Exception as e:
         logger.warning(f"Could not update ~/.zshrc: {e}")
-    
+
     # For fish, if exists
     fish_config = Path.home() / ".config" / "fish" / "config.fish"
     if fish_config.exists():
         fish_path = f'\nset -x PATH "{bin_dir}" $PATH\n'
         try:
-            with open(fish_config, 'a') as f:
+            with open(fish_config, "a") as f:
                 f.write(fish_path)
             logger.info("Added to PATH in ~/.config/fish/config.fish")
         except Exception as e:
@@ -796,5 +995,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-

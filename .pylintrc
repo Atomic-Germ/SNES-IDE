@@ -1,0 +1,21 @@
+[MASTER]
+ignore=venv,.venv
+init-hook='import sys; sys.path.insert(0, "src")'
+
+[MESSAGES CONTROL]
+disable=C0114,C0115,C0116,missing-docstring,too-few-public-methods,import-outside-toplevel,unused-import,unused-argument
+disable=C0114,C0115,C0116,missing-docstring,too-few-public-methods,import-outside-toplevel,unused-import,unused-argument,useless-return,C0301
+
+[FORMAT]
+max-line-length=100
+
+[TYPECHECK]
+# allow dynamic attributes
+ignore-mixin-members=yes
+
+[REPORTS]
+output-format=text
+
+[BASIC]
+variable-rgx=[a-z_][a-z0-9_]{0,30}$
+

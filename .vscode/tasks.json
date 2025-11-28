@@ -339,6 +339,174 @@
 			"type": "shell",
 			"command": "source .venv/bin/activate && pytest -q || true",
 			"isBackground": false
+		},
+		{
+			"label": "Run Pylint",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pylint src tests || true",
+			"isBackground": false,
+			"problemMatcher": [
+				"$pylint"
+			],
+			"group": "test"
+		},
+		{
+			"label": "Format and Lint",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pip install -r requirements.txt && isort src tests && black src tests && pylint src tests || true",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Run Pylint Only",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pylint src tests || true",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [
+				"$pylint"
+			]
+		},
+		{
+			"label": "Pylint Capture",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pylint src tests || true",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [
+				"$pylint"
+			]
+		},
+		{
+			"label": "Re-run Pylint",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pylint src tests || true",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [
+				"$pylint"
+			]
+		},
+		{
+			"label": "Re-run Pylint",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pylint src tests || true",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [
+				"$pylint"
+			]
+		},
+		{
+			"label": "Re-run Pylint 2",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pylint src tests || true",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [
+				"$pylint"
+			]
+		},
+		{
+			"label": "Re-run Pylint 3",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pylint src tests || true",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [
+				"$pylint"
+			]
+		},
+		{
+			"label": "Re-run Pylint 4",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pylint src tests || true",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [
+				"$pylint"
+			]
+		},
+		{
+			"label": "Re-run Pylint 5",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pylint src tests || true",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [
+				"$pylint"
+			]
+		},
+		{
+			"label": "Re-run Pylint 6",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pylint src tests || true",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [
+				"$pylint"
+			]
+		},
+		{
+			"label": "Re-run Pylint 7",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pylint src tests || true",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [
+				"$pylint"
+			]
+		},
+		{
+			"label": "Final Pylint Run",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pylint src tests || true",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [
+				"$pylint"
+			]
+		},
+		{
+			"label": "Final Pylint Run 2",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pylint src tests || true",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [
+				"$pylint"
+			]
+		},
+		{
+			"label": "Final Pylint Run 3",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pylint src tests || true",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [
+				"$pylint"
+			]
+		},
+		{
+			"label": "Pylint After Fix",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pylint src tests || true",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [
+				"$pylint"
+			]
+		},
+		{
+			"label": "Pylint Final Run",
+			"type": "shell",
+			"command": "source .venv/bin/activate && pylint src tests || true",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [
+				"$pylint"
+			]
 		}
 	]
 }
