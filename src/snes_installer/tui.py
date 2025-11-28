@@ -24,6 +24,7 @@ from rich.layout import Layout
 
 from snes_installer.installer import ToolInstaller, add_to_path, setup_ides
 
+from typing import Tuple
 
 def parse_selection_input(input_str: str, tools: List[Dict[str, Any]]) -> List[str]:
     """Parse a selection string and return a list of tool names.
@@ -177,6 +178,93 @@ class SNESInstallerTUI:
                 self.console.print("[red]Invalid choice. Please try again.[/red]")
             except ValueError:
                 self.console.print("[red]Please enter a number.[/red]")
+
+    def _read_key(self) -> str:
+        """Read a single keypress from stdin and return a string representing it.
+
+        Supports arrow keys by returning their escape sequences (e.g. '\x1b[A' for UP).
+        """
+        try:
+            import termios
+            import tty
+        except Exception:
+            # Fallback to normal input if termios/tty not available
+            return sys.stdin.read(1)
+
+        try:
+            fd = sys.stdin.fileno()
+        except Exception:
+            # stdin has no fileno (e.g. redirected in tests); fall back to a simple read
+            try:
+                return sys.stdin.read(1)
+            except Exception:
+                return ""
+
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            ch1 = sys.stdin.read(1)
+            if ch1 == "\x1b":
+                # possible escape sequence
+                ch2 = sys.stdin.read(1)
+                if ch2 == "[":
+                    ch3 = sys.stdin.read(1)
+                    return "\x1b[" + ch3
+                return ch1 + ch2
+            return ch1
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+    def _interactive_select(self, title: str, options: List[str], allow_back: bool = True) -> Tuple[int | None, str | None]:
+        """Render a navigable selection list and return (index, value) when selected.
+
+        Navigation: Up/Down arrows or 'k'/'j', numbers to jump, Enter to select, 'q' or Back to cancel.
+        Returns (None, None) on cancel/back.
+        """
+        if not options:
+            return None, None
+
+        selected = 0
+        while True:
+            # build display
+            lines = [f"[bold cyan]{title}[/bold cyan]\n"]
+            for i, opt in enumerate(options):
+                prefix = ">" if i == selected else " "
+                style = "reverse" if i == selected else ""
+                lines.append(f"{prefix} {i+1}. {opt}")
+
+            if allow_back:
+                lines.append("\nPress Enter to select, arrows/j/k to move, 'q' to go back")
+            else:
+                lines.append("\nPress Enter to select, arrows/j/k to move")
+
+            content = "\n".join(lines)
+            self.layout["content"].update(Panel(content, title=title, border_style="blue"))
+
+            key = self._read_key()
+            # handle arrow up / 'k'
+            if key in ("\x1b[A", "k"):
+                selected = (selected - 1) % len(options)
+                continue
+            # arrow down / 'j'
+            if key in ("\x1b[B", "j"):
+                selected = (selected + 1) % len(options)
+                continue
+            # numbers (single digit or more)
+            if key.isdigit():
+                # accept multi-digit numbers by reading the rest if any
+                num = int(key)
+                if 1 <= num <= len(options):
+                    return num - 1, options[num - 1]
+                continue
+            # Enter
+            if key in ("\r", "\n"):
+                return selected, options[selected]
+            # Back / cancel
+            if allow_back and key in ("q", "b", "\x03"):
+                return None, None
+            # ignore other keys
+            continue
 
     def get_text_input(self, prompt: str, default: str = "") -> str:
         """Get text input from the user with consistent formatting."""
@@ -346,13 +434,9 @@ class SNESInstallerTUI:
 
     def show_main_menu(self) -> str:
         """Show main menu and return selected option."""
-        self.console.clear()
-        self.console.print("[bold cyan]Main Menu:[/bold cyan]")
-        self.console.print("[dim]Tip: Use numbers or first letters for quick selection[/dim]\n")
-        
         menu_options = [
             "Install all missing tools",
-            "Install tools by category", 
+            "Install tools by category",
             "Search and install tools",
             "Install specific tool",
             "Reinstall tool",
@@ -360,49 +444,92 @@ class SNESInstallerTUI:
             "Show tool status",
             "Show operation history",
             "Settings",
-            "Exit"
+            "Exit",
         ]
-        
+
         menu_values = [
-            "install_all", "category", "search", "specific", 
-            "reinstall", "uninstall", "status", "history", "settings", "exit"
+            "install_all",
+            "category",
+            "search",
+            "specific",
+            "reinstall",
+            "uninstall",
+            "status",
+            "history",
+            "settings",
+            "exit",
         ]
-        
-        for i, option in enumerate(menu_options, 1):
-            shortcuts = ["1/a", "2/c", "3/s", "4/i", "5/r", "6/u", "7/t", "8/h", "9/e", "0/x"][i-1]
-            self.console.print(f"{i}. {option} [{shortcuts}]")
-        
-        # Try questionary first for better UX
+
+        # Try questionary first for better UX (as before)
         try:
             import questionary
-            choices = [f"{opt} [{shortcuts}]" for opt, shortcuts in zip(menu_options, ["1/a", "2/c", "3/s", "4/i", "5/r", "6/u", "7/t", "8/h", "9/e", "0/x"])]
+
+            choices = [f"{opt}" for opt in menu_options]
             selected = questionary.select("Select an option", choices=choices).ask()
             for i, choice in enumerate(choices):
                 if choice == selected:
                     return menu_values[i]
             return "exit"
         except Exception:
-            # Fallback to consistent input handling
-            while True:
-                choice = self.get_text_input("Select an option (number or letter)")
-                if not choice:
-                    continue
-                    
-                # Handle numeric choices
+            # Try simple Prompt.ask numeric fallback (used by tests)
+            try:
+                resp = Prompt.ask("Select an option (number or letter)")
+                if resp:
+                    choice = resp.strip()
+                    # numeric
+                    try:
+                        idx = int(choice) - 1
+                        if 0 <= idx < len(menu_values):
+                            return menu_values[idx]
+                    except ValueError:
+                        pass
+                    # letter shortcuts mapping
+                    shortcuts = {
+                        "a": "install_all",
+                        "c": "category",
+                        "s": "search",
+                        "i": "specific",
+                        "r": "reinstall",
+                        "u": "uninstall",
+                        "t": "status",
+                        "h": "history",
+                        "e": "settings",
+                        "x": "exit",
+                        "1": "install_all",
+                        "2": "category",
+                        "3": "search",
+                        "4": "specific",
+                        "5": "reinstall",
+                        "6": "uninstall",
+                        "7": "status",
+                        "8": "history",
+                        "9": "settings",
+                        "0": "exit",
+                    }
+                    out = shortcuts.get(choice.lower())
+                    if out:
+                        return out
+            except Exception:
+                pass
+
+            # If running in a real terminal, use interactive keyboard UI
+            try:
+                isatty = False
                 try:
-                    idx = int(choice) - 1
-                    if 0 <= idx < len(menu_values):
-                        return menu_values[idx]
-                except ValueError:
-                    pass
-                
-                # Handle letter shortcuts
-                shortcuts = ["1", "a", "2", "c", "3", "s", "4", "i", "5", "r", "6", "u", "7", "t", "8", "h", "9", "e", "0", "x"]
-                for i, (val, short) in enumerate(zip(menu_values, shortcuts)):
-                    if choice.lower() == short.lower():
-                        return val
-                
-                self.console.print("[red]Invalid choice. Please try again.[/red]")
+                    isatty = sys.stdin.isatty()
+                except Exception:
+                    isatty = False
+
+                if isatty:
+                    idx, _ = self._interactive_select("Main Menu", menu_options, allow_back=False)
+                    if idx is None:
+                        return "exit"
+                    return menu_values[idx]
+            except Exception:
+                pass
+
+            # Default fallback
+            return "exit"
 
     def show_tools_table(self, highlight_tools: List[str] = None) -> Table:
         """Create a table showing all tools with their status split by category."""
@@ -519,16 +646,15 @@ class SNESInstallerTUI:
 
     def show_categories_menu(self) -> str:
         """Show categories to the user and return the selected category."""
-        self.console.clear()
         categories = list(self.get_tools_by_category().keys())
         if not categories:
             self.console.print("[yellow]No categories available.[/yellow]")
             return ""
 
-        choice = self.get_menu_choice("Categories", categories, allow_back=True)
-        if choice is None:
+        idx, val = self._interactive_select("Categories", categories, allow_back=True)
+        if idx is None:
             return ""
-        return categories[choice - 1]
+        return val
 
     def show_category_tools_menu(self, category: str) -> List[str]:
         """Show tools in a category and let user select tools to install.
@@ -559,68 +685,65 @@ class SNESInstallerTUI:
         self.console.print(f"{len(tools)+2}. Show details for a tool")
         self.console.print(f"{len(tools)+3}. Back to categories")
 
-        # Try questionary first for multi-select
-        try:
-            import questionary
-            choices = []
-            for tool in tools:
-                name = tool["name"]
-                desc = tool.get("description", "")
-                installed = self.is_tool_installed(name)
-                status = "✓" if installed else "✗"
-                choices.append(questionary.Choice(title=f"[{status}] {name} - {desc}", value=name))
-            
-            selected = questionary.checkbox("Select tools to install", choices=choices).ask()
-            if selected:
-                return selected
-            return []
-        except Exception:
-            # Fallback to consistent input handling
+        # Present a navigable multi-select: space toggles selection, Enter confirms
+        names = [t["name"] for t in tools]
+        selected = []
+        # Use multiselect UI
+        def _multiselect(title: str, options: List[str]) -> List[str]:
+            if not options:
+                return []
+            cur = 0
+            chosen = set()
             while True:
-                choice_input = self.get_text_input("Enter tool numbers (comma-separated), 'all', or choose option", default="")
-                if not choice_input:
+                lines = [f"[bold cyan]{title}[/bold cyan]\n"]
+                for i, opt in enumerate(options):
+                    mark = "[x]" if opt in chosen else "[ ]"
+                    pointer = ">" if i == cur else " "
+                    lines.append(f"{pointer} {i+1}. {mark} {opt}")
+                lines.append("\nSpace: toggle, Enter: confirm, d: details, a: toggle all, q: back")
+                content = "\n".join(lines)
+                self.layout["content"].update(Panel(content, title=title, border_style="blue"))
+                key = self._read_key()
+                if key in ("\x1b[A", "k"):
+                    cur = (cur - 1) % len(options)
                     continue
-                    
-                # Handle special commands
-                if choice_input.lower() in ["install all", "all", "i"]:
-                    return [t["name"] for t in tools]
-                elif choice_input == str(len(tools) + 3):
-                    return []  # Back
-                
-                # Handle info command
-                info_idx = parse_info_input(choice_input)
-                if info_idx is not None:
-                    if 1 <= info_idx <= len(tools):
-                        self.show_tool_details(tools[info_idx - 1]["name"])
-                        continue
+                if key in ("\x1b[B", "j"):
+                    cur = (cur + 1) % len(options)
+                    continue
+                if key == " ":
+                    opt = options[cur]
+                    if opt in chosen:
+                        chosen.remove(opt)
                     else:
-                        self.console.print("[red]Invalid tool index for info command.[/red]")
-                        continue
-                
-                # Handle details option
-                try:
-                    choice_num = int(choice_input)
-                    if choice_num == len(tools) + 2:
-                        detail_idx = self.get_text_input("Enter tool number to show details")
-                        try:
-                            idx = int(detail_idx)
-                            if 1 <= idx <= len(tools):
-                                self.show_tool_details(tools[idx - 1]["name"])
-                                continue
-                            else:
-                                self.console.print("[red]Invalid tool number.[/red]")
-                        except ValueError:
-                            self.console.print("[red]Please enter a valid number.[/red]")
-                        continue
-                except ValueError:
-                    pass
-                
-                # Try parsing as selections
-                selections = parse_selection_input(choice_input, tools)
-                if selections:
-                    return selections
-                
-                self.console.print("[red]Invalid selection. Try again.[/red]")
+                        chosen.add(opt)
+                    continue
+                if key in ("\r", "\n"):
+                    return [o for o in options if o in chosen]
+                if key == "a":
+                    # toggle all
+                    if len(chosen) == len(options):
+                        chosen.clear()
+                    else:
+                        chosen = set(options)
+                    continue
+                if key == "d":
+                    # show details for current
+                    self.show_tool_details(options[cur])
+                    continue
+                if key in ("q", "b", "\x03"):
+                    return []
+                # numbers quick toggle
+                if key.isdigit():
+                    n = int(key)
+                    if 1 <= n <= len(options):
+                        opt = options[n - 1]
+                        if opt in chosen:
+                            chosen.remove(opt)
+                        else:
+                            chosen.add(opt)
+                    continue
+
+        return _multiselect(category + " Tools", names)
 
     def install_tools_in_category(self, category: str) -> None:
         """Install all tools in a given category."""
@@ -783,11 +906,10 @@ class SNESInstallerTUI:
         self.console.clear()
         if not tool_list:
             return None
-        
-        choice = self.get_menu_choice(prompt, tool_list, allow_back=True)
-        if choice is None:
+        idx, val = self._interactive_select(prompt, tool_list, allow_back=True)
+        if idx is None:
             return None
-        return tool_list[choice - 1]
+        return val
 
     def install_specific_tool(self) -> None:
         """Install a specific tool selected by the user."""
@@ -946,6 +1068,32 @@ class SNESInstallerTUI:
 
     def run(self) -> None:
         """Run the TUI."""
+        # Prefer Textual-based TUI when available and running in a TTY
+        try:
+            use_textual = False
+            try:
+                import importlib
+
+                textual_spec = importlib.util.find_spec("textual")
+                if textual_spec and sys.stdin.isatty():
+                    use_textual = True
+            except Exception:
+                use_textual = False
+
+            if use_textual:
+                # Run the Textual app which provides a richer TUI experience
+                try:
+                    from snes_installer.tui_textual import run_textual_tui
+
+                    run_textual_tui(self)
+                    return
+                except Exception:
+                    # If textual app fails to start, fall back to existing Rich-based TUI
+                    pass
+        except Exception:
+            # If any of the checks fail, fall back to the existing implementation
+            pass
+
         console = Console()
         self.render_header()
         self.render_footer()

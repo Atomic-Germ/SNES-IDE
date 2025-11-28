@@ -507,6 +507,26 @@
 			"problemMatcher": [
 				"$pylint"
 			]
+		},
+		{
+			"label": "Run SNES Installer",
+			"type": "shell",
+			"command": "source .venv/bin/activate && python -m snes_installer",
+			"isBackground": false
+		},
+		{
+			"label": "Build Install and Run SNES Installer",
+			"type": "shell",
+			"command": "source .venv/bin/activate && python -m pip install --upgrade pip setuptools wheel build && python -m build && python -m pip install --force-reinstall dist/*.whl && python -m snes_installer || true",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Build Install and Run SNES Installer",
+			"type": "shell",
+			"command": "source .venv/bin/activate && python -m pip install --upgrade pip setuptools wheel build && python -m build && python -m pip install --force-reinstall dist/*.whl && python -m snes_installer || true",
+			"isBackground": false,
+			"problemMatcher": []
 		}
 	]
 }

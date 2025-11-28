@@ -9,11 +9,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from snes_installer.installer import ToolInstaller, add_to_path, setup_ides
-from snes_installer.tui import SNESInstallerTUI
+# Defer importing the TUI until it's needed to keep CLI-only runs lightweight
+SNESInstallerTUI = None
 
 
 def main() -> None:
     """Main entry point with CLI argument parsing."""
+    global SNESInstallerTUI
     parser = argparse.ArgumentParser(
         description="SNES Development Tools Installer",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -58,7 +60,29 @@ Examples:
 
     args = parser.parse_args()
 
+    # Default config path (next to this module). If the package was installed
+    # this file may not be present in site-packages during development runs
+    # so provide a few sensible fallbacks (workspace `src/`, env override).
     config_file = Path(__file__).parent / "tools_config.json"
+
+    # Allow override via environment variable for developers/tests
+    import os
+
+    env_path = os.environ.get("SNES_INSTALLER_CONFIG")
+    if env_path:
+        config_file = Path(env_path)
+
+    # If default doesn't exist (e.g., running from an installed package),
+    # try common workspace locations: `./src/snes_installer/tools_config.json`
+    if not config_file.exists():
+        alt = Path.cwd() / "src" / "snes_installer" / "tools_config.json"
+        if alt.exists():
+            config_file = alt
+        else:
+            # try one level up from cwd (in case running from project root)
+            alt2 = Path.cwd().parent / "src" / "snes_installer" / "tools_config.json"
+            if alt2.exists():
+                config_file = alt2
     install_dir = Path(args.install_dir) if args.install_dir else None
     min_space_bytes = int(args.min_space) * 1024 * 1024
     installer = ToolInstaller(
@@ -95,7 +119,11 @@ Examples:
         print("Installation complete!")
         return
 
-    # Default: TUI mode
+    # Default: TUI mode — import the TUI implementation only when required
+    if SNESInstallerTUI is None:
+        from snes_installer.tui import SNESInstallerTUI as _TUIClass
+        SNESInstallerTUI = _TUIClass
+
     tui = SNESInstallerTUI(
         config_file,
         install_dir=install_dir,
