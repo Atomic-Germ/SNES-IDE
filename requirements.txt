@@ -5,3 +5,4 @@ pylint==4.0.3
 black==25.11.0
 isort==7.0.0
 textual==6.6.0
+pytest==9.0.1
