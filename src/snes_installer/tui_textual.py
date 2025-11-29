@@ -7,24 +7,35 @@ is available and the process is attached to a real TTY.
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any, Dict, List, Set, Optional
-
 import asyncio
-import threading
-import os
 import io
+import os
+import re
+import threading
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set
+
 from textual import events
 from textual.app import App, ComposeResult
-from textual.screen import Screen
-from textual.widgets import Label
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
-from textual.widgets import Button, Footer, Header, Input, Label, ListItem, ListView, Static
+from textual.screen import Screen
+from textual.widgets import (
+    Button,
+    Footer,
+    Header,
+    Input,
+    Label,
+    ListItem,
+    ListView,
+    Static,
+)
 
 
 class SNESInstallerTextualApp(App):
     css_path = "tui_textual.css"
+    # reactive fields must be declared at class level for Textual to track them
+    current_category = reactive("")
 
     BINDINGS = [
         ("tab", "focus_next", "Next"),
@@ -42,7 +53,8 @@ class SNESInstallerTextualApp(App):
         self.tools_config = tui_instance.tools_config
         self.installer = tui_instance.installer
         self.categories = list(self.tui.get_tools_by_category().keys())
-        self.current_category = reactive(self.categories[0] if self.categories else "")
+        # set the reactive value (reactive descriptor declared at class level)
+        self.current_category = self.categories[0] if self.categories else ""
         self.selected_tools: Set[str] = set()
         self.failed_tools: Set[str] = set()
         # highlight index per category
@@ -152,8 +164,9 @@ class SNESInstallerTextualApp(App):
 
     def on_mount(self) -> None:
         # populate categories
-        for cat in self.categories:
-            self.cat_list.append(ListItem(Static(cat)))
+        for i, cat in enumerate(self.categories):
+            # give each category list item a stable id (no spaces)
+            self.cat_list.append(ListItem(Static(cat), id=f"cat_{i}"))
         # select first
         if self.categories:
             self.cat_list.index = 0
@@ -179,6 +192,7 @@ class SNESInstallerTextualApp(App):
             self.log_box.update("")
         except Exception:
             pass
+
     def _reset_ctrl_c(self) -> None:
         # reset ctrl+c counter slowly
         if self.ctrl_c_count > 0:
@@ -195,8 +209,16 @@ class SNESInstallerTextualApp(App):
                 marker = "[!]"
             else:
                 marker = "[x]" if installed or name in self.selected_tools else "[ ]"
-            label = f"{marker} {name} - {t.get('description','') }"
-            self.tools_list.append(ListItem(Static(label)))
+            # Use a one-line short description in the list to avoid multi-line ListItem heights
+            raw_desc = t.get("description", "") or ""
+            first_line = raw_desc.splitlines()[0] if raw_desc else ""
+            short = first_line.strip()
+            if len(short) > 80:
+                short = short[:77] + "..."
+            label = f"{marker} {name} - {short}"
+            # sanitize id for ListItem (Textual ids should avoid spaces/special chars)
+            safe_name = re.sub(r"[^0-9a-zA-Z_-]", "_", name)
+            self.tools_list.append(ListItem(Static(label), id=f"tool_{safe_name}"))
         # set index to previous highlight if available
         idx = self.highlight_index.get(self.current_category, 0)
         try:
@@ -239,14 +261,17 @@ class SNESInstallerTextualApp(App):
 
     async def on_key(self, event: events.Key) -> None:  # noqa: D401 - textual handler
         # navigation and selection handlers
+        # Let ListView handle up/down when it is focused to avoid double-moves
+        focused_id = getattr(self.focused, "id", None)
         if event.key == "up":
-            # default: move up in focused list
-            await self._focus_move(-1)
-            event.stop()
+            if focused_id not in ("cat_list", "tools_list"):
+                await self._focus_move(-1)
+                event.stop()
             return
         if event.key == "down":
-            await self._focus_move(1)
-            event.stop()
+            if focused_id not in ("cat_list", "tools_list"):
+                await self._focus_move(1)
+                event.stop()
             return
         if event.key in ("enter", "space"):
             # toggle selection if focus is tools_list
@@ -255,8 +280,11 @@ class SNESInstallerTextualApp(App):
                 event.stop()
                 return
         if event.key == "tab":
-            # action_focus_next is synchronous; don't await
-            self.action_focus_next()
+            # custom focus order to ensure Categories -> Tools -> Buttons
+            try:
+                self.action_focus_next()
+            except Exception:
+                pass
             event.stop()
             return
         if event.key == "escape" or event.key == "backspace":
@@ -311,6 +339,68 @@ class SNESInstallerTextualApp(App):
             # update highlight index and detail box
             self.highlight_index[self.current_category] = idx
             self.update_detail()
+
+    def action_focus_next(self) -> None:
+        """Override focus next to enforce desired traversal order."""
+        focus_order = [
+            getattr(self, "cat_list", None),
+            getattr(self, "tools_list", None),
+            getattr(self, "install_btn", None),
+            getattr(self, "cancel_btn", None),
+            getattr(self, "settings_btn", None),
+            getattr(self, "quit_btn", None),
+            getattr(self, "progress_bar", None),
+            getattr(self, "log_box", None),
+            getattr(self, "status_bar", None),
+        ]
+        # filter out None and non-focusable
+        nodes = [
+            n for n in focus_order if n is not None and getattr(n, "can_focus", True)
+        ]
+        if not nodes:
+            return
+        cur = getattr(self.focused, "id", None)
+        # find index of current focused widget in our order
+        cur_idx = 0
+        for i, node in enumerate(nodes):
+            if getattr(node, "id", None) == cur:
+                cur_idx = i
+                break
+        next_idx = (cur_idx + 1) % len(nodes)
+        try:
+            self.set_focus(nodes[next_idx])
+        except Exception:
+            pass
+
+    def action_focus_previous(self) -> None:
+        """Reverse traversal for shift+tab."""
+        focus_order = [
+            getattr(self, "cat_list", None),
+            getattr(self, "tools_list", None),
+            getattr(self, "install_btn", None),
+            getattr(self, "cancel_btn", None),
+            getattr(self, "settings_btn", None),
+            getattr(self, "quit_btn", None),
+            getattr(self, "progress_bar", None),
+            getattr(self, "log_box", None),
+            getattr(self, "status_bar", None),
+        ]
+        nodes = [
+            n for n in focus_order if n is not None and getattr(n, "can_focus", True)
+        ]
+        if not nodes:
+            return
+        cur = getattr(self.focused, "id", None)
+        cur_idx = 0
+        for i, node in enumerate(nodes):
+            if getattr(node, "id", None) == cur:
+                cur_idx = i
+                break
+        prev_idx = (cur_idx - 1) % len(nodes)
+        try:
+            self.set_focus(nodes[prev_idx])
+        except Exception:
+            pass
 
     async def _toggle_current_tool(self) -> None:
         tools = self.tui.get_tools_in_category(self.current_category)
@@ -413,7 +503,9 @@ class SNESInstallerTextualApp(App):
                 yield Static("Settings", id="settings_title")
                 # current values
                 cur_dir = str(self.parent_app.installer.install_dir)
-                cur_space = str(self.parent_app.installer.min_free_bytes // (1024 * 1024))
+                cur_space = str(
+                    self.parent_app.installer.min_free_bytes // (1024 * 1024)
+                )
                 yield Label("Install directory:")
                 self.dir_input = Input(value=cur_dir, id="dir_input")
                 yield self.dir_input
@@ -451,7 +543,9 @@ class SNESInstallerTextualApp(App):
                                     return
                             self.parent_app.installer.install_dir = p
                         if sb is not None:
-                            self.parent_app.installer.min_free_bytes = int(sb) * 1024 * 1024
+                            self.parent_app.installer.min_free_bytes = (
+                                int(sb) * 1024 * 1024
+                            )
                         # persist
                         try:
                             self.parent_app.tui.save_user_settings()
@@ -548,7 +642,10 @@ class SNESInstallerTextualApp(App):
 
             try:
                 await asyncio.to_thread(
-                    self.installer.install_selected_tools, tools, progress_cb, stop_event
+                    self.installer.install_selected_tools,
+                    tools,
+                    progress_cb,
+                    stop_event,
                 )
             except Exception as exc:  # noqa: BLE001
                 # show blocking dialog for errors that stop the entire run

@@ -563,6 +563,11 @@
 			"type": "shell",
 			"command": "source .venv/bin/activate && python -m build && python -m pip install --force-reinstall dist/*.whl && python -m snes_installer || true",
 			"isBackground": false
+		},
+		{
+			"label": "Compile Textual File",
+			"type": "shell",
+			"command": "source .venv/bin/activate && python -m py_compile src/snes_installer/tui_textual.py || true"
 		}
 	]
 }

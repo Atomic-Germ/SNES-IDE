@@ -6,58 +6,67 @@ Screen {
     height: 1fr;
 }
 .left {
-    width: 25%;
-    padding: 1 1;
-}
-.center {
-    padding: 1 1;
-    width: 75%;
-}
-.details {
-    height: 20%;
-    padding: 1 1;
-}
-.buttons {
-    height: 3;
-    padding: 1 1;
-}
-/* Settings and error dialog styling */
-#settings_title, #err_title {
-    padding: 1 1;
-    text-style: bold;
-}
-.settings_buttons, .err_buttons {
-    padding-top: 1;
-}
-#err_msg, #settings_err {
-    padding: 1 1;
-    color: red;
-}
-#status_bar {
-    height: 1;
-    padding: 0 1;
-    background: $panel-darken-3; /* use defined theme variable */
-    color: $text; 
-}
-Button {
-    padding: 0 1;
-    background: $surface;
-    color: $text;
-}
-#progress_bar {
-    height: 1;
-    padding: 0 1;
-    color: $text;
-    background: $surface;
-    align: left middle;
-}
-#log_box {
-    height: 6;
-    padding: 0 1;
-    color: $text;
-    background: $background;
-    overflow: auto;
-    white-space: pre-wrap;
-    align: left top;
-    border: tall $panel-darken-3;
-}
+    Screen {
+        layout: vertical;
+    }
+    # simple layout: header, body, footer
+    .body {
+        height: 1fr;
+    }
+    .left {
+        width: 25%;
+        padding: 1 1;
+    }
+    .center {
+        padding: 1 1;
+        width: 75%;
+    }
+    .details {
+        height: 20%;
+        padding: 1 1;
+    }
+    .buttons {
+        height: 3;
+        padding: 1 1;
+    }
+    /* Settings and error dialog styling */
+    #settings_title, #err_title {
+        padding: 1 1;
+        text-style: bold;
+    }
+    .settings_buttons, .err_buttons {
+        padding-top: 1;
+    }
+    #err_msg, #settings_err {
+        padding: 1 1;
+        color: red;
+    }
+    #status_bar {
+        height: 1;
+        padding: 0 1;
+        background: #222; /* dark background */
+        color: #ddd; 
+    }
+    Button {
+        padding: 0 1;
+        background: #444;
+        color: #fff;
+        border: round #666;
+    }
+    #progress_bar {
+        height: 1;
+        padding: 0 1;
+        color: #ddd;
+        background: #111;
+        align: left middle;
+    }
+    #log_box {
+        height: 6;
+        padding: 0 1;
+        color: #ddd;
+        background: #000;
+        overflow: auto;
+        white-space: pre-wrap;
+        align: left top;
+        border: tall $panel-darken-3;
+    }
