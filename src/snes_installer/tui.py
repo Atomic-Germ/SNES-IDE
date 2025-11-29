@@ -150,7 +150,7 @@ class SNESInstallerTUI:
     def render_header(self) -> None:
         """Render the header section."""
         self.layout["header"].update(
-            Panel("[bold blue]SNES Installer[/bold blue]", expand=True)
+            Panel("[bold blue]SNES Installer — DEV BUILD[/bold blue]", expand=True)
         )
 
     def render_footer(self) -> None:

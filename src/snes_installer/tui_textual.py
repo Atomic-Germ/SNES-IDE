@@ -132,6 +132,8 @@ class SNESInstallerTextualApp(App):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
+        # visible dev marker so we can verify this source is running
+        yield Static("SNES Installer — DEV BUILD", id="app_title")
         with Horizontal(classes="body"):
             with Vertical(classes="left"):
                 yield Static("Categories", id="cat_title")
