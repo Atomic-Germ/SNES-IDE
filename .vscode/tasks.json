@@ -527,6 +527,42 @@
 			"command": "source .venv/bin/activate && python -m pip install --upgrade pip setuptools wheel build && python -m build && python -m pip install --force-reinstall dist/*.whl && python -m snes_installer || true",
 			"isBackground": false,
 			"problemMatcher": []
+		},
+		{
+			"label": "Rebuild Wheel",
+			"type": "shell",
+			"command": "source .venv/bin/activate && python -m build && python -m pip install --force-reinstall dist/*.whl",
+			"isBackground": false
+		},
+		{
+			"label": "Run Installed SNES Installer",
+			"type": "shell",
+			"command": "source .venv/bin/activate && python -m snes_installer || true",
+			"isBackground": false
+		},
+		{
+			"label": "Rebuild and Run TUI",
+			"type": "shell",
+			"command": "source .venv/bin/activate && python -m build && python -m pip install --force-reinstall dist/*.whl && python -m snes_installer || true",
+			"isBackground": false
+		},
+		{
+			"label": "Rebuild and Run TUI",
+			"type": "shell",
+			"command": "source .venv/bin/activate && python -m build && python -m pip install --force-reinstall dist/*.whl && python -m snes_installer || true",
+			"isBackground": false
+		},
+		{
+			"label": "Rebuild and Run TUI",
+			"type": "shell",
+			"command": "source .venv/bin/activate && python -m build && python -m pip install --force-reinstall dist/*.whl && python -m snes_installer || true",
+			"isBackground": false
+		},
+		{
+			"label": "Rebuild and Run TUI",
+			"type": "shell",
+			"command": "source .venv/bin/activate && python -m build && python -m pip install --force-reinstall dist/*.whl && python -m snes_installer || true",
+			"isBackground": false
 		}
 	]
 }
