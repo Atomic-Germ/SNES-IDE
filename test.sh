@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
 source .venv/bin/activate
-pip install --upgrade pip build
-pip install -e .
+pytest -q

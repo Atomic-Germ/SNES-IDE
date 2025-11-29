@@ -1,0 +1,10 @@
+{
+"scripts": {
+    "start": "bash run.sh",
+    "dev": "bash dev.sh",
+    "build": "bash build.sh",
+    "format": "bash format.sh",
+    "lint": "bash lint.sh",
+    "test": "bash test.sh"
+  }
+}
