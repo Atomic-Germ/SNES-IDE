@@ -24,9 +24,21 @@ SNES-IDE is a development environment for SNES homebrew. The project includes to
 ### Local Build (Windows)
 
 1. Install [Python 3.13+](https://www.python.org/downloads/windows/)
-2. Install Dependencies:  
+2. (Optional but recommended) Create and activate a Python virtual environment, then install dependencies. Examples:
 
-   ```sh
+   PowerShell:
+
+   ```powershell
+   python -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+   pip install -r build\requirements.txt
+   ```
+
+   Command Prompt (cmd.exe):
+
+   ```cmd
+   python -m venv .venv
+   .\.venv\Scripts\activate
    pip install -r build\requirements.txt
    ```
 
@@ -38,13 +50,57 @@ SNES-IDE is a development environment for SNES homebrew. The project includes to
 
 4. Output will be in `SNES-IDE-out/`
 
+## Using venv for development
+
+Using a Python virtual environment (venv) isolates project dependencies from your system Python and is recommended for local development. Below are quick examples to create, activate, install dependencies, and deactivate a venv.
+
+- Create a venv in the project root (common choice is a hidden folder like `.venv`).
+
+- Activate and install dependencies:
+
+   - Linux / macOS / other UNIX:
+
+      ```bash
+      python3 -m venv .venv
+      source .venv/bin/activate
+      pip install -r ./build/requirements.txt
+      ```
+
+   - Windows (PowerShell):
+
+      ```powershell
+      python -m venv .venv
+      .\.venv\Scripts\Activate.ps1
+      pip install -r build\requirements.txt
+      ```
+
+   - Windows (cmd.exe):
+
+      ```cmd
+      python -m venv .venv
+      .\.venv\Scripts\activate
+      pip install -r build\requirements.txt
+      ```
+
+- Deactivate the venv when you're done:
+
+   ```bash
+   deactivate
+   ```
+
+- To remove the virtual environment entirely, delete the `.venv` folder (e.g., `rm -rf .venv` on UNIX or remove the folder in Explorer on Windows).
+
+Using a venv keeps local development dependencies separate from your system environment and makes it easier to reproduce builds across machines.
+
 ### Local Build (UNIX)
 
 1. Install [Python 3.13+](https://www.python.org/downloads/)
-2. Install Dependencies:
+2. (Optional but recommended) Create and activate a Python virtual environment, then install dependencies. Example:
 
-   ```sh
-   pip3 install -r ./build/requirements.txt
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install -r ./build/requirements.txt
    ```
 
 3. Run the build script:
