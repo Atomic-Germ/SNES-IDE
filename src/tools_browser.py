@@ -957,7 +957,7 @@ class ToolBrowser(App):
             # Tools in category
             for tool in sorted(tools, key=lambda t: (not t.get("available"), t["name"])):
                 icon = "[green]●[/green]" if tool.get("available") else "[red]○[/red]"
-                item = ListItem(Label(f"{icon} {tool['name']}"), id=f"tool-{tool['name']}")
+                item = ListItem(Label(f"{icon} {tool['name']}"))
                 item.data = tool["name"]  # Store tool name for lookup
                 list_view.append(item)
 
