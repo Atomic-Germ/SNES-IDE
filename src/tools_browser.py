@@ -352,9 +352,7 @@ class ToolInstaller:
     async def build_tool(
         self, 
         tool_config: Dict[str, Any], 
-        source_dir: Path,
-        base_step: int = 0,
-        total_steps: int = 0
+        source_dir: Path
     ) -> bool:
         """Build a tool from source.
         
@@ -373,11 +371,17 @@ class ToolInstaller:
 
         # Count source files to estimate build progress
         source_extensions = {'.c', '.cpp', '.cc', '.cxx', '.s', '.asm'}
-        source_files = []
+        source_files = set()
         for ext in source_extensions:
-            source_files.extend(source_dir.rglob(f'*{ext}'))
-        estimated_lines = max(len(source_files), 10)  # At least 10 to avoid division issues
-        self.log_info(f"Found {len(source_files)} source files (estimating ~{estimated_lines} build outputs)")
+            for f in source_dir.rglob(f'*{ext}'):
+                # Store just the filename for matching
+                source_files.add(f.name)
+        
+        total_source_files = max(len(source_files), 1)  # At least 1 to avoid division issues
+        self.log_info(f"Found {len(source_files)} source files to track")
+        
+        # Set progress bar total to the number of source files for granular tracking
+        self.update_progress(0, total_source_files)
 
         # Set up environment
         env = os.environ.copy()
@@ -387,8 +391,8 @@ class ToolInstaller:
             env[key] = value
             self.log_info(f"Setting {key}={value}")
 
-        # Track overall build progress across all commands
-        total_lines_processed = 0
+        # Track files compiled across all commands
+        files_compiled = set()
         
         for i, cmd_str in enumerate(commands, 1):
             self.log(f"[bold cyan]Command {i}/{len(commands)}:[/bold cyan]")
@@ -409,18 +413,15 @@ class ToolInstaller:
                     if not line:
                         break
                     line_count += 1
-                    total_lines_processed += 1
                     decoded = line.decode().rstrip()
                     
-                    # Update progress based on lines processed vs estimated
-                    # Build phase is between base_step+1 and base_step+len(commands)
-                    # We interpolate within that range based on line count
-                    if total_steps > 0 and estimated_lines > 0:
-                        # Progress within the build phase (0.0 to 1.0)
-                        build_progress = min(1.0, total_lines_processed / estimated_lines)
-                        # Map to actual step range (base_step to base_step + len(commands))
-                        current_progress = base_step + (build_progress * len(commands))
-                        self.update_progress(current_progress, total_steps)
+                    # Check if this line mentions any of our source files
+                    for src_file in source_files:
+                        if src_file in decoded:
+                            files_compiled.add(src_file)
+                            # Update progress: current = files compiled, total = source files
+                            self.update_progress(len(files_compiled), total_source_files)
+                            break  # Only count once per line
                     
                     # Show all lines but dim the verbose compiler output
                     if any(x in decoded.lower() for x in ['warning:', 'error:', 'undefined']):
@@ -440,12 +441,14 @@ class ToolInstaller:
                     self.log_error(f"Build command failed with code {process.returncode}")
                     return False
                     
-                self.log_info(f"Command completed ({line_count} lines of output)")
+                self.log_info(f"Command completed ({line_count} lines, {len(files_compiled)}/{total_source_files} files)")
             except Exception as e:
                 self.log_error(f"Build failed: {e}")
                 return False
 
-        self.log_success("Build completed")
+        # Ensure we show 100% at end of build
+        self.update_progress(total_source_files, total_source_files)
+        self.log_success(f"Build completed ({len(files_compiled)} files compiled)")
         return True
 
     async def install_binary(self, tool_config: Dict[str, Any], source_dir: Path) -> bool:
@@ -560,15 +563,10 @@ class ToolInstaller:
         """
         tool_name = tool_config.get("name", "unknown")
         
-        # Calculate total steps: deps + download + build commands + install + verify
-        build = tool_config.get("build", {})
-        plat_build = build.get(self.platform, {})
-        build_commands = plat_build.get("commands", [])
-        # Total: 1 (deps) + 1 (download) + N (build cmds) + 1 (install) + 1 (verify)
-        total_steps = 4 + len(build_commands)
-        current_step = 0
+        # Use a simple 4-step progress for non-build phases
+        # Build phase will dynamically set its own total based on source file count
         
-        self.update_progress(current_step, total_steps)
+        self.update_progress(0, 4)
         
         self.log(f"[bold]{'='*50}[/bold]")
         self.log(f"[bold]Installing: {tool_name}[/bold]")
@@ -579,8 +577,7 @@ class ToolInstaller:
         self.log("[bold cyan]Step 1/4: Installing dependencies...[/bold cyan]")
         if not await self.install_dependencies(tool_config):
             return False
-        current_step += 1
-        self.update_progress(current_step, total_steps)
+        self.update_progress(1, 4)
         self.log("")
 
         # Step 2: Download source
@@ -588,32 +585,33 @@ class ToolInstaller:
         source_dir = await self.download_source(tool_config)
         if not source_dir:
             return False
-        current_step += 1
-        self.update_progress(current_step, total_steps)
+        self.update_progress(2, 4)
         self.log("")
 
-        # Step 3: Build (progress updated per command inside build_tool)
+        # Step 3: Build (progress bar will be dynamically set to source file count)
         self.log("[bold cyan]Step 3/4: Building...[/bold cyan]")
-        if not await self.build_tool(tool_config, source_dir, current_step, total_steps):
+        if not await self.build_tool(tool_config, source_dir):
             return False
-        current_step += len(build_commands) if build_commands else 0
-        self.update_progress(current_step, total_steps)
+        # Build sets its own progress, now reset to step-based for remaining phases
+        self.update_progress(3, 4)
         self.log("")
 
         # Step 4: Install binary
         self.log("[bold cyan]Step 4/4: Installing binary...[/bold cyan]")
         if not await self.install_binary(tool_config, source_dir):
             return False
-        current_step += 1
-        self.update_progress(current_step, total_steps)
         self.log("")
 
         # Verify
         self.log("[bold cyan]Verifying installation...[/bold cyan]")
         await self.verify_installation(tool_config)
-        current_step += 1
-        self.update_progress(current_step, total_steps)
+        self.update_progress(4, 4)
         self.log("")
+
+        self.log(f"[bold green]{'='*50}[/bold green]")
+        self.log(f"[bold green]Installation of {tool_name} complete![/bold green]")
+        self.log(f"[bold green]{'='*50}[/bold green]")
+        return True
 
         self.log(f"[bold green]{'='*50}[/bold green]")
         self.log(f"[bold green]Installation of {tool_name} complete![/bold green]")
