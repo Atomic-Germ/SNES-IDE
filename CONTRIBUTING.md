@@ -109,7 +109,7 @@ Using a venv keeps local development dependencies separate from your system envi
    python3 ./build/build.py
    ```
 
-4. Output will be in `SNES-IDE-out/`
+4. Output will be in `SNES-IDE-out/`. The venv will still be created for distribution packaginge even if you don't use it for development.
 
 ## Testing
 
