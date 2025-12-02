@@ -6,16 +6,575 @@ Run with:
 
 from __future__ import annotations
 
+import asyncio
+import os
+import platform
+import shutil
+import subprocess
 import sys
 import json
+import tempfile
+import urllib.request
+import tarfile
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Callable
 
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.reactive import reactive
+from textual.screen import ModalScreen
 from textual.widget import Widget
-from textual.widgets import Footer, Header, Label, ListItem, ListView, Static, Rule
+from textual.widgets import Footer, Header, Label, ListItem, ListView, Static, Rule, Button, RichLog
+
+
+def get_platform() -> str:
+    """Get the current platform identifier."""
+    system = platform.system()
+    if system == "Darwin":
+        return "darwin"
+    elif system == "Windows":
+        return "win32"
+    return "linux"
+
+
+def get_package_manager() -> str | None:
+    """Detect the available package manager on the system."""
+    plat = get_platform()
+    if plat == "darwin":
+        if shutil.which("brew"):
+            return "brew"
+    elif plat == "linux":
+        if shutil.which("apt-get"):
+            return "apt"
+        elif shutil.which("dnf"):
+            return "dnf"
+    elif plat == "win32":
+        if shutil.which("pacman"):  # MSYS2
+            return "msys2"
+    return None
+
+
+class ToolInstaller:
+    """Handles downloading, building, and installing tools."""
+
+    def __init__(self, tools_dir: Path | None = None, log_callback: Callable[[str], None] | None = None):
+        """Initialize the installer.
+        
+        Args:
+            tools_dir: Directory to install tools to. Defaults to ~/.snes-ide/tools
+            log_callback: Function to call with log messages
+        """
+        if tools_dir is None:
+            tools_dir = Path.home() / ".snes-ide" / "tools"
+        self.tools_dir = tools_dir
+        self.tools_dir.mkdir(parents=True, exist_ok=True)
+        self.log = log_callback or print
+        self.platform = get_platform()
+        self.pkg_manager = get_package_manager()
+
+    def log_info(self, msg: str) -> None:
+        """Log an info message."""
+        self.log(f"[cyan]INFO:[/cyan] {msg}")
+
+    def log_error(self, msg: str) -> None:
+        """Log an error message."""
+        self.log(f"[red]ERROR:[/red] {msg}")
+
+    def log_success(self, msg: str) -> None:
+        """Log a success message."""
+        self.log(f"[green]SUCCESS:[/green] {msg}")
+
+    def log_cmd(self, msg: str) -> None:
+        """Log a command being run."""
+        self.log(f"[yellow]RUN:[/yellow] {msg}")
+
+    async def install_dependencies(self, tool_config: Dict[str, Any]) -> bool:
+        """Install system dependencies for a tool.
+        
+        Returns True if successful, False otherwise.
+        """
+        deps = tool_config.get("dependencies", {})
+        plat_deps = deps.get(self.platform, {})
+        
+        if not plat_deps:
+            self.log_info("No dependencies to install")
+            return True
+
+        if not self.pkg_manager:
+            self.log_error(f"No package manager detected for {self.platform}")
+            return False
+
+        packages = plat_deps.get(self.pkg_manager, [])
+        if not packages:
+            self.log_info(f"No {self.pkg_manager} packages required")
+            return True
+
+        self.log_info(f"Installing dependencies: {', '.join(packages)}")
+
+        # Build the install command
+        if self.pkg_manager == "apt":
+            cmd = ["sudo", "apt-get", "install", "-y"] + packages
+        elif self.pkg_manager == "dnf":
+            cmd = ["sudo", "dnf", "install", "-y"] + packages
+        elif self.pkg_manager == "brew":
+            cmd = ["brew", "install"] + packages
+        elif self.pkg_manager == "msys2":
+            cmd = ["pacman", "-S", "--noconfirm"] + packages
+        else:
+            self.log_error(f"Unknown package manager: {self.pkg_manager}")
+            return False
+
+        self.log_cmd(" ".join(cmd))
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT
+            )
+            stdout, _ = await process.communicate()
+            if stdout:
+                for line in stdout.decode().splitlines():
+                    self.log(f"  {line}")
+            
+            if process.returncode != 0:
+                self.log_error(f"Dependency installation failed with code {process.returncode}")
+                return False
+            
+            self.log_success("Dependencies installed")
+            return True
+        except Exception as e:
+            self.log_error(f"Failed to install dependencies: {e}")
+            return False
+
+    async def download_source(self, tool_config: Dict[str, Any]) -> Path | None:
+        """Download the source code for a tool.
+        
+        Returns the path to the source directory, or None on failure.
+        """
+        source = tool_config.get("source", {})
+        source_type = source.get("type")
+        tool_name = tool_config.get("name", "unknown")
+        
+        tool_dir = self.tools_dir / tool_name
+        
+        if source_type == "git":
+            return await self._clone_git(source, tool_dir)
+        elif source_type == "tarball":
+            return await self._download_tarball(source, tool_dir)
+        else:
+            self.log_error(f"Unknown source type: {source_type}")
+            return None
+
+    async def _clone_git(self, source: Dict[str, Any], tool_dir: Path) -> Path | None:
+        """Clone a git repository."""
+        url = source.get("url")
+        if not url:
+            self.log_error("No git URL specified")
+            return None
+
+        branch = source.get("branch", "master")
+        tag = source.get("tag")
+
+        # Remove existing directory if it exists
+        if tool_dir.exists():
+            self.log_info(f"Removing existing directory: {tool_dir}")
+            shutil.rmtree(tool_dir)
+
+        self.log_info(f"Cloning {url}")
+        
+        cmd = ["git", "clone", "--depth", "1"]
+        if tag:
+            cmd.extend(["--branch", tag])
+        elif branch:
+            cmd.extend(["--branch", branch])
+        cmd.extend([url, str(tool_dir)])
+
+        self.log_cmd(" ".join(cmd))
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT
+            )
+            stdout, _ = await process.communicate()
+            if stdout:
+                for line in stdout.decode().splitlines():
+                    self.log(f"  {line}")
+
+            if process.returncode != 0:
+                self.log_error(f"Git clone failed with code {process.returncode}")
+                return None
+
+            self.log_success(f"Cloned to {tool_dir}")
+            return tool_dir
+        except Exception as e:
+            self.log_error(f"Git clone failed: {e}")
+            return None
+
+    async def _download_tarball(self, source: Dict[str, Any], tool_dir: Path) -> Path | None:
+        """Download and extract a tarball."""
+        url = source.get("url")
+        if not url:
+            self.log_error("No tarball URL specified")
+            return None
+
+        strip_components = source.get("strip_components", 0)
+
+        # Remove existing directory if it exists
+        if tool_dir.exists():
+            self.log_info(f"Removing existing directory: {tool_dir}")
+            shutil.rmtree(tool_dir)
+
+        tool_dir.mkdir(parents=True, exist_ok=True)
+
+        self.log_info(f"Downloading {url}")
+
+        try:
+            # Download to temp file
+            with tempfile.NamedTemporaryFile(suffix=".tar.gz", delete=False) as tmp:
+                tmp_path = Path(tmp.name)
+
+            # Use curl or wget for download (more reliable than urllib)
+            if shutil.which("curl"):
+                cmd = ["curl", "-L", "-o", str(tmp_path), url]
+            elif shutil.which("wget"):
+                cmd = ["wget", "-O", str(tmp_path), url]
+            else:
+                # Fallback to urllib
+                self.log_info("Downloading with urllib...")
+                urllib.request.urlretrieve(url, tmp_path)
+                cmd = None
+
+            if cmd:
+                self.log_cmd(" ".join(cmd))
+                process = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT
+                )
+                stdout, _ = await process.communicate()
+                if process.returncode != 0:
+                    self.log_error(f"Download failed with code {process.returncode}")
+                    return None
+
+            self.log_info(f"Extracting to {tool_dir}")
+
+            # Extract tarball
+            with tarfile.open(tmp_path, "r:*") as tar:
+                if strip_components > 0:
+                    # Extract with strip components
+                    for member in tar.getmembers():
+                        parts = Path(member.name).parts
+                        if len(parts) > strip_components:
+                            member.name = str(Path(*parts[strip_components:]))
+                            tar.extract(member, tool_dir)
+                else:
+                    tar.extractall(tool_dir)
+
+            tmp_path.unlink()
+            self.log_success(f"Extracted to {tool_dir}")
+            return tool_dir
+        except Exception as e:
+            self.log_error(f"Download/extract failed: {e}")
+            return None
+
+    async def build_tool(self, tool_config: Dict[str, Any], source_dir: Path) -> bool:
+        """Build a tool from source.
+        
+        Returns True if successful, False otherwise.
+        """
+        build = tool_config.get("build", {})
+        plat_build = build.get(self.platform, {})
+        commands = plat_build.get("commands", [])
+        env_vars = plat_build.get("env", {})
+
+        if not commands:
+            self.log_info("No build commands specified")
+            return True
+
+        self.log_info(f"Building in {source_dir}")
+
+        # Set up environment
+        env = os.environ.copy()
+        for key, value in env_vars.items():
+            # Replace ${TOOL_DIR} with actual path
+            value = value.replace("${TOOL_DIR}", str(source_dir))
+            env[key] = value
+            self.log_info(f"Setting {key}={value}")
+
+        for cmd_str in commands:
+            self.log_cmd(cmd_str)
+            try:
+                process = await asyncio.create_subprocess_shell(
+                    cmd_str,
+                    cwd=source_dir,
+                    env=env,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT
+                )
+                stdout, _ = await process.communicate()
+                if stdout:
+                    for line in stdout.decode().splitlines():
+                        self.log(f"  {line}")
+
+                if process.returncode != 0:
+                    self.log_error(f"Build command failed with code {process.returncode}")
+                    return False
+            except Exception as e:
+                self.log_error(f"Build failed: {e}")
+                return False
+
+        self.log_success("Build completed")
+        return True
+
+    async def install_binary(self, tool_config: Dict[str, Any], source_dir: Path) -> bool:
+        """Install the built binary to PATH.
+        
+        Returns True if successful, False otherwise.
+        """
+        binary_path = tool_config.get("binary_path", "")
+        binary_name = tool_config.get("binary_name", {})
+        
+        if isinstance(binary_name, dict):
+            binary_name = binary_name.get(self.platform)
+        
+        if not binary_name:
+            binary_name = tool_config.get("name")
+
+        if tool_config.get("is_sdk"):
+            # For SDKs, we just add to shell config
+            self.log_info(f"SDK detected - adding {source_dir} to environment")
+            return await self._setup_sdk_env(tool_config, source_dir)
+
+        # Find the binary
+        if binary_path:
+            binary_file = source_dir / binary_path
+        else:
+            binary_file = source_dir / binary_name
+
+        if not binary_file.exists():
+            # Search for it
+            for pattern in [binary_name, f"**/{binary_name}"]:
+                matches = list(source_dir.glob(pattern))
+                if matches:
+                    binary_file = matches[0]
+                    break
+
+        if not binary_file.exists():
+            self.log_error(f"Binary not found: {binary_file}")
+            return False
+
+        # Install to ~/.local/bin
+        install_dir = Path.home() / ".local" / "bin"
+        install_dir.mkdir(parents=True, exist_ok=True)
+        
+        dest = install_dir / binary_name
+        self.log_info(f"Installing {binary_file} -> {dest}")
+
+        try:
+            shutil.copy2(binary_file, dest)
+            dest.chmod(0o755)
+            self.log_success(f"Installed to {dest}")
+            
+            # Check if ~/.local/bin is in PATH
+            if str(install_dir) not in os.environ.get("PATH", ""):
+                self.log_info(f"Note: Add {install_dir} to your PATH")
+            
+            return True
+        except Exception as e:
+            self.log_error(f"Install failed: {e}")
+            return False
+
+    async def _setup_sdk_env(self, tool_config: Dict[str, Any], source_dir: Path) -> bool:
+        """Set up environment variables for an SDK."""
+        tool_name = tool_config.get("name", "").upper().replace("-", "_")
+        env_var = f"{tool_name}_HOME"
+        
+        self.log_info(f"SDK installed at: {source_dir}")
+        self.log_info(f"Add to your shell config:")
+        self.log(f"  export {env_var}={source_dir}")
+        self.log(f"  export PATH=$PATH:${env_var}/devkitsnes/tools")
+        return True
+
+    async def verify_installation(self, tool_config: Dict[str, Any]) -> bool:
+        """Verify that a tool is properly installed.
+        
+        Returns True if verification passes, False otherwise.
+        """
+        verify_cmd = tool_config.get("verify_command", [])
+        if not verify_cmd:
+            self.log_info("No verify command specified")
+            return True
+
+        self.log_info(f"Verifying installation: {' '.join(verify_cmd)}")
+
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *verify_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT
+            )
+            stdout, _ = await process.communicate()
+            if stdout:
+                for line in stdout.decode().splitlines()[:3]:  # First 3 lines
+                    self.log(f"  {line}")
+
+            if process.returncode == 0:
+                self.log_success("Verification passed!")
+                return True
+            else:
+                self.log_error(f"Verification failed with code {process.returncode}")
+                return False
+        except FileNotFoundError:
+            self.log_error(f"Command not found: {verify_cmd[0]}")
+            return False
+        except Exception as e:
+            self.log_error(f"Verification failed: {e}")
+            return False
+
+    async def install(self, tool_config: Dict[str, Any]) -> bool:
+        """Perform a full installation of a tool.
+        
+        Returns True if successful, False otherwise.
+        """
+        tool_name = tool_config.get("name", "unknown")
+        self.log(f"[bold]{'='*50}[/bold]")
+        self.log(f"[bold]Installing: {tool_name}[/bold]")
+        self.log(f"[bold]{'='*50}[/bold]")
+        self.log("")
+
+        # Step 1: Install dependencies
+        self.log("[bold cyan]Step 1/4: Installing dependencies...[/bold cyan]")
+        if not await self.install_dependencies(tool_config):
+            return False
+        self.log("")
+
+        # Step 2: Download source
+        self.log("[bold cyan]Step 2/4: Downloading source...[/bold cyan]")
+        source_dir = await self.download_source(tool_config)
+        if not source_dir:
+            return False
+        self.log("")
+
+        # Step 3: Build
+        self.log("[bold cyan]Step 3/4: Building...[/bold cyan]")
+        if not await self.build_tool(tool_config, source_dir):
+            return False
+        self.log("")
+
+        # Step 4: Install binary
+        self.log("[bold cyan]Step 4/4: Installing binary...[/bold cyan]")
+        if not await self.install_binary(tool_config, source_dir):
+            return False
+        self.log("")
+
+        # Verify
+        self.log("[bold cyan]Verifying installation...[/bold cyan]")
+        await self.verify_installation(tool_config)
+        self.log("")
+
+        self.log(f"[bold green]{'='*50}[/bold green]")
+        self.log(f"[bold green]Installation of {tool_name} complete![/bold green]")
+        self.log(f"[bold green]{'='*50}[/bold green]")
+        return True
+
+
+class InstallScreen(ModalScreen):
+    """Modal screen for tool installation with progress log."""
+
+    DEFAULT_CSS = """
+    InstallScreen {
+        align: center middle;
+    }
+    
+    #install-dialog {
+        width: 80%;
+        height: 80%;
+        border: thick $primary;
+        background: $surface;
+        padding: 1 2;
+    }
+    
+    #install-title {
+        text-align: center;
+        text-style: bold;
+        padding: 1;
+        background: $accent;
+        margin-bottom: 1;
+    }
+    
+    #install-log {
+        height: 1fr;
+        border: solid $primary;
+        margin-bottom: 1;
+    }
+    
+    #install-buttons {
+        height: auto;
+        align: center middle;
+    }
+    
+    #install-buttons Button {
+        margin: 0 2;
+    }
+    """
+
+    BINDINGS = [
+        ("escape", "close", "Close"),
+    ]
+
+    def __init__(self, tool_config: Dict[str, Any]):
+        super().__init__()
+        self.tool_config = tool_config
+        self.installing = False
+        self.install_complete = False
+
+    def compose(self) -> ComposeResult:
+        tool_name = self.tool_config.get("name", "Unknown")
+        with Vertical(id="install-dialog"):
+            yield Label(f"Installing: {tool_name}", id="install-title")
+            yield RichLog(id="install-log", highlight=True, markup=True)
+            with Horizontal(id="install-buttons"):
+                yield Button("Start Install", id="start-btn", variant="primary")
+                yield Button("Close", id="close-btn", variant="default")
+
+    def on_mount(self) -> None:
+        """Start installation when mounted."""
+        self.query_one("#close-btn", Button).disabled = True
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button presses."""
+        if event.button.id == "start-btn":
+            if not self.installing:
+                self.installing = True
+                event.button.disabled = True
+                self.run_worker(self._run_install())
+        elif event.button.id == "close-btn":
+            self.dismiss(self.install_complete)
+
+    def action_close(self) -> None:
+        """Close the screen."""
+        if not self.installing:
+            self.dismiss(False)
+
+    def log_message(self, msg: str) -> None:
+        """Add a message to the log."""
+        log = self.query_one("#install-log", RichLog)
+        log.write(msg)
+
+    async def _run_install(self) -> None:
+        """Run the installation process."""
+        installer = ToolInstaller(log_callback=self.log_message)
+        
+        try:
+            self.install_complete = await installer.install(self.tool_config)
+        except Exception as e:
+            self.log_message(f"[red]Installation failed: {e}[/red]")
+            self.install_complete = False
+        
+        # Re-enable close button
+        self.query_one("#close-btn", Button).disabled = False
+        self.query_one("#start-btn", Button).label = "Done" if self.install_complete else "Failed"
 
 
 class Sidebar(Widget):
@@ -381,8 +940,27 @@ class ToolBrowser(App):
 
     def action_install(self) -> None:
         """Install the currently selected tool."""
-        # TODO: Implement tool installation
-        pass
+        detail_panel = self.query_one(ToolDetailPanel)
+        tool_data = detail_panel.tool_data
+        
+        if tool_data is None:
+            self.notify("No tool selected. Press 's' to open sidebar and select a tool.", severity="warning")
+            return
+        
+        if tool_data.get("available"):
+            self.notify(f"{tool_data.get('name')} is already installed.", severity="information")
+            return
+        
+        # Push the install screen
+        self.push_screen(InstallScreen(tool_data), self._on_install_complete)
+
+    def _on_install_complete(self, success: bool) -> None:
+        """Handle install completion."""
+        if success:
+            self.notify("Installation complete! Refreshing...", severity="information")
+            self.action_refresh()
+        else:
+            self.notify("Installation did not complete successfully.", severity="warning")
 
 
 if __name__ == "__main__":
