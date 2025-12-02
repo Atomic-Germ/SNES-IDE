@@ -17,7 +17,7 @@
   "tools": [
     {
       "name": "64tass",
-      "description": "6502/65816 assembler",
+      "description": "Powerful cross-assembler supporting 6502, 65C02, 65816, and R65C02. Features macros, conditional assembly, multiple output formats (binary, Intel HEX, S-record), and extensive expression evaluation. Highly portable with excellent error diagnostics.",
       "category": "assemblers",
       "priority": "optional",
       "source": {
@@ -62,7 +62,7 @@
     },
     {
       "name": "ca65",
-      "description": "6502 assembler (cc65 suite)",
+      "description": "Macro assembler from the cc65 cross-compiler suite. Supports 6502/65C02 with powerful macro system, conditional assembly, and symbol management. Part of a complete toolchain with linker, librarian, and C compiler for NES, Commodore, Atari, and Apple II.",
       "category": "assemblers",
       "priority": "optional",
       "source": {
@@ -107,7 +107,7 @@
     },
     {
       "name": "wla-dx",
-      "description": "Multi-platform assembler with SNES support (wla-65816)",
+      "description": "Versatile cross-assembler suite supporting 65816, Z80, 6502, 6800, and more. The wla-65816 variant is optimized for SNES with bank management, object file linking, and ROM patching. Widely used for SNES homebrew and ROM hacking projects.",
       "category": "assemblers",
       "priority": "required",
       "source": {
@@ -164,7 +164,7 @@
     },
     {
       "name": "superfamiconv",
-      "description": "SNES graphics converter",
+      "description": "Flexible tile graphics converter for SNES and retro consoles. Converts PNG images to native tile, palette, and map data. Supports multiple modes (SNES, Mode 7, GB, GBA, MD), color depth options, tile optimization, and sprite layouts. Essential for graphics asset pipelines.",
       "category": "graphics",
       "priority": "required",
       "source": {
@@ -221,7 +221,7 @@
     },
     {
       "name": "pvsneslib",
-      "description": "Complete SNES development framework - builds from source",
+      "description": "Comprehensive C-based SNES development SDK. Includes 816-tcc compiler, linker, graphics/audio tools, and runtime libraries. Enables high-level C programming for SNES with built-in sprite, background, input, and sound handling. The primary SDK for SNES-IDE projects.",
       "category": "sdk",
       "priority": "required",
       "source": {
@@ -283,7 +283,7 @@
     },
     {
       "name": "lakesnes",
-      "description": "Lightweight SNES emulator",
+      "description": "Fast, lightweight SNES emulator written in C. Features clean codebase, good compatibility, and low resource usage. Ideal for quick testing during development. Uses SDL2 for cross-platform graphics and input handling.",
       "category": "emulators",
       "priority": "required",
       "source": {
@@ -328,7 +328,7 @@
     },
     {
       "name": "bsnes",
-      "description": "Accurate SNES emulator with debugging features",
+      "description": "Cycle-accurate SNES emulator by Near (byuu). Known for pixel-perfect accuracy and comprehensive debugging tools: memory viewer, CPU/SMP/PPU state, breakpoints, and trace logging. The gold standard for testing ROM accuracy and debugging.",
       "category": "emulators",
       "priority": "optional",
       "source": {
@@ -373,7 +373,7 @@
     },
     {
       "name": "schismtracker",
-      "description": "Impulse Tracker clone for music creation",
+      "description": "Cross-platform Impulse Tracker clone for composing chiptune and tracker music. Full IT format compatibility with samples, instruments, and effects. Output can be converted to SNES SPC format using smconv. Features classic DOS-style interface with modern improvements.",
       "category": "audio",
       "priority": "optional",
       "source": {
@@ -430,7 +430,7 @@
     },
     {
       "name": "libresprite",
-      "description": "Pixel art sprite editor",
+      "description": "Free, open-source pixel art and animation editor forked from Aseprite. Features layers, frames, onion skinning, palette management, and tile mode. Exports to PNG, GIF, and sprite sheets. Ideal for creating SNES sprites and tiles with indexed color support.",
       "category": "graphics",
       "priority": "optional",
       "source": {
@@ -488,7 +488,7 @@
     },
     {
       "name": "tiled",
-      "description": "Tile map editor",
+      "description": "Powerful, flexible tile map editor for 2D game development. Supports orthogonal, isometric, and hexagonal maps. Features layers, objects, custom properties, and tileset management. Exports to TMX/JSON for conversion to SNES-compatible formats via tmx2snes.",
       "category": "graphics",
       "priority": "optional",
       "source": {
@@ -543,7 +543,7 @@
     },
     {
       "name": "make",
-      "description": "GNU Make build tool",
+      "description": "GNU Make build automation tool. Reads Makefiles to compile and link projects efficiently by tracking file dependencies. Essential for building pvsneslib projects and most SNES development tools. Typically pre-installed on Linux/macOS.",
       "category": "build-tools",
       "priority": "required",
       "use_system": true,
@@ -575,7 +575,7 @@
     },
     {
       "name": "dotnet8",
-      "description": ".NET 8 SDK for DotnetSnes",
+      "description": ".NET 8 SDK required for DotnetSnes development. Enables writing SNES games in C# using the DotnetSnes transpiler, which converts .NET IL to 65816 assembly. Includes runtime, compiler, and package management. Installed via Microsoft's official script.",
       "category": "sdk",
       "priority": "optional",
       "source": {
@@ -610,7 +610,7 @@
     },
     {
       "name": "jdk8",
-      "description": "Zulu OpenJDK 8 for JavaSnes",
+      "description": "Azul Zulu OpenJDK 8 with JavaFX for JavaSnes development. Required to run the JavaSnes transpiler that converts Java bytecode to 65816 assembly. This build includes JavaFX for GUI tools. Pre-built binaries for x64 and ARM64 architectures.",
       "category": "sdk",
       "priority": "optional",
       "source": {
