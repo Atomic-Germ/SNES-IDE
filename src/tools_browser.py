@@ -109,17 +109,38 @@ class ToolInstaller:
             self.log_info(f"No {self.pkg_manager} packages required")
             return True
 
-        self.log_info(f"Installing dependencies: {', '.join(packages)}")
+        # Check which dependencies are already available in PATH
+        missing_packages = []
+        for pkg in packages:
+            # Map package names to binary names for common packages
+            binary_name = self._package_to_binary(pkg)
+            if binary_name and shutil.which(binary_name):
+                self.log_info(f"✓ {pkg} already available ({binary_name})")
+            else:
+                missing_packages.append(pkg)
+
+        if not missing_packages:
+            self.log_success("All dependencies already available!")
+            return True
+
+        self.log_info(f"Missing dependencies: {', '.join(missing_packages)}")
+
+        # Check if we need sudo
+        needs_sudo = self.pkg_manager in ("apt", "dnf")
+        
+        if needs_sudo:
+            self.log_info("[yellow]Root privileges required to install system packages[/yellow]")
+            self.log_info("You may be prompted for your password...")
 
         # Build the install command
         if self.pkg_manager == "apt":
-            cmd = ["sudo", "apt-get", "install", "-y"] + packages
+            cmd = ["sudo", "apt-get", "install", "-y"] + missing_packages
         elif self.pkg_manager == "dnf":
-            cmd = ["sudo", "dnf", "install", "-y"] + packages
+            cmd = ["sudo", "dnf", "install", "-y"] + missing_packages
         elif self.pkg_manager == "brew":
-            cmd = ["brew", "install"] + packages
+            cmd = ["brew", "install"] + missing_packages
         elif self.pkg_manager == "msys2":
-            cmd = ["pacman", "-S", "--noconfirm"] + packages
+            cmd = ["pacman", "-S", "--noconfirm"] + missing_packages
         else:
             self.log_error(f"Unknown package manager: {self.pkg_manager}")
             return False
@@ -138,6 +159,8 @@ class ToolInstaller:
             
             if process.returncode != 0:
                 self.log_error(f"Dependency installation failed with code {process.returncode}")
+                if needs_sudo:
+                    self.log_info("[dim]Tip: You may need to run with proper sudo access[/dim]")
                 return False
             
             self.log_success("Dependencies installed")
@@ -145,6 +168,32 @@ class ToolInstaller:
         except Exception as e:
             self.log_error(f"Failed to install dependencies: {e}")
             return False
+
+    def _package_to_binary(self, package: str) -> str | None:
+        """Map a package name to its primary binary name for PATH checking."""
+        # Common mappings for build dependencies
+        mappings = {
+            # Build essentials
+            "build-essential": "gcc",
+            "gcc": "gcc",
+            "g++": "g++",
+            "gcc-c++": "g++",
+            "make": "make",
+            "cmake": "cmake",
+            "git": "git",
+            "mingw-w64-x86_64-gcc": "gcc",
+            "mingw-w64-x86_64-cmake": "cmake",
+            # Libraries - these don't have binaries, return None
+            "libpng-dev": None,
+            "libpng-devel": None,
+            "libpng": None,
+            "mingw-w64-x86_64-libpng": None,
+            "zlib1g-dev": None,
+            "zlib-devel": None,
+            "zlib": None,
+        }
+        return mappings.get(package, package)  # Default: try package name as binary
+        return False
 
     async def download_source(self, tool_config: Dict[str, Any]) -> Path | None:
         """Download the source code for a tool.
