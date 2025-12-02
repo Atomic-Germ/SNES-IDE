@@ -152,10 +152,15 @@ class ToolInstaller:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT
             )
-            stdout, _ = await process.communicate()
-            if stdout:
-                for line in stdout.decode().splitlines():
-                    self.log(f"  {line}")
+            
+            # Stream output line by line in real-time
+            while True:
+                line = await process.stdout.readline()
+                if not line:
+                    break
+                self.log(f"  {line.decode().rstrip()}")
+            
+            await process.wait()
             
             if process.returncode != 0:
                 self.log_error(f"Dependency installation failed with code {process.returncode}")
@@ -245,10 +250,15 @@ class ToolInstaller:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT
             )
-            stdout, _ = await process.communicate()
-            if stdout:
-                for line in stdout.decode().splitlines():
-                    self.log(f"  {line}")
+            
+            # Stream output line by line in real-time
+            while True:
+                line = await process.stdout.readline()
+                if not line:
+                    break
+                self.log(f"  {line.decode().rstrip()}")
+            
+            await process.wait()
 
             if process.returncode != 0:
                 self.log_error(f"Git clone failed with code {process.returncode}")
@@ -351,7 +361,8 @@ class ToolInstaller:
             env[key] = value
             self.log_info(f"Setting {key}={value}")
 
-        for cmd_str in commands:
+        for i, cmd_str in enumerate(commands, 1):
+            self.log(f"[bold cyan]Command {i}/{len(commands)}:[/bold cyan]")
             self.log_cmd(cmd_str)
             try:
                 process = await asyncio.create_subprocess_shell(
@@ -361,14 +372,34 @@ class ToolInstaller:
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.STDOUT
                 )
-                stdout, _ = await process.communicate()
-                if stdout:
-                    for line in stdout.decode().splitlines():
-                        self.log(f"  {line}")
+                
+                # Stream output line by line in real-time
+                line_count = 0
+                while True:
+                    line = await process.stdout.readline()
+                    if not line:
+                        break
+                    line_count += 1
+                    decoded = line.decode().rstrip()
+                    # Show all lines but dim the verbose compiler output
+                    if any(x in decoded.lower() for x in ['warning:', 'error:', 'undefined']):
+                        self.log(f"  [yellow]{decoded}[/yellow]")
+                    elif decoded.startswith('cc ') or decoded.startswith('gcc ') or decoded.startswith('g++ '):
+                        # Shorten long compile commands
+                        if len(decoded) > 80:
+                            self.log(f"  [dim]{decoded[:77]}...[/dim]")
+                        else:
+                            self.log(f"  [dim]{decoded}[/dim]")
+                    else:
+                        self.log(f"  {decoded}")
 
+                await process.wait()
+                
                 if process.returncode != 0:
                     self.log_error(f"Build command failed with code {process.returncode}")
                     return False
+                    
+                self.log_info(f"Command completed ({line_count} lines of output)")
             except Exception as e:
                 self.log_error(f"Build failed: {e}")
                 return False
