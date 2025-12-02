@@ -14,6 +14,7 @@ import subprocess
 import sys
 import json
 import tempfile
+import time
 import urllib.request
 import tarfile
 from pathlib import Path
@@ -61,14 +62,14 @@ class ToolInstaller:
         self, 
         tools_dir: Path | None = None, 
         log_callback: Callable[[str], None] | None = None,
-        progress_callback: Callable[[float, float], None] | None = None
+        progress_callback: Callable[[float, float, float | None], None] | None = None
     ):
         """Initialize the installer.
         
         Args:
             tools_dir: Directory to install tools to. Defaults to ~/.snes-ide/tools
             log_callback: Function to call with log messages
-            progress_callback: Function to call with (current, total) progress
+            progress_callback: Function to call with (current, total, eta_seconds)
         """
         if tools_dir is None:
             tools_dir = Path.home() / ".snes-ide" / "tools"
@@ -79,10 +80,10 @@ class ToolInstaller:
         self.platform = get_platform()
         self.pkg_manager = get_package_manager()
 
-    def update_progress(self, current: float, total: float) -> None:
+    def update_progress(self, current: float, total: float, eta_seconds: float | None = None) -> None:
         """Update the progress bar."""
         if self.progress_callback:
-            self.progress_callback(current, total)
+            self.progress_callback(current, total, eta_seconds)
 
     def log_info(self, msg: str) -> None:
         """Log an info message."""
@@ -381,7 +382,7 @@ class ToolInstaller:
         self.log_info(f"Found {len(source_files)} source files to track")
         
         # Set progress bar total to the number of source files for granular tracking
-        self.update_progress(0, total_source_files)
+        self.update_progress(0, total_source_files, None)
 
         # Set up environment
         env = os.environ.copy()
@@ -391,8 +392,11 @@ class ToolInstaller:
             env[key] = value
             self.log_info(f"Setting {key}={value}")
 
-        # Track files compiled across all commands
+        # Track files compiled across all commands and timing for ETA
         files_compiled = set()
+        compile_times: list[float] = []  # Time taken to compile each file
+        last_compile_time = time.monotonic()
+        build_start_time = last_compile_time
         
         for i, cmd_str in enumerate(commands, 1):
             self.log(f"[bold cyan]Command {i}/{len(commands)}:[/bold cyan]")
@@ -418,9 +422,23 @@ class ToolInstaller:
                     # Check if this line mentions any of our source files
                     for src_file in source_files:
                         if src_file in decoded:
-                            files_compiled.add(src_file)
-                            # Update progress: current = files compiled, total = source files
-                            self.update_progress(len(files_compiled), total_source_files)
+                            if src_file not in files_compiled:
+                                # New file compiled - track timing
+                                now = time.monotonic()
+                                if files_compiled:  # Not the first file
+                                    compile_times.append(now - last_compile_time)
+                                last_compile_time = now
+                                files_compiled.add(src_file)
+                                
+                                # Calculate ETA based on average compile time
+                                eta_seconds = None
+                                if compile_times:
+                                    avg_time = sum(compile_times) / len(compile_times)
+                                    remaining_files = total_source_files - len(files_compiled)
+                                    eta_seconds = avg_time * remaining_files
+                                
+                                # Update progress with ETA
+                                self.update_progress(len(files_compiled), total_source_files, eta_seconds)
                             break  # Only count once per line
                     
                     # Show all lines but dim the verbose compiler output
@@ -446,9 +464,10 @@ class ToolInstaller:
                 self.log_error(f"Build failed: {e}")
                 return False
 
-        # Ensure we show 100% at end of build
-        self.update_progress(total_source_files, total_source_files)
-        self.log_success(f"Build completed ({len(files_compiled)} files compiled)")
+        # Ensure we show 100% at end of build with 0 ETA
+        total_build_time = time.monotonic() - build_start_time
+        self.update_progress(total_source_files, total_source_files, 0)
+        self.log_success(f"Build completed ({len(files_compiled)} files in {total_build_time:.1f}s)")
         return True
 
     async def install_binary(self, tool_config: Dict[str, Any], source_dir: Path) -> bool:
@@ -656,7 +675,13 @@ class InstallScreen(ModalScreen):
     }
     
     #install-progress {
-        width: 100%;
+        width: 1fr;
+    }
+    
+    #eta-label {
+        width: auto;
+        margin-left: 1;
+        color: $text-muted;
     }
     
     #install-buttons {
@@ -686,6 +711,7 @@ class InstallScreen(ModalScreen):
             yield RichLog(id="install-log", highlight=True, markup=True)
             with Horizontal(id="progress-container"):
                 yield ProgressBar(id="install-progress", total=100, show_eta=False)
+                yield Label("", id="eta-label")
             with Horizontal(id="install-buttons"):
                 yield Button("Start Install", id="start-btn", variant="primary")
                 yield Button("Close", id="close-btn", variant="default")
@@ -714,11 +740,30 @@ class InstallScreen(ModalScreen):
         log = self.query_one("#install-log", RichLog)
         log.write(msg)
 
-    def update_progress(self, current: float, total: float) -> None:
-        """Update the progress bar."""
+    def update_progress(self, current: float, total: float, eta_seconds: float | None = None) -> None:
+        """Update the progress bar and ETA display."""
         progress_bar = self.query_one("#install-progress", ProgressBar)
+        eta_label = self.query_one("#eta-label", Label)
+        
         if total > 0:
             progress_bar.update(total=total, progress=current)
+        
+        # Format and display ETA
+        if eta_seconds is not None:
+            if eta_seconds <= 0:
+                eta_label.update("")
+            elif eta_seconds < 60:
+                eta_label.update(f" ~{int(eta_seconds)}s remaining")
+            elif eta_seconds < 3600:
+                mins = int(eta_seconds // 60)
+                secs = int(eta_seconds % 60)
+                eta_label.update(f" ~{mins}m {secs}s remaining")
+            else:
+                hours = int(eta_seconds // 3600)
+                mins = int((eta_seconds % 3600) // 60)
+                eta_label.update(f" ~{hours}h {mins}m remaining")
+        else:
+            eta_label.update("")
 
     async def _run_install(self) -> None:
         """Run the installation process."""
