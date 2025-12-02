@@ -360,6 +360,8 @@ class ToolBrowser(App):
             if tool_name in self.all_tools_map:
                 detail_panel = self.query_one(ToolDetailPanel)
                 detail_panel.tool_data = self.all_tools_map[tool_name]
+                # Auto-hide sidebar after selection
+                self.show_sidebar = False
 
     def action_toggle_sidebar(self) -> None:
         """Toggle sidebar visibility."""
