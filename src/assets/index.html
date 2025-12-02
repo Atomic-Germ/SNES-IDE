@@ -220,6 +220,16 @@
                             <span class="run-icon"><i
                                     class="fas fa-play"></i></span>
                         </button>
+                        <button class="script-btn"
+                            onclick="showToolInstaller()">
+                            <div>
+                                <div class="script-name">Install Tools</div>
+                                <div class="script-desc">Manage tool installation
+                                    and verification</div>
+                            </div>
+                            <span class="run-icon"><i
+                                    class="fas fa-download"></i></span>
+                        </button>
                     </div>
                 </div>
 
@@ -238,8 +248,10 @@
         <script>
 
         var scriptRunner = null;
+        var toolInstaller = null;
         new QWebChannel(qt.webChannelTransport, function(channel) {
             scriptRunner = channel.objects.scriptRunner;
+            toolInstaller = channel.objects.toolInstaller;
             scriptRunner.scriptExecuted.connect(function(scriptName, result) {
                 updateStatus(`Completed: ${scriptName} - ${result}`);
                 setIndicator('idle');
@@ -262,6 +274,21 @@
                 scriptRunner.runScript(scriptName);
             } else {
                 updateStatus('Error: Script runner not available');
+            }
+        }
+
+        /**
+         * Show the tool installer dialog.
+         *
+         * This function communicates with the PyQt backend to display
+         * the tool installer and verification dialog.
+         */
+        function showToolInstaller() {
+            if (toolInstaller) {
+                updateStatus('Opening Tool Installer...');
+                toolInstaller.show_tool_installer();
+            } else {
+                updateStatus('Error: Tool installer not available');
             }
         }
 

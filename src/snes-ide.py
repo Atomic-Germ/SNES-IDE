@@ -16,14 +16,21 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget
-from PySide6.QtCore import QObject, Slot, Signal, QUrl, QProcess
+from PySide6.QtWidgets import (
+    QApplication, QMainWindow, QVBoxLayout, QWidget, QDialog,
+    QDialogButtonBox, QScrollArea, QLabel, QPushButton, QProgressBar,
+    QGroupBox, QVBoxLayout as VBoxLayout
+)
+from PySide6.QtCore import QObject, Slot, Signal, QUrl, QProcess, Qt
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebChannel import QWebChannel
 
 from typing_extensions import NoReturn, Any
+from typing import Dict
 from pathlib import Path
 import sys
+import json
+from tool_manager import ToolManager
 
 
 class ScriptRunner(QObject):
@@ -43,6 +50,22 @@ class ScriptRunner(QObject):
 
         super().__init__()
         self.scripts_dir: Path = self.get_executable_path() / "scripts"
+        self.tool_manager: ToolManager = self._init_tool_manager()
+
+    def _init_tool_manager(self) -> ToolManager:
+        """
+        Initialize the ToolManager with the appropriate tools.json path.
+
+        Returns:
+            ToolManager instance configured with tools.json.
+        """
+        try:
+            tools_json_path = self.get_executable_path() / "tools.json"
+            return ToolManager(tools_json_path)
+        except Exception as e:
+            print(f"Warning: Could not initialize ToolManager: {e}")
+            # Return a manager with default path
+            return ToolManager()
 
     @staticmethod
     def get_executable_path() -> Path:
@@ -165,6 +188,178 @@ class ScriptRunner(QObject):
                 error_msg = f"Error: {error_msg}"
                 self.scriptExecuted.emit(script_name, error_msg)
 
+    @Slot(result=str)
+    def get_tools_status(self) -> str:
+        """
+        Get the installation status of all tools as JSON.
+
+        Returns:
+            JSON string containing tool status information.
+        """
+        try:
+            tools_by_category = self.tool_manager.get_tools_by_category()
+            return json.dumps(tools_by_category)
+        except Exception as e:
+            error_data = {"error": str(e)}
+            return json.dumps(error_data)
+
+    @Slot(result=str)
+    def get_missing_required_tools(self) -> str:
+        """
+        Get list of missing required tools as JSON.
+
+        Returns:
+            JSON string containing missing required tools.
+        """
+        try:
+            missing = self.tool_manager.get_missing_required_tools()
+            return json.dumps(missing)
+        except Exception as e:
+            error_data = {"error": str(e)}
+            return json.dumps(error_data)
+
+
+class ToolInstallerDialog(QDialog):
+    """Dialog for managing tool installation and verification."""
+
+    def __init__(self, script_runner: ScriptRunner, parent: QWidget = None) -> None:
+        """
+        Initialize the Tool Installer Dialog.
+
+        Args:
+            script_runner: Reference to ScriptRunner for accessing ToolManager.
+            parent: Parent widget.
+
+        Returns:
+            None
+        """
+        super().__init__(parent)
+        self.script_runner = script_runner
+        self.setWindowTitle("Tool Installer")
+        self.setGeometry(100, 100, 800, 600)
+        self.init_ui()
+        self.load_tools_status()
+
+    def init_ui(self) -> None:
+        """Initialize the user interface for the dialog."""
+        layout = VBoxLayout(self)
+
+        # Title
+        title = QLabel("SNES-IDE Tool Manager")
+        title.setStyleSheet("font-weight: bold; font-size: 14px; margin-bottom: 10px;")
+        layout.addWidget(title)
+
+        # Refresh button
+        refresh_button = QPushButton("Refresh Status")
+        refresh_button.clicked.connect(self.load_tools_status)
+        layout.addWidget(refresh_button)
+
+        # Scroll area for tools
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_widget = QWidget()
+        scroll_layout = VBoxLayout(scroll_widget)
+
+        self.tool_groups: Dict[str, QGroupBox] = {}
+
+        # Create groups by category
+        tools_by_category = self.script_runner.tool_manager.get_tools_by_category()
+
+        for category in sorted(tools_by_category.keys()):
+            group = QGroupBox(category.replace("-", " ").title())
+            group_layout = VBoxLayout()
+
+            for tool_status in sorted(
+                tools_by_category[category],
+                key=lambda t: (not t["available"], t["priority"] == "optional", t["name"])
+            ):
+                tool_widget = self.create_tool_widget(tool_status)
+                group_layout.addWidget(tool_widget)
+
+            group.setLayout(group_layout)
+            scroll_layout.addWidget(group)
+            self.tool_groups[category] = group
+
+        scroll_layout.addStretch()
+        scroll_area.setWidget(scroll_widget)
+        layout.addWidget(scroll_area)
+
+        # Dialog buttons
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+    def create_tool_widget(self, tool_status: Dict[str, Any]) -> QWidget:
+        """
+        Create a widget for displaying and managing a single tool.
+
+        Args:
+            tool_status: Tool status dictionary.
+
+        Returns:
+            QWidget containing tool information and action buttons.
+        """
+        widget = QWidget()
+        layout = VBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        # Tool header with name and status
+        header_layout = VBoxLayout()
+
+        name_label = QLabel(tool_status["name"])
+        name_label.setStyleSheet("font-weight: bold;")
+
+        desc_label = QLabel(tool_status["description"])
+        desc_label.setStyleSheet("font-size: 10px; color: gray;")
+
+        status_text = "✓ Available" if tool_status["available"] else "✗ Not installed"
+        status_color = "green" if tool_status["available"] else "red"
+        status_label = QLabel(status_text)
+        status_label.setStyleSheet(f"color: {status_color}; font-weight: bold;")
+
+        header_layout.addWidget(name_label)
+        header_layout.addWidget(desc_label)
+        header_layout.addWidget(status_label)
+
+        if tool_status["path"]:
+            path_label = QLabel(f"Path: {tool_status['path']}")
+            path_label.setStyleSheet("font-size: 9px; color: darkblue;")
+            header_layout.addWidget(path_label)
+
+        layout.addLayout(header_layout)
+
+        # Action buttons
+        if not tool_status["available"]:
+            action_layout = VBoxLayout()
+
+            install_button = QPushButton("Install")
+            install_button.setMaximumWidth(100)
+            # TODO: Connect to installation script when available
+            install_button.setEnabled(False)
+            install_button.setToolTip("Installation script not yet implemented")
+
+            action_layout.addWidget(install_button)
+            layout.addLayout(action_layout)
+
+        widget.setLayout(layout)
+        return widget
+
+    def load_tools_status(self) -> None:
+        """Reload and display current tool status."""
+        try:
+            # Force reload of tool statuses
+            tools_by_category = self.script_runner.tool_manager.get_tools_by_category()
+
+            # Update existing groups
+            for category in self.tool_groups.keys():
+                if category in tools_by_category:
+                    # Tools are already displayed, just update visibility
+                    pass
+
+        except Exception as e:
+            error_label = QLabel(f"Error loading tool status: {str(e)}")
+            error_label.setStyleSheet("color: red;")
+
 
 class MainWindow(QMainWindow):
 
@@ -193,7 +388,11 @@ class MainWindow(QMainWindow):
 
         self.channel: QWebChannel = QWebChannel()
         self.script_runner: ScriptRunner = ScriptRunner()
+        self.tool_installer_dialog: ToolInstallerDialog = ToolInstallerDialog(
+            self.script_runner, self
+        )
         self.channel.registerObject("scriptRunner", self.script_runner)
+        self.channel.registerObject("toolInstaller", self)
         self.web_view.page().setWebChannel(self.channel)
 
         html_path: Path = ScriptRunner.get_executable_path() / "assets" / "index.html"
@@ -203,6 +402,16 @@ class MainWindow(QMainWindow):
         self.web_view.load(url)
 
         layout.addWidget(self.web_view)
+
+    @Slot()
+    def show_tool_installer(self) -> None:
+        """
+        Show the tool installer dialog.
+
+        Returns:
+            None
+        """
+        self.tool_installer_dialog.show()
 
 
 def main() -> NoReturn:
