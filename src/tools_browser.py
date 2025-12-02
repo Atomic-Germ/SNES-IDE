@@ -225,6 +225,7 @@ class ToolBrowser(App):
 
     BINDINGS = [
         ("s", "toggle_sidebar", "Sidebar"),
+        ("i", "install", "Install"),
         ("q", "quit", "Quit"),
         ("r", "refresh", "Refresh"),
     ]
@@ -377,6 +378,11 @@ class ToolBrowser(App):
         self.all_tools_map.clear()
         self.load_tools_from_json()
         self.populate_tool_list()
+
+    def action_install(self) -> None:
+        """Install the currently selected tool."""
+        # TODO: Implement tool installation
+        pass
 
 
 if __name__ == "__main__":
