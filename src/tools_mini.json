@@ -1,0 +1,668 @@
+{
+  "version": "1.0.0",
+  "description": "SNES-IDE Mini - Build-on-demand tool configuration",
+  "system_requirements": {
+    "common": ["git", "make", "cmake", "python3"],
+    "linux": {
+      "apt": ["build-essential", "cmake", "git", "libpng-dev", "zlib1g-dev"],
+      "dnf": ["gcc", "gcc-c++", "make", "cmake", "git", "libpng-devel", "zlib-devel"]
+    },
+    "darwin": {
+      "brew": ["cmake", "libpng", "zlib"]
+    },
+    "win32": {
+      "msys2": ["mingw-w64-x86_64-cmake", "mingw-w64-x86_64-gcc", "make"]
+    }
+  },
+  "tools": [
+    {
+      "name": "64tass",
+      "description": "6502/65816 assembler",
+      "category": "assemblers",
+      "priority": "optional",
+      "source": {
+        "type": "tarball",
+        "url": "https://github.com/irmen/64tass/archive/refs/tags/v1.59.3120.tar.gz",
+        "strip_components": 1
+      },
+      "binary_path": "64tass",
+      "binary_name": {
+        "linux": "64tass",
+        "darwin": "64tass",
+        "win32": "64tass.exe"
+      },
+      "build": {
+        "linux": {
+          "commands": ["make"],
+          "env": {}
+        },
+        "darwin": {
+          "commands": ["make"],
+          "env": {}
+        },
+        "win32": {
+          "commands": ["make"],
+          "env": {}
+        }
+      },
+      "dependencies": {
+        "linux": {
+          "apt": ["build-essential"],
+          "dnf": ["gcc", "make"]
+        },
+        "darwin": {
+          "brew": []
+        },
+        "win32": {
+          "msys2": ["mingw-w64-x86_64-gcc", "make"]
+        }
+      },
+      "patches": [],
+      "verify_command": ["64tass", "--version"]
+    },
+    {
+      "name": "ca65",
+      "description": "6502 assembler (cc65 suite)",
+      "category": "assemblers",
+      "priority": "optional",
+      "source": {
+        "type": "tarball",
+        "url": "https://github.com/cc65/cc65/archive/refs/tags/V2.19.tar.gz",
+        "strip_components": 1
+      },
+      "binary_path": "bin/ca65",
+      "binary_name": {
+        "linux": "ca65",
+        "darwin": "ca65",
+        "win32": "ca65.exe"
+      },
+      "build": {
+        "linux": {
+          "commands": ["make"],
+          "env": {}
+        },
+        "darwin": {
+          "commands": ["make"],
+          "env": {}
+        },
+        "win32": {
+          "commands": ["make"],
+          "env": {}
+        }
+      },
+      "dependencies": {
+        "linux": {
+          "apt": ["build-essential"],
+          "dnf": ["gcc", "make"]
+        },
+        "darwin": {
+          "brew": []
+        },
+        "win32": {
+          "msys2": ["mingw-w64-x86_64-gcc", "make"]
+        }
+      },
+      "patches": [],
+      "verify_command": ["ca65", "--version"]
+    },
+    {
+      "name": "wla-dx",
+      "description": "Multi-platform assembler with SNES support (wla-65816)",
+      "category": "assemblers",
+      "priority": "required",
+      "source": {
+        "type": "tarball",
+        "url": "https://github.com/vhelin/wla-dx/archive/refs/tags/v10.6.tar.gz",
+        "strip_components": 1
+      },
+      "binary_path": "binaries/wla-65816",
+      "binary_name": {
+        "linux": "wla-65816",
+        "darwin": "wla-65816",
+        "win32": "wla-65816.exe"
+      },
+      "build": {
+        "linux": {
+          "commands": [
+            "mkdir -p build",
+            "cd build && cmake ..",
+            "cd build && make"
+          ],
+          "env": {}
+        },
+        "darwin": {
+          "commands": [
+            "mkdir -p build",
+            "cd build && cmake ..",
+            "cd build && make"
+          ],
+          "env": {}
+        },
+        "win32": {
+          "commands": [
+            "mkdir -p build",
+            "cd build && cmake .. -G 'MinGW Makefiles'",
+            "cd build && mingw32-make"
+          ],
+          "env": {}
+        }
+      },
+      "dependencies": {
+        "linux": {
+          "apt": ["build-essential", "cmake"],
+          "dnf": ["gcc", "gcc-c++", "make", "cmake"]
+        },
+        "darwin": {
+          "brew": ["cmake"]
+        },
+        "win32": {
+          "msys2": ["mingw-w64-x86_64-cmake", "mingw-w64-x86_64-gcc"]
+        }
+      },
+      "patches": [],
+      "verify_command": ["wla-65816", "-V"]
+    },
+    {
+      "name": "superfamiconv",
+      "description": "SNES graphics converter",
+      "category": "graphics",
+      "priority": "required",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/Optiroc/SuperFamiconv.git",
+        "branch": "master"
+      },
+      "binary_path": "build/superfamiconv",
+      "binary_name": {
+        "linux": "superfamiconv",
+        "darwin": "superfamiconv",
+        "win32": "superfamiconv.exe"
+      },
+      "build": {
+        "linux": {
+          "commands": [
+            "mkdir -p build",
+            "cd build && cmake ..",
+            "cd build && make"
+          ],
+          "env": {}
+        },
+        "darwin": {
+          "commands": [
+            "mkdir -p build",
+            "cd build && cmake ..",
+            "cd build && make"
+          ],
+          "env": {}
+        },
+        "win32": {
+          "commands": [
+            "mkdir -p build",
+            "cd build && cmake .. -G 'MinGW Makefiles'",
+            "cd build && mingw32-make"
+          ],
+          "env": {}
+        }
+      },
+      "dependencies": {
+        "linux": {
+          "apt": ["build-essential", "cmake", "libpng-dev"],
+          "dnf": ["gcc", "gcc-c++", "make", "cmake", "libpng-devel"]
+        },
+        "darwin": {
+          "brew": ["cmake", "libpng"]
+        },
+        "win32": {
+          "msys2": ["mingw-w64-x86_64-cmake", "mingw-w64-x86_64-gcc", "mingw-w64-x86_64-libpng"]
+        }
+      },
+      "patches": [],
+      "verify_command": ["superfamiconv", "--help"]
+    },
+    {
+      "name": "pvsneslib",
+      "description": "Complete SNES development framework - builds from source",
+      "category": "sdk",
+      "priority": "required",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/alekmaul/pvsneslib.git",
+        "branch": "master",
+        "tag": "4.4.0"
+      },
+      "binary_path": "",
+      "is_sdk": true,
+      "build": {
+        "linux": {
+          "commands": [
+            "cd devkitsnes && make",
+            "cd pvsneslib && make"
+          ],
+          "env": {
+            "PVSNESLIB_HOME": "${TOOL_DIR}"
+          }
+        },
+        "darwin": {
+          "commands": [
+            "cd devkitsnes && make",
+            "cd pvsneslib && make"
+          ],
+          "env": {
+            "PVSNESLIB_HOME": "${TOOL_DIR}"
+          }
+        },
+        "win32": {
+          "commands": [
+            "cd devkitsnes && make",
+            "cd pvsneslib && make"
+          ],
+          "env": {
+            "PVSNESLIB_HOME": "${TOOL_DIR}"
+          }
+        }
+      },
+      "dependencies": {
+        "linux": {
+          "apt": ["build-essential", "libpng-dev", "zlib1g-dev"],
+          "dnf": ["gcc", "gcc-c++", "make", "libpng-devel", "zlib-devel"]
+        },
+        "darwin": {
+          "brew": ["libpng", "zlib"]
+        },
+        "win32": {
+          "msys2": ["mingw-w64-x86_64-gcc", "mingw-w64-x86_64-libpng", "mingw-w64-x86_64-zlib"]
+        }
+      },
+      "patches": ["16k-pagesize"],
+      "post_install": {
+        "create_symlinks": [
+          {"from": "devkitsnes/bin", "to": "bin"},
+          {"from": "devkitsnes/tools", "to": "tools"}
+        ]
+      }
+    },
+    {
+      "name": "lakesnes",
+      "description": "Lightweight SNES emulator",
+      "category": "emulators",
+      "priority": "required",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/angelo-wf/LakeSnes.git",
+        "branch": "main"
+      },
+      "binary_path": "lakesnes",
+      "binary_name": {
+        "linux": "lakesnes",
+        "darwin": "lakesnes",
+        "win32": "lakesnes.exe"
+      },
+      "build": {
+        "linux": {
+          "commands": ["make"],
+          "env": {}
+        },
+        "darwin": {
+          "commands": ["make"],
+          "env": {}
+        },
+        "win32": {
+          "commands": ["make"],
+          "env": {}
+        }
+      },
+      "dependencies": {
+        "linux": {
+          "apt": ["build-essential", "libsdl2-dev"],
+          "dnf": ["gcc", "make", "SDL2-devel"]
+        },
+        "darwin": {
+          "brew": ["sdl2"]
+        },
+        "win32": {
+          "msys2": ["mingw-w64-x86_64-gcc", "mingw-w64-x86_64-SDL2"]
+        }
+      },
+      "patches": ["16k-pagesize"],
+      "verify_command": []
+    },
+    {
+      "name": "bsnes",
+      "description": "Accurate SNES emulator with debugging features",
+      "category": "emulators",
+      "priority": "optional",
+      "source": {
+        "type": "tarball",
+        "url": "https://github.com/bsnes-emu/bsnes/archive/refs/tags/v115.tar.gz",
+        "strip_components": 1
+      },
+      "binary_path": "bsnes/out/bsnes",
+      "binary_name": {
+        "linux": "bsnes",
+        "darwin": "bsnes.app",
+        "win32": "bsnes.exe"
+      },
+      "build": {
+        "linux": {
+          "commands": ["make -C bsnes"],
+          "env": {}
+        },
+        "darwin": {
+          "commands": ["make -C bsnes"],
+          "env": {}
+        },
+        "win32": {
+          "commands": ["make -C bsnes"],
+          "env": {}
+        }
+      },
+      "dependencies": {
+        "linux": {
+          "apt": ["build-essential", "libgtk-3-dev", "libsdl2-dev", "libopenal-dev", "libpulse-dev", "libao-dev", "libasound2-dev"],
+          "dnf": ["gcc", "gcc-c++", "make", "gtk3-devel", "SDL2-devel", "openal-soft-devel", "pulseaudio-libs-devel", "alsa-lib-devel"]
+        },
+        "darwin": {
+          "brew": ["sdl2"]
+        },
+        "win32": {
+          "msys2": ["mingw-w64-x86_64-gcc", "mingw-w64-x86_64-SDL2", "mingw-w64-x86_64-gtk3"]
+        }
+      },
+      "patches": ["16k-pagesize"],
+      "verify_command": []
+    },
+    {
+      "name": "schismtracker",
+      "description": "Impulse Tracker clone for music creation",
+      "category": "audio",
+      "priority": "optional",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/schismtracker/schismtracker.git",
+        "branch": "master"
+      },
+      "binary_path": "schismtracker",
+      "binary_name": {
+        "linux": "schismtracker",
+        "darwin": "Schism Tracker.app",
+        "win32": "schismtracker.exe"
+      },
+      "build": {
+        "linux": {
+          "commands": [
+            "autoreconf -i",
+            "./configure",
+            "make"
+          ],
+          "env": {}
+        },
+        "darwin": {
+          "commands": [
+            "autoreconf -i",
+            "./configure",
+            "make"
+          ],
+          "env": {}
+        },
+        "win32": {
+          "commands": [
+            "autoreconf -i",
+            "./configure",
+            "make"
+          ],
+          "env": {}
+        }
+      },
+      "dependencies": {
+        "linux": {
+          "apt": ["build-essential", "autoconf", "automake", "libsdl2-dev", "libasound2-dev"],
+          "dnf": ["gcc", "make", "autoconf", "automake", "SDL2-devel", "alsa-lib-devel"]
+        },
+        "darwin": {
+          "brew": ["autoconf", "automake", "sdl2"]
+        },
+        "win32": {
+          "msys2": ["mingw-w64-x86_64-gcc", "mingw-w64-x86_64-SDL2", "autoconf", "automake"]
+        }
+      },
+      "patches": [],
+      "verify_command": ["schismtracker", "--version"]
+    },
+    {
+      "name": "libresprite",
+      "description": "Pixel art sprite editor",
+      "category": "graphics",
+      "priority": "optional",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/LibreSprite/LibreSprite.git",
+        "branch": "master",
+        "recursive": true
+      },
+      "binary_path": "build/bin/libresprite",
+      "binary_name": {
+        "linux": "libresprite",
+        "darwin": "LibreSprite.app",
+        "win32": "libresprite.exe"
+      },
+      "build": {
+        "linux": {
+          "commands": [
+            "mkdir -p build",
+            "cd build && cmake .. -DCMAKE_BUILD_TYPE=Release",
+            "cd build && make"
+          ],
+          "env": {}
+        },
+        "darwin": {
+          "commands": [
+            "mkdir -p build",
+            "cd build && cmake .. -DCMAKE_BUILD_TYPE=Release",
+            "cd build && make"
+          ],
+          "env": {}
+        },
+        "win32": {
+          "commands": [
+            "mkdir -p build",
+            "cd build && cmake .. -G 'MinGW Makefiles' -DCMAKE_BUILD_TYPE=Release",
+            "cd build && mingw32-make"
+          ],
+          "env": {}
+        }
+      },
+      "dependencies": {
+        "linux": {
+          "apt": ["build-essential", "cmake", "libfreetype6-dev", "libpng-dev", "libjpeg-dev", "libgif-dev", "libtinyxml-dev", "libpixman-1-dev", "libx11-dev", "libxcursor-dev"],
+          "dnf": ["gcc", "gcc-c++", "cmake", "freetype-devel", "libpng-devel", "libjpeg-turbo-devel", "giflib-devel", "tinyxml-devel", "pixman-devel", "libX11-devel", "libXcursor-devel"]
+        },
+        "darwin": {
+          "brew": ["cmake", "freetype", "libpng", "jpeg", "giflib", "tinyxml", "pixman"]
+        },
+        "win32": {
+          "msys2": ["mingw-w64-x86_64-cmake", "mingw-w64-x86_64-gcc", "mingw-w64-x86_64-freetype", "mingw-w64-x86_64-libpng", "mingw-w64-x86_64-libjpeg-turbo", "mingw-w64-x86_64-giflib"]
+        }
+      },
+      "patches": [],
+      "verify_command": []
+    },
+    {
+      "name": "tiled",
+      "description": "Tile map editor",
+      "category": "graphics",
+      "priority": "optional",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/mapeditor/tiled.git",
+        "branch": "master",
+        "tag": "v1.11.0"
+      },
+      "binary_path": "build/bin/tiled",
+      "binary_name": {
+        "linux": "tiled",
+        "darwin": "Tiled.app",
+        "win32": "tiled.exe"
+      },
+      "build": {
+        "linux": {
+          "commands": [
+            "qmake",
+            "make"
+          ],
+          "env": {}
+        },
+        "darwin": {
+          "commands": [
+            "qmake",
+            "make"
+          ],
+          "env": {}
+        },
+        "win32": {
+          "commands": [
+            "qmake",
+            "make"
+          ],
+          "env": {}
+        }
+      },
+      "dependencies": {
+        "linux": {
+          "apt": ["build-essential", "qt6-base-dev", "qt6-declarative-dev", "qt6-tools-dev", "qbs", "zlib1g-dev"],
+          "dnf": ["gcc", "gcc-c++", "qt6-qtbase-devel", "qt6-qtdeclarative-devel", "qt6-qttools-devel", "zlib-devel"]
+        },
+        "darwin": {
+          "brew": ["qt@6"]
+        },
+        "win32": {
+          "msys2": ["mingw-w64-x86_64-qt6-base", "mingw-w64-x86_64-qt6-declarative", "mingw-w64-x86_64-qt6-tools"]
+        }
+      },
+      "patches": [],
+      "verify_command": ["tiled", "--version"]
+    },
+    {
+      "name": "make",
+      "description": "GNU Make build tool",
+      "category": "build-tools",
+      "priority": "required",
+      "use_system": true,
+      "system_binary": {
+        "linux": "make",
+        "darwin": "make",
+        "win32": "make"
+      },
+      "fallback_source": {
+        "type": "tarball",
+        "url": "https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz",
+        "strip_components": 1
+      },
+      "build": {
+        "linux": {
+          "commands": ["./configure", "make"],
+          "env": {}
+        },
+        "darwin": {
+          "commands": ["./configure", "make"],
+          "env": {}
+        },
+        "win32": {
+          "commands": ["./configure", "make"],
+          "env": {}
+        }
+      },
+      "verify_command": ["make", "--version"]
+    },
+    {
+      "name": "dotnet8",
+      "description": ".NET 8 SDK for DotnetSnes",
+      "category": "sdk",
+      "priority": "optional",
+      "source": {
+        "type": "script",
+        "install_script": {
+          "linux": "curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 8.0 --install-dir ${TOOL_DIR}",
+          "darwin": "curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 8.0 --install-dir ${TOOL_DIR}",
+          "win32": "powershell -Command \"& {Invoke-WebRequest -Uri 'https://dot.net/v1/dotnet-install.ps1' -OutFile 'dotnet-install.ps1'; ./dotnet-install.ps1 -Channel 8.0 -InstallDir '${TOOL_DIR}'}\""
+        }
+      },
+      "binary_path": "dotnet",
+      "binary_name": {
+        "linux": "dotnet",
+        "darwin": "dotnet",
+        "win32": "dotnet.exe"
+      },
+      "is_sdk": true,
+      "dependencies": {
+        "linux": {
+          "apt": ["curl", "libicu-dev"],
+          "dnf": ["curl", "libicu"]
+        },
+        "darwin": {
+          "brew": []
+        },
+        "win32": {
+          "msys2": []
+        }
+      },
+      "patches": [],
+      "verify_command": ["dotnet", "--version"]
+    },
+    {
+      "name": "jdk8",
+      "description": "Zulu OpenJDK 8 for JavaSnes",
+      "category": "sdk",
+      "priority": "optional",
+      "source": {
+        "type": "tarball",
+        "url": {
+          "linux_x64": "https://cdn.azul.com/zulu/bin/zulu8.80.0.17-ca-fx-jdk8.0.422-linux_x64.tar.gz",
+          "linux_aarch64": "https://cdn.azul.com/zulu/bin/zulu8.80.0.17-ca-fx-jdk8.0.422-linux_aarch64.tar.gz",
+          "darwin_x64": "https://cdn.azul.com/zulu/bin/zulu8.80.0.17-ca-fx-jdk8.0.422-macosx_x64.tar.gz",
+          "darwin_aarch64": "https://cdn.azul.com/zulu/bin/zulu8.80.0.17-ca-fx-jdk8.0.422-macosx_aarch64.tar.gz",
+          "win32": "https://cdn.azul.com/zulu/bin/zulu8.80.0.17-ca-fx-jdk8.0.422-win_x64.zip"
+        },
+        "strip_components": 1
+      },
+      "binary_path": "bin/java",
+      "binary_name": {
+        "linux": "java",
+        "darwin": "java",
+        "win32": "java.exe"
+      },
+      "is_sdk": true,
+      "build": {
+        "linux": {"commands": [], "env": {}},
+        "darwin": {"commands": [], "env": {}},
+        "win32": {"commands": [], "env": {}}
+      },
+      "dependencies": {
+        "linux": {"apt": [], "dnf": []},
+        "darwin": {"brew": []},
+        "win32": {"msys2": []}
+      },
+      "patches": [],
+      "verify_command": ["java", "-version"]
+    }
+  ],
+  "patch_sets": {
+    "16k-pagesize": {
+      "description": "Patches for systems with 16K page size (e.g., Asahi Linux on Apple Silicon)",
+      "detection": {
+        "command": "getconf PAGESIZE",
+        "condition": "output > 4096"
+      },
+      "files": []
+    }
+  },
+  "platform_detection": {
+    "asahi": {
+      "check_file": "/etc/os-release",
+      "contains": "asahi"
+    },
+    "pagesize_16k": {
+      "command": "getconf PAGESIZE",
+      "equals": "16384"
+    }
+  }
+}
