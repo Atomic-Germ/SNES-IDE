@@ -1,405 +1,118 @@
-# SNES-IDE-MINI-out Implementation Notes
-
-## Overview
-
-This document outlines the architecture and requirements for building a "mini" version of SNES-IDE that compiles all tools locally from source on-demand, rather than bundling pre-built binaries. This is specifically designed for systems with non-standard requirements, such as Apple M1 running Asahi Fedora Remix (which requires 16K page size binaries, etc.).
-
----
-
-## Current Architecture Summary
-
-### Build System (`build/build.py`)
-
-The current build process:
-1. **Cleans** `SNES-IDE-out/` directory
-2. **Restores big files** - uses `FileJoiner` to reconstruct large files from chunks (`.snes.ide.reconstruct.manifest.json`)
-3. **Copies root files** - README, LICENSE, etc.
-4. **Copies libs** - from `resources/libs/` → `SNES-IDE-out/libs/`
-5. **Copies docs** - from `docs/` → `SNES-IDE-out/docs/`
-6. **Copies binary files** - from `resources/bin/{platform}/` → `SNES-IDE-out/bin/`
-7. **Copies source code** - from `src/` → `SNES-IDE-out/`
-8. **Decompresses zip files** - unpacks any `.zip` files in output
-9. **Generates bundle** - creates platform-specific bundle (AppImage/App/exe)
-
-### Pre-Built Binaries Location (`resources/bin/`)
-
-```
-resources/bin/
-├── COPYING.md           # Licenses for all bundled tools
-├── linux/
-│   ├── dotnet8/         # .NET 8 SDK (chunked zip)
-│   ├── jdk8/            # Zulu OpenJDK 8 (chunked zip)
-│   ├── make/            # GNU Make
-│   ├── pvsneslib/       # PVSnesLib SDK (devkitsnes + pvsneslib)
-│   ├── schismtracker/   # SchismTracker AppImage
-│   ├── snes-emulator/   # LakeSnes emulator
-│   ├── sprite-editor/   # Libresprite AppImage
-│   └── tmx-editor/      # Tiled AppImage
-├── macos/               # Same structure for macOS
-└── windows/             # Same structure for Windows
-```
-
-### Library Dependencies (`resources/libs/`)
-
-```
-resources/libs/
-├── COPYING.md
-├── DntcTranspiler/      # .NET to C transpiler (for DotnetSnes)
-├── DotnetSnesLib/       # DotnetSnes library source
-├── SampleLibrary/       # Sample library
-├── javasnes/            # JavaSnes library source
-└── pvsneslib/           # PVSnesLib include/examples/templates
-```
-
----
-
-## Tools Configuration (`build/tools_.json`)
-
-The `tools_.json` file defines all external tools with their:
-- **name**: Tool identifier
-- **description**: What it does
-- **category**: Grouping (Compilers, Debugging Tools, Utilities, Sound & Music)
-- **url**: Download URL (string or platform-specific object)
-- **binary_path**: Relative path to the built binary
-- **build_commands**: Platform-specific build commands
-- **configure_commands**: Pre-build configuration (mostly empty)
-
-### Tools Defined:
-
-| Name | Build System | Notes |
-|------|--------------|-------|
-| ca65 | make | Part of cc65, 6502 assembler |
-| asar | cmake + make | SNES assembler |
-| xkas | make | SNES assembler |
-| 64tass | make | 6502/65816 assembler |
-| wla-dx | cmake + make | Multi-platform assembler |
-| libsfx | N/A | Library only, no build |
-| pvsneslib | Pre-built | Downloaded per-platform |
-| superfamiconv | cmake + make | Graphics converter |
-| bsnes | make | SNES emulator (complex deps) |
-| no$snes | make | SNES emulator |
-| ucon64 | Pre-built | ROM utility |
-| snes_gss | N/A | GUI tool |
-| furnace | N/A | Script-based |
-| terrific_audio_driver | cargo (Rust) | Requires Rust toolchain |
-
----
-
-## Script Dependencies on Binaries
-
-The scripts in `src/scripts/` reference these binary paths:
-
-### Compilation Scripts
-- **compile-pvsneslib-proj.py**: `bin/pvsneslib`, `bin/make`
-- **compile-javasnes-proj.py**: `bin/pvsneslib`, `bin/jdk8`, `bin/make`
-- **compile-dotnetsnes-proj.py**: `bin/pvsneslib`, `bin/dotnet8`, `bin/make`, `libs/DntcTranspiler`, `libs/DotnetSnesLib`
-
-### Graphics Tools
-- **gfx-png-bmp-editor.py**: `bin/sprite-editor/libresprite`
-- **gfx-tmx-editor.py**: `bin/tmx-editor/tiled`
-- **gfx-png-bmp-snes-converter.py**: `bin/pvsneslib` (gfx2snes tool)
-- **gfx-tmx-tmj-converter.py**: `bin/pvsneslib` (tilesetextractor)
-
-### Audio Tools
-- **audio-impulse-tracker-init.py**: `bin/schismtracker`
-- **audio-wav-brr-converter.py**: `bin/pvsneslib` (snesbrr tool)
-- **audio-brr-wav-converter.py**: `bin/pvsneslib` (snesbrr tool)
-
-### Utilities
-- **open-emulator.py**: `bin/snes-emulator/lakesnes` (or `bsnes` on macOS)
-
----
-
-## SNES-IDE-MINI-out Implementation Plan
-
-### Core Concept
-
-Instead of bundling pre-built binaries, the MINI version will:
-1. Ship with **source URLs and build instructions** only
-2. Include a **tool manager** that:
-   - Downloads sources on-demand
-   - Applies platform-specific patches (e.g., 16K page size)
-   - Builds tools locally
-   - Caches built binaries for reuse
-3. Detect system requirements and adapt builds accordingly
-
-### New Files/Modules Needed
-
-#### 1. `build/build_mini.py`
-Main build script for SNES-IDE-MINI-out:
-- Skip copying pre-built binaries
-- Include tool manager and build configurations
-- Create minimal bundle with build-on-demand capability
-
-#### 2. `src/tool_manager.py`
-Core module for on-demand tool building:
-```python
-class ToolManager:
-    def __init__(self, tools_config: dict, cache_dir: Path)
-    def check_tool_installed(self, tool_name: str) -> bool
-    def install_tool(self, tool_name: str) -> bool
-    def download_source(self, tool_name: str) -> Path
-    def apply_patches(self, tool_name: str, source_dir: Path) -> bool
-    def build_tool(self, tool_name: str, source_dir: Path) -> bool
-    def get_tool_path(self, tool_name: str) -> Path
-```
-
-#### 3. `src/patches/`
-Directory for platform-specific patches:
-```
-src/patches/
-├── 16k-page-size/           # Patches for 16K page alignment
-│   ├── pvsneslib.patch
-│   ├── lakesnes.patch
-│   └── ...
-├── asahi-linux/             # Asahi-specific patches
-├── aarch64/                 # ARM64-specific patches
-└── README.md
-```
-
-#### 4. `build/tools_mini.json`
-Extended tools configuration with:
-- Source repository URLs (git/tarball)
-- Build dependencies (packages to install)
-- Patch sets to apply
-- Environment variables needed
-- Post-build verification commands
-
-### Modified Scripts
-
-All scripts in `src/scripts/` need modification to:
-1. Check if tool is available via `ToolManager`
-2. Trigger build if not installed
-3. Use dynamic path resolution
-
-Example modification pattern:
-```python
-# Before (current)
-libresprite = Path(get_home_path()) / "bin" / "sprite-editor" / "libresprite.AppImage"
-
-# After (mini version)
-from tool_manager import ToolManager
-tool_mgr = ToolManager.get_instance()
-libresprite = tool_mgr.get_tool_path("libresprite")
-if not libresprite.exists():
-    tool_mgr.install_tool("libresprite")
-    libresprite = tool_mgr.get_tool_path("libresprite")
-```
-
----
-
-## Required Build Dependencies by Tool
-
-### System Package Dependencies
-
-For building tools from source, users will need:
-
-**All Platforms:**
-- git
-- make
-- cmake
-- gcc/g++ or clang
-- python3
-
-**Linux (apt/dnf):**
-```bash
-# Essential
-build-essential cmake git
-
-# For PVSnesLib/devkitsnes
-# (These are typically pre-built, but for source builds:)
-libpng-dev zlib1g-dev
-
-# For bsnes
-libgtk-3-dev libsdl2-dev libopenal-dev libpulse-dev
-
-# For lakesnes
-libsdl2-dev
-
-# For Schismtracker
-libsdl2-dev libasound2-dev
-
-# For libresprite
-libfreetype6-dev libpng-dev libjpeg-dev libgif-dev libtinyxml-dev
-
-# For Tiled
-qt6-base-dev qt6-declarative-dev
-```
-
-**macOS (Homebrew):**
-```bash
-brew install cmake sdl2 qt@6 libpng freetype
-```
-
-**Windows (MSYS2/MinGW):**
-```bash
-pacman -S mingw-w64-x86_64-cmake mingw-w64-x86_64-gcc mingw-w64-x86_64-SDL2
-```
-
----
-
-## Platform-Specific Patches for Asahi/16K Page Size
-
-### Key Issues:
-1. **Memory alignment**: Some tools assume 4K page size
-2. **JIT compilation**: Some emulators use JIT that needs page alignment
-3. **Pre-built binaries**: Won't work, need native compilation
-
-### Tools Likely Needing Patches:
-
-1. **LakeSnes**: May need page-aligned memory allocations
-2. **bsnes**: Complex JIT, likely needs careful handling
-3. **Schismtracker**: Should build cleanly
-4. **Libresprite**: Should build cleanly
-5. **Tiled**: Should build cleanly (Qt-based)
-6. **PVSnesLib/devkitsnes**: The 816-tcc compiler may need patches
-
-### Patch Strategy:
-
-```bash
-# Example: Force 16K page alignment in allocations
-# Add to CFLAGS/CXXFLAGS:
--DPAGE_SIZE=16384
--faligned-new=16384
-
-# For mmap-based allocations:
-# Patch to use MAP_ALIGNED(14) on FreeBSD-derived systems
-```
-
----
-
-## Tool Manager GUI Integration
-
-Add a new UI section to `src/assets/index.html`:
-
-```html
-<div class="category-card">
-    <div class="category-header">
-        <div class="category-icon"><i class="fas fa-download"></i></div>
-        <h2 class="category-title">Tool Management</h2>
-    </div>
-    <div class="script-list">
-        <button class="script-btn" onclick="runScript('tool-manager-gui.py')">
-            <div>
-                <div class="script-name">Install Tools</div>
-                <div class="script-desc">Build and install development tools</div>
-            </div>
-        </button>
-        <button class="script-btn" onclick="runScript('tool-manager-status.py')">
-            <div>
-                <div class="script-name">Tool Status</div>
-                <div class="script-desc">Check installed tools</div>
-            </div>
-        </button>
-    </div>
-</div>
-```
-
----
-
-## Directory Structure for SNES-IDE-MINI-out
-
-```
-SNES-IDE-MINI-out/
-├── snes-ide.py              # Main application
-├── tool_manager.py          # On-demand tool builder
-├── assets/
-│   ├── index.html
-│   └── styles.css
-├── scripts/                  # Modified scripts using tool_manager
-├── libs/                     # Same as current (source libraries)
-├── docs/
-├── config/
-│   ├── tools.json           # Tool definitions with build instructions
-│   └── patches/             # Platform-specific patches
-├── cache/                    # Built tool cache (created at runtime)
-│   ├── downloads/           # Downloaded sources
-│   └── builds/              # Compiled binaries
-└── bin/                      # Symlinks to cached builds (created at runtime)
-```
-
----
-
-## Implementation Phases
-
-### Phase 1: Core Infrastructure
-- [ ] Create `build/build_mini.py`
-- [ ] Create `src/tool_manager.py` with basic download/build
-- [ ] Create enhanced `build/tools_mini.json`
-- [ ] Test with one simple tool (e.g., 64tass)
-
-### Phase 2: Tool Integration
-- [ ] Add all tools to configuration
-- [ ] Create build scripts for each tool
-- [ ] Test builds on standard Linux x64
-
-### Phase 3: Patch System
-- [ ] Create patch infrastructure
-- [ ] Add 16K page size patches
-- [ ] Add Asahi-specific patches
-- [ ] Test on Asahi Fedora Remix
-
-### Phase 4: Script Migration
-- [ ] Modify all scripts to use `tool_manager`
-- [ ] Add fallback to pre-built if available
-- [ ] Test full workflow
-
-### Phase 5: UI Integration
-- [ ] Add tool management GUI
-- [ ] Add progress indicators for builds
-- [ ] Add dependency checking
-
----
-
-## Critical Considerations
-
-### 1. Build Time
-- First-time setup will be slow (building all tools)
-- Consider parallel builds where possible
-- Provide clear progress feedback
-
-### 2. Dependency Resolution
-- Need to detect missing system packages
-- Provide clear instructions for installing deps
-- Consider using containers for reproducible builds
-
-### 3. Disk Space
-- Source + build artifacts can be large
-- Implement cleanup options
-- Cache management
-
-### 4. Error Handling
-- Build failures must be clearly reported
-- Logs should be saved for debugging
-- Fallback to pre-built when possible
-
-### 5. Updates
-- Need mechanism to update tool sources
-- Version pinning for reproducibility
-- Git submodules vs tarballs
-
----
-
-## Testing Checklist
-
-- [ ] Build on Ubuntu x64
-- [ ] Build on Fedora Asahi (aarch64, 16K pages)
-- [ ] Build on macOS ARM
-- [ ] Build on Windows (MSYS2)
-- [ ] All scripts work with built tools
-- [ ] GUI shows correct tool status
-- [ ] Updates work correctly
-- [ ] Cache cleanup works
-
----
-
-## References
-
-- PVSnesLib: https://github.com/alekmaul/pvsneslib
-- LakeSnes: https://github.com/angelo-wf/lakesnes
-- bsnes: https://github.com/bsnes-emu/bsnes
-- Schismtracker: https://github.com/schismtracker/schismtracker
-- Libresprite: https://github.com/LibreSprite/LibreSprite
-- Tiled: https://github.com/mapeditor/tiled
-- Asahi Linux: https://asahilinux.org/
-- 16K page size issues: https://github.com/AsahiLinux/docs/wiki/Software-known-to-have-issues-with-16k-page-size
+# SNES-IDE Mini — Build-On-Demand Planning Notes
+
+## Goals and Constraints
+- Deliver an alternative distribution alongside the traditional AppImage/zip bundles that contains *no pre-built binaries* in `bin/`, yet can still bootstrap every required tool locally when the user asks SNES-IDE to install or run something.
+- Support "odd" environments (e.g., Asahi Linux on Apple Silicon with 16K pages) by compiling from source, optionally applying patches, and detecting system traits dynamically.
+- Re-use the existing desktop application (`src/snes-ide.py` + Qt/HTML front-end) as the *installer UI*. No separate installer binary should exist; the IDE already orchestrates tool setup through Python scripts.
+- Preserve the existing UX for the regular distribution—`SNES-IDE-out` keeps shipping pre-built payloads—while the new `SNES-IDE-MINI-out` relies on the on-demand builder.
+
+## Current Distribution Architecture
+### Build pipeline (build/build.py)
+1. `clean_all()` removes `SNES-IDE-out/`.
+2. `restore_big_files()` scans `resources/` for `*.snes.ide.reconstruct.manifest.json` and reassembles large binaries from chunk files.
+3. Copies root files, libraries, docs, and `resources/bin/<os>` payloads into `SNES-IDE-out/`.
+4. `decompress_zip_files_in_out()` inflates archives (e.g., packaged SDK zips) so installers contain ready-to-run directories.
+5. `generate_bundle()` wraps the output via `BundleCreator`, creating platform-specific bundles (AppDir/AppImage skeleton on Linux, `.app` on macOS, portable tree + launcher on Windows). Dependencies are installed into an embedded virtual environment (see `build/requirements.txt`).
+
+### Runtime layout expectations
+- When shipped, the bundle contains:
+  - `bin/` — OS-specific executables (assemblies, emulators, SDKs). Copied from `resources/bin/<platform>`.
+  - `libs/` — Shared libraries/templates (`resources/libs`). Scripts copy template projects from here.
+  - `docs/` — Example projects and manuals.
+  - `src/` — Application Python sources, Qt assets, and helper scripts.
+- Every Python helper script (under `src/scripts/`) resolves `home_path = Path(script_dir).parent`. They assume `home_path/bin` already contains the necessary executables and SDKs. Example: `compile-pvsneslib-proj.py` expects `bin/pvsneslib/{devkitsnes,tools,...}` plus `bin/make/<make>`.
+
+### Resource directories today
+- `resources/bin/`
+  - Subdirectories per platform (`linux`, `macos`, `windows`) sharing the same high-level tool names: `dotnet8`, `jdk8`, `make`, `pvsneslib`, `schismtracker`, `snes-emulator`, `sprite-editor`, `tmx-editor`.
+  - Heavy payloads (dotnet SDK, JDK, bsnes, etc.) are chunked via `resources/split-big-files.py`; manifests live next to the chunks for reconstruction.
+  - Some tools remain zipped (e.g., `tiled.AppImage`). Build script inflates these after copying.
+- `resources/libs/`
+  - `pvsneslib/` templates referenced by project creation scripts.
+  - `DotnetSnesLib/`, `DntcTranspiler/`, `javasnes/`, `SampleLibrary/` for additional frameworks and examples consumed at runtime.
+
+## Application Structure Recap
+- `src/snes-ide.py` boots a PySide6 GUI window, loads `src/assets/index.html` into `QWebEngineView`, and exposes `ScriptRunner` via `QWebChannel`.
+- The HTML (and `assets/styles.css`) provide the menu of actions (create project, compile, graphics/audio tools, open emulator, etc.). Buttons call `scriptRunner.runScript('...py')`.
+- Every script under `src/scripts/` performs a focused task (compile, convert assets, open emulator). They all rely on `get_file_path.py` to prompt for files/dirs and on binaries placed in `home_path/bin`.
+- Therefore, **SNES-IDE itself is the installer**: launching one of these scripts should ensure the dependencies exist (currently guaranteed because builders ship them). For the mini variant we must intercept these scripts (or provide a lower-level `ToolManager`) so they can trigger a build/install before running the external command.
+
+## Tool Metadata Sources
+### build/tools.json (missing locally)
+- The instructions mention `build/tools.json` contains detailed metadata for the existing prebuilt toolchain, but the file is absent in the `mini` branch workspace. Need to confirm whether it lives in another branch or is generated during CI. If present elsewhere, it likely mirrors `src/tools_mini.json` but geared toward packaging binary artifacts.
+
+### src/tools_mini.json (current mini config draft)
+- Describes the prospective build-on-demand catalog.
+- `system_requirements`: minimal packages per platform family (`apt`, `dnf`, `brew`, `msys2`).
+- `tools`: array of tool definitions. Important fields:
+  - `source`: `git`, `tarball`, or installer script, with optional branch/tag and strip options.
+  - `build.commands`: shell snippets per OS. Many use `cmake && make`, others `autoreconf` or plain `make`.
+  - `dependencies`: platform package hints (should map to whichever OS the user actually runs).
+  - `binary_path`/`binary_name`: relative path inside the build directory and the final exe name per OS.
+  - `is_sdk` toggles non-binary toolkits (pvsneslib, dotnet, jdk).
+  - `patches`: references into `patch_sets` (currently only `16k-pagesize`).
+  - `post_install` actions (e.g., for `pvsneslib`, create symlinks from `devkitsnes/bin` to `bin`).
+  - `verify_command`: command used to confirm the install succeeded.
+- Catalog overview (all entries already enumerated inside the JSON):
+  - Assemblers: `64tass`, `ca65`, `wla-dx` (required), `superfamiconv` (graphics converter but tool-like).
+  - SDKs/frameworks: `pvsneslib` (required, has patch + symlinks), `dotnet8`, `jdk8`.
+  - Emulators: `lakesnes` (required) and `bsnes` (optional but patched for 16K).
+  - Audio/graphics apps: `schismtracker`, `libresprite`, `tiled`.
+  - Build essentials: `make` (prefers system binary but can fall back to source build).
+- `patch_sets`: `16k-pagesize` has detection conditions but no files yet; we will need to populate `src/patches/16k-pagesize/<tool>/...` with actual diffs.
+- `platform_detection`: helper probes for Asahi-based Linux and page-size detection.
+
+## Patching & Special-Case Handling
+- `src/patches/16k-pagesize/README.md` outlines how to organize per-tool patch folders (e.g., `lakesnes/mmap-alignment.patch`).
+- Tool definitions referencing `"patches": ["16k-pagesize"]` will need automation to:
+  1. Detect via `getconf PAGESIZE` whether the patch set applies.
+  2. Copy/patch files from `src/patches/16k-pagesize/<tool>/` into the build tree before the `build.commands` run.
+- Additional patch sets can be added the same way (e.g., for distro-specific quirks).
+
+## Deliverable Layout for SNES-IDE-MINI-out
+- Create a new build target (parallel to `SNES-IDE-out`) that runs all the same steps *except copying `resources/bin/<os>` and decompressing archives*. Instead, include:
+  - `src/` (unchanged) plus the new `tools_mini.json`, patch folders, and any helper module that performs builds.
+  - `libs/` and `docs/` (still needed for project templates and samples).
+  - A lightweight bootstrapper script (maybe `src/tool_manager.py`) that can:
+    * Parse `tools_mini.json`.
+    * Detect the host OS/arch/page size.
+    * Check/prepare system dependencies (inform user to install packages).
+    * Download source archives or clone repos to a writable cache (e.g., `~/.snes-ide/tools/src/<tool>`).
+    * Apply optional patches.
+    * Run `build.commands` sequentially while streaming logs back to the UI.
+    * Copy resulting binaries into `home/bin/<tool>` (matching the layout expected by existing scripts) and mark them as installed (maybe via a manifest in `bin/.installed-tools.json`).
+    * Run `verify_command` to ensure success.
+- Both distributions can share the same `src/` codebase if runtime checks (e.g., `if not tool_installed: install_tool(...)`) are added to each script or to a centralized wrapper invoked before launching external commands.
+- Potential workflow for a script like `open-emulator.py` in the mini build:
+  1. Ensure `bin/snes-emulator/lakesnes` exists; otherwise call `tool_manager.ensure("lakesnes")`.
+  2. `ensure()` downloads/builds using `tools_mini.json`.
+  3. Once done, run the emulator as today.
+- Consider caching built artifacts to avoid re-compilation and enabling uninstall/upgrade commands.
+
+## Integration Points and Required Work
+1. **Tool manager module**
+   - Lives under `src/` so both GUI and scripts can import it.
+   - Provides a CLI (for debugging) and Python API (`ensure(tool_name)`, `list_installed()`, `install_all(priority=required)`, etc.).
+   - Persists install metadata (versions, commit hashes) to a JSON file under `bin/` so we can skip rebuilds unless sources change.
+2. **Script wrappers**
+   - Either modify each script to call the manager for the tools it consumes or centralize the logic in a decorator/helper to minimize duplication.
+   - Example mapping: `compile-pvsneslib-proj.py` depends on `make`, `pvsneslib`. `compile-dotnetsnes-proj.py` depends on `make`, `pvsneslib`, `dotnet8`. `open-emulator.py` depends on `lakesnes` (and optionally `bsnes`).
+3. **Mini build pipeline**
+   - Add a new entry point (maybe `build/build_mini.py`) or extend `build/build.py` with a flag to skip `copy_bin()` and instead place `src/tools_mini.json`, patch folders, and new python modules into `SNES-IDE-MINI-out/`.
+   - Document the difference in `README.md` so users know when to pick the mini build.
+4. **Dependency install guidance**
+   - Provide user-facing docs (maybe extend this file or add `docs/MINI.md`) showing how to install `apt/dnf/brew/msys2` packages listed in `system_requirements` before running the builder.
+5. **Patch content**
+   - Fill in actual patches for `lakesnes`, `bsnes`, `pvsneslib` once failures are reproduced on 16K-page systems. The `files` array in `tools_mini.json.patch_sets` should reference those patch files.
+6. **Logging & UX**
+   - Decide how build logs surface in the Qt UI (e.g., reuse the status bar, add a dedicated log view, or stream to console only).
+
+## Outstanding Questions / Open Items
+- `build/tools.json` is mentioned but not present on the `mini` branch. Need to locate or reconstruct it to ensure parity between the legacy prebuilt flow and the new mini flow.
+- Define where source tarballs/clones should live at runtime (inside the app directory vs user home). For writable installs we likely need to operate outside the read-only AppImage; consider using `~/.local/share/snes-ide/tools/`.
+- Confirm how `SNES-IDE-MINI-out` will be distributed (AppImage skeleton without binaries? zipped source?). Might need to keep the embedded Python venv (like the standard build) so users still get PySide6 even though tools are absent.
+- Establish security/trust model for fetching source tarballs at install time (checksum verification, pinned tags, optional offline mirrors).
+- Decide whether `tools_mini.json` should support per-architecture overrides (x86_64 vs arm64) beyond the placeholder URLs in `jdk8`.
+- Determine upgrade/uninstall story (e.g., rerun builder to install updated tool versions or rebuild when config version increments).
+
+These notes capture the current repository layout, the expectations of every component that touches tool binaries, and the scaffolding already present (`tools_mini.json`, patch directories) for the new build-on-demand workflow. They should be sufficient context to start implementing the SNES-IDE Mini tool manager and the parallel packaging flow.
