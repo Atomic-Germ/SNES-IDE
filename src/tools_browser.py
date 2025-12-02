@@ -535,8 +535,8 @@ class InstallScreen(ModalScreen):
             yield Label(f"Installing: {tool_name}", id="install-title")
             yield RichLog(id="install-log", highlight=True, markup=True)
             with Horizontal(id="install-buttons"):
-                yield Button("Start Install", id="start-btn", variant="primary", flat=True)
-                yield Button("Close", id="close-btn", variant="default", flat=True)
+                yield Button("Start Install", id="start-btn", variant="primary", flat=True, compact=True)
+                yield Button("Close", id="close-btn", variant="default", flat=True, compact=True)
 
     def on_mount(self) -> None:
         """Start installation when mounted."""
