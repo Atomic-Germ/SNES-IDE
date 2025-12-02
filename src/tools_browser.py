@@ -24,7 +24,7 @@ from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widget import Widget
-from textual.widgets import Footer, Header, Label, ListItem, ListView, Static, Rule, Button, RichLog
+from textual.widgets import Footer, Header, Label, ListItem, ListView, Static, Rule, Button, RichLog, ProgressBar
 
 
 def get_platform() -> str:
@@ -57,20 +57,32 @@ def get_package_manager() -> str | None:
 class ToolInstaller:
     """Handles downloading, building, and installing tools."""
 
-    def __init__(self, tools_dir: Path | None = None, log_callback: Callable[[str], None] | None = None):
+    def __init__(
+        self, 
+        tools_dir: Path | None = None, 
+        log_callback: Callable[[str], None] | None = None,
+        progress_callback: Callable[[float, float], None] | None = None
+    ):
         """Initialize the installer.
         
         Args:
             tools_dir: Directory to install tools to. Defaults to ~/.snes-ide/tools
             log_callback: Function to call with log messages
+            progress_callback: Function to call with (current, total) progress
         """
         if tools_dir is None:
             tools_dir = Path.home() / ".snes-ide" / "tools"
         self.tools_dir = tools_dir
         self.tools_dir.mkdir(parents=True, exist_ok=True)
         self.log = log_callback or print
+        self.progress_callback = progress_callback
         self.platform = get_platform()
         self.pkg_manager = get_package_manager()
+
+    def update_progress(self, current: float, total: float) -> None:
+        """Update the progress bar."""
+        if self.progress_callback:
+            self.progress_callback(current, total)
 
     def log_info(self, msg: str) -> None:
         """Log an info message."""
@@ -337,7 +349,13 @@ class ToolInstaller:
             self.log_error(f"Download/extract failed: {e}")
             return None
 
-    async def build_tool(self, tool_config: Dict[str, Any], source_dir: Path) -> bool:
+    async def build_tool(
+        self, 
+        tool_config: Dict[str, Any], 
+        source_dir: Path,
+        base_step: int = 0,
+        total_steps: int = 0
+    ) -> bool:
         """Build a tool from source.
         
         Returns True if successful, False otherwise.
@@ -353,6 +371,14 @@ class ToolInstaller:
 
         self.log_info(f"Building in {source_dir}")
 
+        # Count source files to estimate build progress
+        source_extensions = {'.c', '.cpp', '.cc', '.cxx', '.s', '.asm'}
+        source_files = []
+        for ext in source_extensions:
+            source_files.extend(source_dir.rglob(f'*{ext}'))
+        estimated_lines = max(len(source_files), 10)  # At least 10 to avoid division issues
+        self.log_info(f"Found {len(source_files)} source files (estimating ~{estimated_lines} build outputs)")
+
         # Set up environment
         env = os.environ.copy()
         for key, value in env_vars.items():
@@ -361,6 +387,9 @@ class ToolInstaller:
             env[key] = value
             self.log_info(f"Setting {key}={value}")
 
+        # Track overall build progress across all commands
+        total_lines_processed = 0
+        
         for i, cmd_str in enumerate(commands, 1):
             self.log(f"[bold cyan]Command {i}/{len(commands)}:[/bold cyan]")
             self.log_cmd(cmd_str)
@@ -380,7 +409,19 @@ class ToolInstaller:
                     if not line:
                         break
                     line_count += 1
+                    total_lines_processed += 1
                     decoded = line.decode().rstrip()
+                    
+                    # Update progress based on lines processed vs estimated
+                    # Build phase is between base_step+1 and base_step+len(commands)
+                    # We interpolate within that range based on line count
+                    if total_steps > 0 and estimated_lines > 0:
+                        # Progress within the build phase (0.0 to 1.0)
+                        build_progress = min(1.0, total_lines_processed / estimated_lines)
+                        # Map to actual step range (base_step to base_step + len(commands))
+                        current_progress = base_step + (build_progress * len(commands))
+                        self.update_progress(current_progress, total_steps)
+                    
                     # Show all lines but dim the verbose compiler output
                     if any(x in decoded.lower() for x in ['warning:', 'error:', 'undefined']):
                         self.log(f"  [yellow]{decoded}[/yellow]")
@@ -518,6 +559,17 @@ class ToolInstaller:
         Returns True if successful, False otherwise.
         """
         tool_name = tool_config.get("name", "unknown")
+        
+        # Calculate total steps: deps + download + build commands + install + verify
+        build = tool_config.get("build", {})
+        plat_build = build.get(self.platform, {})
+        build_commands = plat_build.get("commands", [])
+        # Total: 1 (deps) + 1 (download) + N (build cmds) + 1 (install) + 1 (verify)
+        total_steps = 4 + len(build_commands)
+        current_step = 0
+        
+        self.update_progress(current_step, total_steps)
+        
         self.log(f"[bold]{'='*50}[/bold]")
         self.log(f"[bold]Installing: {tool_name}[/bold]")
         self.log(f"[bold]{'='*50}[/bold]")
@@ -527,6 +579,8 @@ class ToolInstaller:
         self.log("[bold cyan]Step 1/4: Installing dependencies...[/bold cyan]")
         if not await self.install_dependencies(tool_config):
             return False
+        current_step += 1
+        self.update_progress(current_step, total_steps)
         self.log("")
 
         # Step 2: Download source
@@ -534,23 +588,31 @@ class ToolInstaller:
         source_dir = await self.download_source(tool_config)
         if not source_dir:
             return False
+        current_step += 1
+        self.update_progress(current_step, total_steps)
         self.log("")
 
-        # Step 3: Build
+        # Step 3: Build (progress updated per command inside build_tool)
         self.log("[bold cyan]Step 3/4: Building...[/bold cyan]")
-        if not await self.build_tool(tool_config, source_dir):
+        if not await self.build_tool(tool_config, source_dir, current_step, total_steps):
             return False
+        current_step += len(build_commands) if build_commands else 0
+        self.update_progress(current_step, total_steps)
         self.log("")
 
         # Step 4: Install binary
         self.log("[bold cyan]Step 4/4: Installing binary...[/bold cyan]")
         if not await self.install_binary(tool_config, source_dir):
             return False
+        current_step += 1
+        self.update_progress(current_step, total_steps)
         self.log("")
 
         # Verify
         self.log("[bold cyan]Verifying installation...[/bold cyan]")
         await self.verify_installation(tool_config)
+        current_step += 1
+        self.update_progress(current_step, total_steps)
         self.log("")
 
         self.log(f"[bold green]{'='*50}[/bold green]")
@@ -589,6 +651,16 @@ class InstallScreen(ModalScreen):
         margin-bottom: 1;
     }
     
+    #progress-container {
+        height: auto;
+        padding: 0 1;
+        margin-bottom: 1;
+    }
+    
+    #install-progress {
+        width: 100%;
+    }
+    
     #install-buttons {
         height: auto;
         align: center middle;
@@ -614,9 +686,11 @@ class InstallScreen(ModalScreen):
         with Vertical(id="install-dialog"):
             yield Label(f"Installing: {tool_name}", id="install-title")
             yield RichLog(id="install-log", highlight=True, markup=True)
+            with Horizontal(id="progress-container"):
+                yield ProgressBar(id="install-progress", total=100, show_eta=False)
             with Horizontal(id="install-buttons"):
-                yield Button("Start Install", id="start-btn", variant="primary", flat=True, compact=True)
-                yield Button("Close", id="close-btn", variant="default", flat=True, compact=True)
+                yield Button("Start Install", id="start-btn", variant="primary")
+                yield Button("Close", id="close-btn", variant="default")
 
     def on_mount(self) -> None:
         """Start installation when mounted."""
@@ -642,9 +716,18 @@ class InstallScreen(ModalScreen):
         log = self.query_one("#install-log", RichLog)
         log.write(msg)
 
+    def update_progress(self, current: float, total: float) -> None:
+        """Update the progress bar."""
+        progress_bar = self.query_one("#install-progress", ProgressBar)
+        if total > 0:
+            progress_bar.update(total=total, progress=current)
+
     async def _run_install(self) -> None:
         """Run the installation process."""
-        installer = ToolInstaller(log_callback=self.log_message)
+        installer = ToolInstaller(
+            log_callback=self.log_message,
+            progress_callback=self.update_progress
+        )
         
         try:
             self.install_complete = await installer.install(self.tool_config)
