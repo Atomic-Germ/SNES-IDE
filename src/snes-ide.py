@@ -30,7 +30,15 @@ from typing import Dict
 from pathlib import Path
 import sys
 import json
+import argparse
 from tool_manager import ToolManager
+
+# Textual imports (optional, for TUI mode)
+try:
+    from tools_browser import ToolBrowser
+    HAS_TEXTUAL = True
+except ImportError:
+    HAS_TEXTUAL = False
 
 
 class ScriptRunner(QObject):
@@ -414,13 +422,40 @@ class MainWindow(QMainWindow):
         self.tool_installer_dialog.show()
 
 
+def run_tui() -> NoReturn:
+    """Run the Textual TUI version."""
+    if not HAS_TEXTUAL:
+        print("Error: textual is not installed. Install it with:")
+        print("  pip install textual")
+        sys.exit(1)
+    
+    app = ToolBrowser()
+    app.run()
+    sys.exit(0)
+
+
 def main() -> NoReturn:
     """
-    Main entry point of the application. Initializes QApplication,
-    sets the style to Fusion if possible, creates a MainWindow,
-    shows it and starts the application event loop.
+    Main entry point of the application.
+    
+    Supports command-line flags:
+    - --tui, -t: Run in Textual TUI mode instead of Qt GUI
     """
-
+    
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="SNES IDE - Tool Manager")
+    parser.add_argument(
+        "--tui", "-t",
+        action="store_true",
+        help="Run in Textual TUI mode instead of Qt GUI"
+    )
+    args = parser.parse_args()
+    
+    # Launch TUI if requested
+    if args.tui:
+        run_tui()
+    
+    # Otherwise launch Qt GUI
     app: QApplication = QApplication(sys.argv)
 
     try:

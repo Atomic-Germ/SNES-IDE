@@ -1,0 +1,128 @@
+/* SNES-IDE Tool Installer TUI Stylesheet */
+
+Screen {
+    layout: vertical;
+    background: $surface;
+    color: $text;
+}
+
+Header {
+    dock: top;
+    height: 1;
+    background: $boost;
+    color: $primary;
+    text-style: bold;
+}
+
+Footer {
+    dock: bottom;
+    height: 1;
+    background: $boost;
+    border-top: solid $primary;
+}
+
+#title {
+    dock: top;
+    height: 3;
+    content-align: center middle;
+    background: $primary 20%;
+    color: $primary;
+    text-style: bold;
+    border-bottom: heavy $primary;
+    margin-bottom: 1;
+}
+
+#tools-scroll {
+    border: solid $panel;
+    height: 1fr;
+    overflow: auto;
+    padding: 1;
+}
+
+#button-bar {
+    dock: bottom;
+    height: 3;
+    background: $boost;
+    border-top: solid $primary;
+    padding: 1;
+    layout: horizontal;
+}
+
+#button-bar > Button {
+    margin-right: 2;
+    width: auto;
+}
+
+.status-label {
+    width: 1fr;
+    height: auto;
+    margin-bottom: 1;
+    text-align: center;
+    color: $text-muted;
+    text-style: italic;
+}
+
+CategorySection {
+    layout: vertical;
+    border: round $accent;
+    padding: 1 2;
+    margin-bottom: 1;
+    background: $panel;
+}
+
+CategorySection > #category-title {
+    color: $accent;
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+CategorySection > #tools-container {
+    layout: vertical;
+    height: auto;
+}
+
+ToolStatusWidget {
+    border: solid $primary;
+    padding: 1 2;
+    margin-bottom: 1;
+    height: auto;
+    background: $surface;
+}
+
+ToolStatusWidget.available {
+    border: solid $success;
+    background: $success 5%;
+}
+
+ToolStatusWidget.missing {
+    border: solid $error;
+    background: $error 5%;
+}
+
+ToolStatusWidget.required {
+    border: heavy $warning;
+    background: $warning 5%;
+}
+
+ToolStatusWidget:hover {
+    background: $primary 10%;
+}
+
+Button {
+    margin-right: 1;
+}
+
+Button.primary {
+    background: $primary;
+    border: heavy $primary;
+}
+
+Button:hover {
+    background: $accent;
+    border: heavy $accent;
+}
+
+Button:focus {
+    background: $boost;
+    border: heavy $accent;
+}
