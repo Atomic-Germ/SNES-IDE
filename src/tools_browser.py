@@ -394,9 +394,10 @@ class ToolInstaller:
 
         # Track files compiled across all commands and timing for ETA
         files_compiled = set()
-        compile_times: list[float] = []  # Time taken to compile each file
+        compile_times: list[float] = []  # Time taken to compile each file (excluding outliers)
         last_compile_time = time.monotonic()
         build_start_time = last_compile_time
+        MIN_COMPILE_TIME = 0.5  # Ignore files that compile in under 0.5s (likely cached/trivial)
         
         for i, cmd_str in enumerate(commands, 1):
             self.log(f"[bold cyan]Command {i}/{len(commands)}:[/bold cyan]")
@@ -425,10 +426,13 @@ class ToolInstaller:
                             if src_file not in files_compiled:
                                 # New file compiled - track timing
                                 now = time.monotonic()
-                                if files_compiled:  # Not the first file
-                                    compile_times.append(now - last_compile_time)
+                                elapsed = now - last_compile_time
                                 last_compile_time = now
                                 files_compiled.add(src_file)
+                                
+                                # Only include substantial compile times (filter outliers)
+                                if elapsed >= MIN_COMPILE_TIME:
+                                    compile_times.append(elapsed)
                                 
                                 # Calculate ETA based on average compile time
                                 eta_seconds = None
