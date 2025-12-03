@@ -70,6 +70,51 @@ Download the latest release from [SNES-IDE releases](https://github.com/BrunoRNS
 - **Examples:**
   - [Source examples](./docs/examples/)
 
+## Terminal UI (TUI) Mode
+
+SNES-IDE includes a powerful terminal-based interface that works over SSH and in any terminal.
+
+### Running the TUI
+
+```bash
+# Run with default project (current directory)
+python src/snes-ide.py --tui
+
+# Run with a specific project path
+python src/snes-ide.py --tui /path/to/your/project
+```
+
+### Features
+
+- **Code Browser** - Browse and view project files with syntax highlighting
+- **Tool Manager** - Install, update, verify, and uninstall development tools
+- **Command Palette** - Quick access to all commands via `Ctrl+P`
+- **Collapsible Sidebar** - Organized sections for Project files and Tools
+
+### Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `s` | Toggle sidebar visibility |
+| `f` | Toggle between code and tools view |
+| `o` | Open project directory |
+| `i` | Install selected tool |
+| `r` | Refresh tool list |
+| `Ctrl+P` | Open command palette |
+| `Escape` | Return to tools view |
+| `q` | Quit |
+
+### Supported File Types
+
+The code browser provides syntax highlighting for:
+- **C/C++** (`.c`, `.h`, `.cpp`, `.hpp`)
+- **Assembly** (`.asm`, `.s`, `.inc`)
+- **Python** (`.py`)
+- **Java/C#** (`.java`, `.cs`)
+- **Build files** (`Makefile`, `CMakeLists.txt`)
+- **Data formats** (`.json`, `.yaml`, `.xml`)
+- And many more...
+
 ## Contributing
 
 - Read [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) and [CONTRIBUTING.md](./CONTRIBUTING.md).
