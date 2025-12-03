@@ -520,7 +520,11 @@ class ToolInstaller:
         self.log_info(f"Found {len(source_files)} source files to track")
         
         # Set progress bar total to the number of source files for granular tracking
-        self.update_progress(0, total_source_files, None)
+        # Build phase is 75% of total progress (25%-100%), so scale total by 4/3
+        # and start at 25% to reflect download/extract/deps already done
+        progress_total = int(total_source_files * 4 / 3)
+        progress_offset = progress_total // 4  # 25% starting point
+        self.update_progress(progress_offset, progress_total, None)
 
         # Set up environment
         env = os.environ.copy()
@@ -579,8 +583,8 @@ class ToolInstaller:
                                     remaining_files = total_source_files - len(files_compiled)
                                     eta_seconds = avg_time * remaining_files
                                 
-                                # Update progress with ETA
-                                self.update_progress(len(files_compiled), total_source_files, eta_seconds)
+                                # Update progress with ETA (offset by 25% for pre-build phases)
+                                self.update_progress(progress_offset + len(files_compiled), progress_total, eta_seconds)
                             break  # Only count once per line
                     
                     # Show all lines but dim the verbose compiler output
@@ -608,7 +612,7 @@ class ToolInstaller:
 
         # Ensure we show 100% at end of build with 0 ETA
         total_build_time = time.monotonic() - build_start_time
-        self.update_progress(total_source_files, total_source_files, 0)
+        self.update_progress(progress_total, progress_total, 0)
         self.log_success(f"Build completed ({len(files_compiled)} files in {total_build_time:.1f}s)")
         return True
 
@@ -1373,8 +1377,16 @@ class InstallScreen(ModalScreen):
                 self.log_message("")
                 self.log_message("[dim]After installing, close this dialog and try again.[/dim]")
                 self.installing = False
-                self.query_one("#start-btn", Button).disabled = False
-                self.query_one("#start-btn", Button).label = "Retry"
+                
+                # Re-enable appropriate button
+                if self.install_mode == "build":
+                    try:
+                        self.query_one("#build-btn", Button).disabled = False
+                        self.query_one("#build-btn", Button).label = "Retry"
+                    except:
+                        self.query_one("#start-btn", Button).disabled = False
+                        self.query_one("#start-btn", Button).label = "Retry"
+                
                 self.query_one("#close-btn", Button).disabled = False
                 return
             
@@ -1387,8 +1399,16 @@ class InstallScreen(ModalScreen):
                 self.log_message("[red]Dependency installation failed or was cancelled[/red]")
                 self.log_message("[dim]You can try installing manually and retry[/dim]")
                 self.installing = False
-                self.query_one("#start-btn", Button).disabled = False
-                self.query_one("#start-btn", Button).label = "Retry"
+                
+                # Re-enable appropriate button
+                if self.install_mode == "build":
+                    try:
+                        self.query_one("#build-btn", Button).disabled = False
+                        self.query_one("#build-btn", Button).label = "Retry"
+                    except:
+                        self.query_one("#start-btn", Button).disabled = False
+                        self.query_one("#start-btn", Button).label = "Retry"
+                
                 self.query_one("#close-btn", Button).disabled = False
                 return
             
@@ -1467,6 +1487,7 @@ class InstallScreen(ModalScreen):
         
         self.installing = False
         self.query_one("#close-btn", Button).disabled = False
+        self.query_one("#install-btn", Button).label = "Done" if self.install_complete else "Failed"
 
     def action_close(self) -> None:
         """Close the screen."""
@@ -1519,7 +1540,16 @@ class InstallScreen(ModalScreen):
         
         # Re-enable close button
         self.query_one("#close-btn", Button).disabled = False
-        self.query_one("#start-btn", Button).label = "Done" if self.install_complete else "Failed"
+        
+        # Update the appropriate button based on mode
+        if self.install_mode == "repo":
+            self.query_one("#install-btn", Button).label = "Done" if self.install_complete else "Failed"
+        elif self.install_mode == "build":
+            # Check if we have build-btn (dual mode) or start-btn (single mode)
+            try:
+                self.query_one("#build-btn", Button).label = "Done" if self.install_complete else "Failed"
+            except:
+                self.query_one("#start-btn", Button).label = "Done" if self.install_complete else "Failed"
 
 
 class VerifyScreen(ModalScreen):
