@@ -4,76 +4,76 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                        SNES-IDE Application                       │
-│                                                                   │
+│                        SNES-IDE Application                      │
+│                                                                  │
 │  ┌────────────────────────────────────────────────────────────┐  │
 │  │                      MainWindow (QMainWindow)              │  │
 │  │  • Manages main application window                         │  │
 │  │  • Holds ToolInstallerDialog instance                      │  │
 │  │  • Registers objects with QWebChannel                      │  │
-│  │  • show_tool_installer() - Slot to display dialog         │  │
+│  │  • show_tool_installer() - Slot to display dialog          │  │
 │  └────────────────────────────────────────────────────────────┘  │
-│                                 │                                 │
+│                                 │                                │
 │                    ┌────────────┼────────────┐                   │
 │                    ▼            ▼            ▼                   │
-│  ┌──────────────────────┐  ┌─────────────────────────────┐      │
-│  │  Web Channel Bridge  │  │   Web View (QWebEngineView) │      │
-│  │  • scriptRunner      │  │   • Loads index.html        │      │
-│  │  • toolInstaller     │  │   • Renders UI              │      │
-│  │  (MainWindow ref)    │  │   • Handles user actions    │      │
-│  └──────────────────────┘  └─────────────────────────────┘      │
+│   ┌──────────────────────┐  ┌─────────────────────────────┐      │
+│   │  Web Channel Bridge  │  │   Web View (QWebEngineView) │      │
+│   │  • scriptRunner      │  │   • Loads index.html        │      │
+│   │  • toolInstaller     │  │   • Renders UI              │      │
+│   │  (MainWindow ref)    │  │   • Handles user actions    │      │
+│   └──────────────────────┘  └─────────────────────────────┘      │
 │           │                         │                            │
 │           │                         ▼                            │
-│  ┌────────┴───────────────────────────────────────────────┐     │
-│  │              JavaScript Layer (index.html)              │     │
-│  │  • showToolInstaller() function                        │     │
-│  │  • QWebChannel integration                             │     │
-│  │  • UI event handlers                                   │     │
-│  └────────────────────────────────────────────────────────┘     │
+│   ┌────────┴───────────────────────────────────────────────┐     │
+│   │             JavaScript Layer (index.html)              │     │
+│   │  • showToolInstaller() function                        │     │
+│   │  • QWebChannel integration                             │     │
+│   │  • UI event handlers                                   │     │
+│   └────────────────────────────────────────────────────────┘     │
 │           │ (Qt.connect)                                         │
 │           ▼                                                      │
-│  ┌────────────────────────────────────────────────────────┐     │
-│  │              ScriptRunner (QObject)                     │     │
-│  │  • Script execution                                    │     │
-│  │  • ToolManager initialization                          │     │
-│  │  • get_tools_status() - Returns JSON                   │     │
-│  │  • get_missing_required_tools() - Returns JSON         │     │
-│  └────────────────────────────────────────────────────────┘     │
+│   ┌────────────────────────────────────────────────────────┐     │
+│   │             ScriptRunner (QObject)                     │     │
+│   │  • Script execution                                    │     │
+│   │  • ToolManager initialization                          │     │
+│   │  • get_tools_status() - Returns JSON                   │     │
+│   │  • get_missing_required_tools() - Returns JSON         │     │
+│   └────────────────────────────────────────────────────────┘     │
 │           │                                                      │
 │           ▼                                                      │
-│  ┌────────────────────────────────────────────────────────┐     │
-│  │          ToolManager (Configuration + Logic)            │     │
-│  │  • Loads tools.json configuration                      │     │
-│  │  • Searches system PATH for binaries                   │     │
-│  │  • Verifies tool functionality                         │     │
-│  │  • Organizes tools by category/priority                │     │
-│  └────────────────────────────────────────────────────────┘     │
+│   ┌────────────────────────────────────────────────────────┐     │
+│   │         ToolManager (Configuration + Logic)            │     │
+│   │  • Loads tools.json configuration                      │     │
+│   │  • Searches system PATH for binaries                   │     │
+│   │  • Verifies tool functionality                         │     │
+│   │  • Organizes tools by category/priority                │     │
+│   └────────────────────────────────────────────────────────┘     │
 │           │                                                      │
 │           ▼                                                      │
-│  ┌────────────────────────────────────────────────────────┐     │
-│  │              tools.json (Configuration)                 │     │
-│  │  • Tool definitions and metadata                       │     │
-│  │  • Categories, priorities, descriptions                │     │
-│  │  • Platform-specific binary names                      │     │
-│  │  • Verification commands                               │     │
-│  └────────────────────────────────────────────────────────┘     │
+│   ┌────────────────────────────────────────────────────────┐     │
+│   │             tools.json (Configuration)                 │     │
+│   │  • Tool definitions and metadata                       │     │
+│   │  • Categories, priorities, descriptions                │     │
+│   │  • Platform-specific binary names                      │     │
+│   │  • Verification commands                               │     │
+│   └────────────────────────────────────────────────────────┘     │
 │                                                                  │
-│  ┌────────────────────────────────────────────────────────┐     │
-│  │       ToolInstallerDialog (QDialog - Optional Display)  │     │
-│  │  • Displays tool status in scrollable dialog            │     │
-│  │  • Groups tools by category                            │     │
-│  │  • Shows installation status (✓/✗)                     │     │
-│  │  • Provides refresh capability                         │     │
-│  │  • Future: Tool installation UI                        │     │
-│  └────────────────────────────────────────────────────────┘     │
+│   ┌────────────────────────────────────────────────────────┐     │
+│   │      ToolInstallerDialog (QDialog - Optional Display)  │     │
+│   │  • Displays tool status in scrollable dialog           │     │
+│   │  • Groups tools by category                            │     │
+│   │  • Shows installation status                           │     │
+│   │  • Provides refresh capability                         │     │
+│   │  • Future: Tool installation UI                        │     │
+│   └────────────────────────────────────────────────────────┘     │
 │           │                                                      │
 │           ▼                                                      │
-│  ┌────────────────────────────────────────────────────────┐     │
-│  │         System PATH (Binary Detection)                  │     │
-│  │  • Uses shutil.which() to find tools                   │     │
-│  │  • Platform-aware binary name resolution                │     │
-│  │  • Verification via subprocess execution               │     │
-│  └────────────────────────────────────────────────────────┘     │
+│   ┌────────────────────────────────────────────────────────┐     │
+│   │        System PATH (Binary Detection)                  │     │
+│   │  • Uses shutil.which() to find tools                   │     │
+│   │ • Platform-aware binary name resolution                │     │
+│   │  • Verification via subprocess execution               │     │
+│   └────────────────────────────────────────────────────────┘     │
 │                                                                  │
 └──────────────────────────────────────────────────────────────────┘
 ```
