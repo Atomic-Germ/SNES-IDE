@@ -106,13 +106,13 @@ User clicks "Install Tools" button
         ▼
     ToolManager.get_tools_by_category()
         │
-        ├─▶ Load tools.json ◀─┐
+        ├─▶ Load tools.json  ◀─┐
         │                      │
         ├─▶ For each tool:     │
         │   • Check PATH       │
         │   • Get status       │ tools.json
         │   • Format data      │
-        │   ◀─────────────────┘
+        │    ◀─────────────────┘
         │
         ▼
     ToolInstallerDialog.create_tool_widget()
@@ -257,12 +257,12 @@ ToolManager initialization
 
 ## Future Integration Points
 
-1. **Tool Installation Scripts**
+1. **Tool Installation Scripts** *COMPLETED*
    - Call download/build scripts
    - Track progress
    - Update status after installation
 
-2. **Dependency Installation**
+2. **Dependency Installation** *COMPLETED*
    - Read system_requirements from tools.json
    - Call package manager (apt, brew, dnf, etc.)
    - Handle platform differences

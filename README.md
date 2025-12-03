@@ -87,6 +87,8 @@ python src/snes-ide.py --tui /path/to/your/project
 ### Features
 
 - **Code Browser** - Browse and view project files with syntax highlighting
+- **Markdown Rendering** - View `.md` files with formatted rendering
+- **Open in Editor** - Launch your preferred editor (`$EDITOR`) directly from the TUI
 - **Tool Manager** - Install, update, verify, and uninstall development tools
 - **Command Palette** - Quick access to all commands via `Ctrl+P`
 - **Collapsible Sidebar** - Organized sections for Project files and Tools
@@ -97,6 +99,7 @@ python src/snes-ide.py --tui /path/to/your/project
 |-----|--------|
 | `s` | Toggle sidebar visibility |
 | `f` | Toggle between code and tools view |
+| `e` | Open current file in external editor |
 | `o` | Open project directory |
 | `i` | Install selected tool |
 | `r` | Refresh tool list |

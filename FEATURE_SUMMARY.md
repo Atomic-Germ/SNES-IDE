@@ -164,10 +164,10 @@ Updated interface with:
 - ✅ Web integration
 
 ### Planned (Infrastructure Ready)
-- 🔄 Tool installation from source
-- 🔄 Dependency management
+- ✅ Tool installation from source (implemented in TUI mode)
+- ✅ Dependency management (implemented in TUI mode with PATH checking)
 - 🔄 Patch application
-- 🔄 Progress tracking
+- ✅ Progress tracking (implemented in TUI mode with ETA)
 - 🔄 Configuration management
 
 ## 🔐 Quality Assurance
