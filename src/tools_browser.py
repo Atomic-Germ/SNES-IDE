@@ -788,6 +788,14 @@ class ToolCommandProvider(Provider):
         if score > 0:
             yield Hit(score, command, self._app.action_show_tools, help="Show tools panel")
 
+        # Open in Editor (only when viewing a file)
+        current_file = self._app.current_file
+        if current_file:
+            command = f"Open in Editor: {current_file.name}"
+            score = matcher.match(command)
+            if score > 0:
+                yield Hit(score, command, self._app.action_open_in_editor, help="Edit file in external editor")
+
         # === Tool-specific commands (require a selected tool) ===
         if tool_data:
             # Install (only if not installed)
@@ -1687,6 +1695,7 @@ class ToolBrowser(App):
     BINDINGS = [
         ("s", "toggle_sidebar", "Sidebar"),
         ("f", "toggle_files", "Files"),
+        ("e", "open_in_editor", "Edit"),
         ("i", "install", "Install"),
         ("o", "open_project", "Open Project"),
         ("q", "quit", "Quit"),
@@ -1794,6 +1803,46 @@ class ToolBrowser(App):
     def action_show_tools(self) -> None:
         """Show the tools panel."""
         self.current_view = "tools"
+    
+    def action_open_in_editor(self) -> None:
+        """Open current file in external editor."""
+        if not self.current_file:
+            self.notify("No file selected", severity="warning")
+            return
+        
+        if not self.current_file.exists():
+            self.notify(f"File not found: {self.current_file}", severity="error")
+            return
+        
+        # Get editor from environment or fallback to common editors
+        editor = os.environ.get("EDITOR") or os.environ.get("VISUAL")
+        if not editor:
+            # Try common editors
+            for fallback in ["nano", "vim", "vi", "code", "gedit", "kate"]:
+                if shutil.which(fallback):
+                    editor = fallback
+                    break
+        
+        if not editor:
+            self.notify("No editor found. Set $EDITOR environment variable.", severity="error")
+            return
+        
+        file_path = self.current_file
+        
+        # Suspend the TUI, run editor, then resume
+        with self.suspend():
+            try:
+                subprocess.run([editor, str(file_path)])
+            except Exception as e:
+                # Will show after resume
+                pass
+        
+        # Refresh the file view after editor closes
+        code_viewer = self.query_one(CodeViewer)
+        # Force a refresh by toggling the path
+        code_viewer.file_path = None
+        code_viewer.file_path = file_path
+        self.notify(f"Returned from {editor}", severity="information")
     
     def action_open_project(self) -> None:
         """Open a project directory (placeholder - could show a dialog)."""
