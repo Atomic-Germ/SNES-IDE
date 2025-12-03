@@ -25,6 +25,7 @@ import tarfile
 from pathlib import Path
 from typing import Dict, Any, Callable
 
+from rich.markdown import Markdown
 from rich.syntax import Syntax
 from rich.traceback import Traceback
 
@@ -1307,6 +1308,7 @@ class CodeViewer(Static):
                 ".html": "html",
                 ".htm": "html",
                 ".css": "css",
+                ".tcss": "css",
                 ".xml": "xml",
                 ".java": "java",
                 ".cs": "csharp",
@@ -1323,14 +1325,19 @@ class CodeViewer(Static):
             else:
                 lexer = lexer_map.get(ext, "text")
             
-            syntax = Syntax(
-                code, 
-                lexer, 
-                theme="monokai",
-                line_numbers=True,
-                word_wrap=False,
-            )
-            content.update(syntax)
+            # Render Markdown files specially
+            if ext in (".md", ".markdown"):
+                md = Markdown(code)
+                content.update(md)
+            else:
+                syntax = Syntax(
+                    code, 
+                    lexer, 
+                    theme="monokai",
+                    line_numbers=True,
+                    word_wrap=False,
+                )
+                content.update(syntax)
             
         except UnicodeDecodeError:
             content.update("[yellow]Binary file - cannot display[/yellow]")
@@ -1463,6 +1470,17 @@ class Sidebar(Widget):
             background: $panel;
         }
         
+        #project-content {
+            height: auto;
+            max-height: 25;
+            background: $panel;
+        }
+        
+        #project-tree {
+            height: auto;
+            max-height: 24;
+        }
+        
         #no-project-label {
             padding: 1 2;
             color: $text-muted;
@@ -1476,14 +1494,15 @@ class Sidebar(Widget):
         yield Label("⚡ SNES-IDE", id="sidebar-title")
         with VerticalScroll():
             with Collapsible(title="📁 Project", collapsed=False, id="project-section"):
-                yield Label("[dim]No project open[/dim]", id="no-project-label")
-                # ProjectTree will be added dynamically when a project is opened
+                with Vertical(id="project-content"):
+                    yield Label("[dim]No project open[/dim]", id="no-project-label")
+                    # ProjectTree will be added here dynamically
             with Collapsible(title="🛠 Tools", collapsed=True, id="tools-section"):
                 yield ListView(id="tool-list")
     
     def watch_project_path(self, project_path: Path | None) -> None:
         """Update the project tree when path changes."""
-        project_section = self.query_one("#project-section", Collapsible)
+        project_content = self.query_one("#project-content", Vertical)
         no_project_label = self.query_one("#no-project-label", Label)
         
         # Remove existing ProjectTree if any
@@ -1493,8 +1512,9 @@ class Sidebar(Widget):
         if project_path and project_path.exists():
             no_project_label.display = False
             tree = ProjectTree(project_path, id="project-tree")
-            project_section.mount(tree)
-            project_section.collapsed = False
+            project_content.mount(tree)
+            # Expand the project section
+            self.query_one("#project-section", Collapsible).collapsed = False
         else:
             no_project_label.display = True
             no_project_label.update("[dim]No project open[/dim]")
