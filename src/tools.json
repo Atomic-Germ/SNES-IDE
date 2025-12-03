@@ -166,6 +166,7 @@
       "name": "superfamiconv",
       "description": "Flexible tile graphics converter for SNES and retro consoles. Converts PNG images to native tile, palette, and map data. Supports multiple modes (SNES, Mode 7, GB, GBA, MD), color depth options, tile optimization, and sprite layouts. Essential for graphics asset pipelines.",
       "category": "graphics",
+      "docs_url": "https://github.com/Optiroc/SuperFamiconv#readme",
       "priority": "required",
       "source": {
         "type": "git",
@@ -178,6 +179,13 @@
         "darwin": "superfamiconv",
         "win32": "superfamiconv.exe"
       },
+      "commands": [
+        {
+          "label": "Convert Image",
+          "script": "gfx-png-bmp-snes-converter.py",
+          "args": ["--tool", "superfamiconv"]
+        }
+      ],
       "build": {
         "linux": {
           "commands": [

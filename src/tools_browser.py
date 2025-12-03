@@ -21,11 +21,13 @@ from pathlib import Path
 from typing import Dict, Any, Callable
 
 from textual.app import App, ComposeResult
+from textual.command import Hit, Hits, Provider
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widget import Widget
 from textual.widgets import Footer, Header, Label, ListItem, ListView, Static, Rule, Button, RichLog, ProgressBar
+import webbrowser
 
 
 def get_platform() -> str:
@@ -636,10 +638,205 @@ class ToolInstaller:
         self.log(f"[bold green]{'='*50}[/bold green]")
         return True
 
-        self.log(f"[bold green]{'='*50}[/bold green]")
-        self.log(f"[bold green]Installation of {tool_name} complete![/bold green]")
-        self.log(f"[bold green]{'='*50}[/bold green]")
-        return True
+    async def uninstall(self, tool_config: Dict[str, Any]) -> bool:
+        """Uninstall a tool by removing its binary and source.
+        
+        Returns True if successful, False otherwise.
+        """
+        tool_name = tool_config.get("name", "unknown")
+        
+        self.log(f"[bold]{'='*50}[/bold]")
+        self.log(f"[bold]Uninstalling: {tool_name}[/bold]")
+        self.log(f"[bold]{'='*50}[/bold]")
+        self.log("")
+
+        success = True
+
+        # Remove binary from ~/.local/bin
+        binary_name = tool_config.get("binary_name", {})
+        if isinstance(binary_name, dict):
+            binary_name = binary_name.get(self.platform)
+        if not binary_name:
+            binary_name = tool_name
+
+        binary_path = Path.home() / ".local" / "bin" / binary_name
+        if binary_path.exists():
+            self.log_info(f"Removing binary: {binary_path}")
+            try:
+                binary_path.unlink()
+                self.log_success(f"Removed {binary_path}")
+            except Exception as e:
+                self.log_error(f"Failed to remove binary: {e}")
+                success = False
+        else:
+            self.log_info(f"Binary not found: {binary_path}")
+
+        # Remove source directory
+        source_dir = self.tools_dir / tool_name
+        if source_dir.exists():
+            self.log_info(f"Removing source: {source_dir}")
+            try:
+                shutil.rmtree(source_dir)
+                self.log_success(f"Removed {source_dir}")
+            except Exception as e:
+                self.log_error(f"Failed to remove source: {e}")
+                success = False
+        else:
+            self.log_info(f"Source directory not found: {source_dir}")
+
+        if success:
+            self.log(f"[bold green]{'='*50}[/bold green]")
+            self.log(f"[bold green]Uninstall of {tool_name} complete![/bold green]")
+            self.log(f"[bold green]{'='*50}[/bold green]")
+        else:
+            self.log(f"[bold yellow]{'='*50}[/bold yellow]")
+            self.log(f"[bold yellow]Uninstall of {tool_name} had errors[/bold yellow]")
+            self.log(f"[bold yellow]{'='*50}[/bold yellow]")
+        
+        return success
+
+
+# Category to scripts mapping
+CATEGORY_SCRIPTS: Dict[str, list[Dict[str, str]]] = {
+    "audio": [
+        {"label": "Convert WAV to BRR", "script": "audio-wav-brr-converter.py"},
+        {"label": "Convert BRR to WAV", "script": "audio-brr-wav-converter.py"},
+        {"label": "Generate Audio Sample", "script": "audio-sample-generator.py"},
+        {"label": "Initialize Impulse Tracker", "script": "audio-impulse-tracker-init.py"},
+    ],
+    "graphics": [
+        {"label": "Convert PNG to SNES", "script": "gfx-png-bmp-snes-converter.py"},
+        {"label": "Edit PNG/BMP", "script": "gfx-png-bmp-editor.py"},
+        {"label": "Edit TMX Map", "script": "gfx-tmx-editor.py"},
+        {"label": "Convert TMX to TMJ", "script": "gfx-tmx-tmj-converter.py"},
+    ],
+    "emulators": [
+        {"label": "Open in Emulator", "script": "open-emulator.py"},
+    ],
+    "sdk": [
+        {"label": "Create PVSnesLib Project", "script": "create-pvsneslib-proj.py"},
+        {"label": "Compile PVSnesLib Project", "script": "compile-pvsneslib-proj.py"},
+        {"label": "Create DotnetSnes Project", "script": "create-dotnetsnes-proj.py"},
+        {"label": "Compile DotnetSnes Project", "script": "compile-dotnetsnes-proj.py"},
+        {"label": "Create JavaSnes Project", "script": "create-javasnes-proj.py"},
+        {"label": "Compile JavaSnes Project", "script": "compile-javasnes-proj.py"},
+    ],
+}
+
+
+class ToolCommandProvider(Provider):
+    """Provides contextual commands for the selected tool."""
+
+    @property
+    def _app(self) -> "ToolBrowser":
+        return self.app  # type: ignore
+
+    async def search(self, query: str) -> Hits:
+        """Yield command hits based on current context."""
+        matcher = self.matcher(query)
+        scripts_dir = Path(__file__).parent / "scripts"
+
+        # Get currently selected tool
+        detail_panel = self._app.query_one(ToolDetailPanel)
+        tool_data = detail_panel.tool_data
+        tool_name = tool_data.get("name", "tool") if tool_data else None
+        is_installed = tool_data.get("available", False) if tool_data else False
+        category = tool_data.get("category") if tool_data else None
+
+        # === Always-available commands ===
+        
+        # Refresh
+        command = "Refresh Tools"
+        score = matcher.match(command)
+        if score > 0:
+            yield Hit(score, command, self._app.action_refresh, help="Reload tool list")
+
+        # Toggle sidebar
+        command = "Toggle Sidebar"
+        score = matcher.match(command)
+        if score > 0:
+            yield Hit(score, command, self._app.action_toggle_sidebar, help="Show/hide tool list")
+
+        # === Tool-specific commands (require a selected tool) ===
+        if tool_data:
+            # Install (only if not installed)
+            if not is_installed:
+                command = f"Install {tool_name}"
+                score = matcher.match(command)
+                if score > 0:
+                    yield Hit(score, command, self._app.action_install, help=f"Download and build {tool_name}")
+
+            # Update (re-run install, only if installed)
+            if is_installed:
+                command = f"Update {tool_name}"
+                score = matcher.match(command)
+                if score > 0:
+                    yield Hit(score, command, self._app.action_update, help=f"Re-download and rebuild {tool_name}")
+
+            # Verify (only if installed)
+            if is_installed:
+                command = f"Verify {tool_name}"
+                score = matcher.match(command)
+                if score > 0:
+                    yield Hit(score, command, self._app.action_verify, help=f"Check {tool_name} installation")
+
+            # Uninstall (only if installed)
+            if is_installed:
+                command = f"Uninstall {tool_name}"
+                score = matcher.match(command)
+                if score > 0:
+                    yield Hit(score, command, self._app.action_uninstall, help=f"Remove {tool_name} binary and source")
+
+            # Documentation (if docs_url exists)
+            docs_url = tool_data.get("docs_url")
+            if docs_url:
+                command = f"Documentation: {tool_name}"
+                score = matcher.match(command)
+                if score > 0:
+                    yield Hit(score, command, lambda: webbrowser.open(docs_url), help=f"Open {tool_name} docs in browser")
+
+            # Per-tool custom commands from tools.json
+            tool_commands = tool_data.get("commands", [])
+            for cmd in tool_commands:
+                label = cmd.get("label", "")
+                script = cmd.get("script", "")
+                args = cmd.get("args", [])
+                if label:
+                    command = f"{tool_name}: {label}"
+                    score = matcher.match(command)
+                    if score > 0:
+                        script_path = scripts_dir / script if script else None
+                        yield Hit(
+                            score, 
+                            command, 
+                            lambda s=script_path, a=args: self._run_script(s, a),
+                            help=f"Run {script}" if script else label
+                        )
+
+            # Category-based commands
+            if category and category in CATEGORY_SCRIPTS:
+                for cat_cmd in CATEGORY_SCRIPTS[category]:
+                    label = cat_cmd.get("label", "")
+                    script = cat_cmd.get("script", "")
+                    command = label
+                    score = matcher.match(command)
+                    if score > 0:
+                        script_path = scripts_dir / script
+                        yield Hit(
+                            score,
+                            command,
+                            lambda s=script_path: self._run_script(s, []),
+                            help=f"Run {script}"
+                        )
+
+    def _run_script(self, script_path: Path | None, args: list[str]) -> None:
+        """Run a script with arguments."""
+        if script_path and script_path.exists():
+            self._app.notify(f"Running {script_path.name}...", severity="information")
+            # For now, just notify - full implementation would run the script
+            # subprocess.Popen([sys.executable, str(script_path)] + args)
+        else:
+            self._app.notify(f"Script not found: {script_path}", severity="error")
 
 
 class InstallScreen(ModalScreen):
@@ -702,22 +899,23 @@ class InstallScreen(ModalScreen):
         ("escape", "close", "Close"),
     ]
 
-    def __init__(self, tool_config: Dict[str, Any]):
+    def __init__(self, tool_config: Dict[str, Any], title_prefix: str = "Installing"):
         super().__init__()
         self.tool_config = tool_config
+        self.title_prefix = title_prefix
         self.installing = False
         self.install_complete = False
 
     def compose(self) -> ComposeResult:
         tool_name = self.tool_config.get("name", "Unknown")
         with Vertical(id="install-dialog"):
-            yield Label(f"Installing: {tool_name}", id="install-title")
+            yield Label(f"{self.title_prefix}: {tool_name}", id="install-title")
             yield RichLog(id="install-log", highlight=True, markup=True)
             with Horizontal(id="progress-container"):
                 yield ProgressBar(id="install-progress", total=100, show_eta=False)
                 yield Label("", id="eta-label")
             with Horizontal(id="install-buttons"):
-                yield Button("Start Install", id="start-btn", variant="primary")
+                yield Button("Start", id="start-btn", variant="primary")
                 yield Button("Close", id="close-btn", variant="default")
 
     def on_mount(self) -> None:
@@ -785,6 +983,220 @@ class InstallScreen(ModalScreen):
         # Re-enable close button
         self.query_one("#close-btn", Button).disabled = False
         self.query_one("#start-btn", Button).label = "Done" if self.install_complete else "Failed"
+
+
+class VerifyScreen(ModalScreen):
+    """Modal screen for verifying a tool installation."""
+
+    DEFAULT_CSS = """
+    VerifyScreen {
+        align: center middle;
+    }
+    
+    #verify-dialog {
+        width: 60%;
+        height: auto;
+        max-height: 50%;
+        border: thick $primary;
+        background: $surface;
+        padding: 1 2;
+    }
+    
+    #verify-title {
+        text-align: center;
+        text-style: bold;
+        padding: 1;
+        background: $accent;
+        margin-bottom: 1;
+    }
+    
+    #verify-log {
+        height: auto;
+        max-height: 10;
+        border: solid $primary;
+        margin-bottom: 1;
+    }
+    
+    #verify-buttons {
+        height: auto;
+        align: center middle;
+    }
+    """
+
+    BINDINGS = [
+        ("escape", "close", "Close"),
+    ]
+
+    def __init__(self, tool_config: Dict[str, Any]):
+        super().__init__()
+        self.tool_config = tool_config
+        self.verify_success = False
+
+    def compose(self) -> ComposeResult:
+        tool_name = self.tool_config.get("name", "Unknown")
+        with Vertical(id="verify-dialog"):
+            yield Label(f"Verifying: {tool_name}", id="verify-title")
+            yield RichLog(id="verify-log", highlight=True, markup=True)
+            with Horizontal(id="verify-buttons"):
+                yield Button("Close", id="close-btn", variant="default")
+
+    def on_mount(self) -> None:
+        """Start verification when mounted."""
+        self.run_worker(self._run_verify())
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button presses."""
+        if event.button.id == "close-btn":
+            self.dismiss(self.verify_success)
+
+    def action_close(self) -> None:
+        """Close the screen."""
+        self.dismiss(self.verify_success)
+
+    async def _run_verify(self) -> None:
+        """Run the verification."""
+        log = self.query_one("#verify-log", RichLog)
+        verify_cmd = self.tool_config.get("verify_command", [])
+        
+        if not verify_cmd:
+            log.write("[yellow]No verify command specified[/yellow]")
+            self.verify_success = True
+            return
+
+        log.write(f"[cyan]Running:[/cyan] {' '.join(verify_cmd)}")
+        
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *verify_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT
+            )
+            stdout, _ = await process.communicate()
+            if stdout:
+                for line in stdout.decode().splitlines()[:5]:
+                    log.write(f"  {line}")
+
+            if process.returncode == 0:
+                log.write("[green bold]✓ Verification passed![/green bold]")
+                self.verify_success = True
+            else:
+                log.write(f"[red bold]✗ Verification failed (code {process.returncode})[/red bold]")
+                self.verify_success = False
+        except FileNotFoundError:
+            log.write(f"[red]Command not found: {verify_cmd[0]}[/red]")
+            self.verify_success = False
+        except Exception as e:
+            log.write(f"[red]Error: {e}[/red]")
+            self.verify_success = False
+
+
+class UninstallScreen(ModalScreen):
+    """Modal screen for uninstalling a tool."""
+
+    DEFAULT_CSS = """
+    UninstallScreen {
+        align: center middle;
+    }
+    
+    #uninstall-dialog {
+        width: 60%;
+        height: auto;
+        max-height: 60%;
+        border: thick $error;
+        background: $surface;
+        padding: 1 2;
+    }
+    
+    #uninstall-title {
+        text-align: center;
+        text-style: bold;
+        padding: 1;
+        background: $error;
+        margin-bottom: 1;
+    }
+    
+    #uninstall-log {
+        height: auto;
+        max-height: 15;
+        border: solid $primary;
+        margin-bottom: 1;
+    }
+    
+    #uninstall-buttons {
+        height: auto;
+        align: center middle;
+    }
+    
+    #uninstall-buttons Button {
+        margin: 0 2;
+    }
+    """
+
+    BINDINGS = [
+        ("escape", "close", "Close"),
+    ]
+
+    def __init__(self, tool_config: Dict[str, Any]):
+        super().__init__()
+        self.tool_config = tool_config
+        self.uninstalling = False
+        self.uninstall_complete = False
+
+    def compose(self) -> ComposeResult:
+        tool_name = self.tool_config.get("name", "Unknown")
+        with Vertical(id="uninstall-dialog"):
+            yield Label(f"⚠ Uninstall: {tool_name}", id="uninstall-title")
+            yield RichLog(id="uninstall-log", highlight=True, markup=True)
+            with Horizontal(id="uninstall-buttons"):
+                yield Button("Confirm Uninstall", id="confirm-btn", variant="error")
+                yield Button("Cancel", id="cancel-btn", variant="default")
+
+    def on_mount(self) -> None:
+        """Show warning when mounted."""
+        log = self.query_one("#uninstall-log", RichLog)
+        tool_name = self.tool_config.get("name", "Unknown")
+        log.write(f"[yellow]This will remove {tool_name}:[/yellow]")
+        log.write(f"  • Binary from ~/.local/bin")
+        log.write(f"  • Source from ~/.snes-ide/tools/{tool_name}")
+        log.write("")
+        log.write("[dim]Press 'Confirm Uninstall' to proceed or 'Cancel' to abort.[/dim]")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button presses."""
+        if event.button.id == "confirm-btn":
+            if not self.uninstalling:
+                self.uninstalling = True
+                event.button.disabled = True
+                self.query_one("#cancel-btn", Button).disabled = True
+                self.run_worker(self._run_uninstall())
+        elif event.button.id == "cancel-btn":
+            self.dismiss(False)
+
+    def action_close(self) -> None:
+        """Close the screen."""
+        if not self.uninstalling:
+            self.dismiss(False)
+
+    async def _run_uninstall(self) -> None:
+        """Run the uninstall process."""
+        log = self.query_one("#uninstall-log", RichLog)
+        log.write("")
+        log.write("[bold]Starting uninstall...[/bold]")
+        
+        installer = ToolInstaller(
+            log_callback=lambda msg: log.write(msg)
+        )
+        
+        try:
+            self.uninstall_complete = await installer.uninstall(self.tool_config)
+        except Exception as e:
+            log.write(f"[red]Uninstall failed: {e}[/red]")
+            self.uninstall_complete = False
+        
+        # Update buttons
+        self.query_one("#confirm-btn", Button).label = "Done" if self.uninstall_complete else "Failed"
+        self.query_one("#cancel-btn", Button).label = "Close"
+        self.query_one("#cancel-btn", Button).disabled = False
 
 
 class Sidebar(Widget):
@@ -969,6 +1381,7 @@ class ToolBrowser(App):
     """SNES-IDE Tool Browser TUI."""
 
     TITLE = "SNES-IDE Tool Manager"
+    COMMANDS = {ToolCommandProvider}
     
     DEFAULT_CSS = """
     Screen {
@@ -1164,6 +1577,59 @@ class ToolBrowser(App):
         # Push the install screen
         self.push_screen(InstallScreen(tool_data), self._on_install_complete)
 
+    def action_update(self) -> None:
+        """Update (re-install) the currently selected tool."""
+        detail_panel = self.query_one(ToolDetailPanel)
+        tool_data = detail_panel.tool_data
+        
+        if tool_data is None:
+            self.notify("No tool selected.", severity="warning")
+            return
+        
+        if not tool_data.get("available"):
+            self.notify(f"{tool_data.get('name')} is not installed. Use Install instead.", severity="warning")
+            return
+        
+        # Push the install screen (update = re-install)
+        self.push_screen(InstallScreen(tool_data, title_prefix="Updating"), self._on_install_complete)
+
+    def action_verify(self) -> None:
+        """Verify the currently selected tool's installation."""
+        detail_panel = self.query_one(ToolDetailPanel)
+        tool_data = detail_panel.tool_data
+        
+        if tool_data is None:
+            self.notify("No tool selected.", severity="warning")
+            return
+        
+        if not tool_data.get("available"):
+            self.notify(f"{tool_data.get('name')} is not installed.", severity="warning")
+            return
+        
+        verify_cmd = tool_data.get("verify_command", [])
+        if not verify_cmd:
+            self.notify(f"No verify command for {tool_data.get('name')}", severity="information")
+            return
+        
+        # Run verify command and show result
+        self.push_screen(VerifyScreen(tool_data), self._on_verify_complete)
+
+    def action_uninstall(self) -> None:
+        """Uninstall the currently selected tool."""
+        detail_panel = self.query_one(ToolDetailPanel)
+        tool_data = detail_panel.tool_data
+        
+        if tool_data is None:
+            self.notify("No tool selected.", severity="warning")
+            return
+        
+        if not tool_data.get("available"):
+            self.notify(f"{tool_data.get('name')} is not installed.", severity="information")
+            return
+        
+        # Push the uninstall screen
+        self.push_screen(UninstallScreen(tool_data), self._on_uninstall_complete)
+
     def _on_install_complete(self, success: bool) -> None:
         """Handle install completion."""
         if success:
@@ -1171,6 +1637,21 @@ class ToolBrowser(App):
             self.action_refresh()
         else:
             self.notify("Installation did not complete successfully.", severity="warning")
+
+    def _on_verify_complete(self, success: bool) -> None:
+        """Handle verify completion."""
+        if success:
+            self.notify("Verification passed!", severity="information")
+        else:
+            self.notify("Verification failed.", severity="warning")
+
+    def _on_uninstall_complete(self, success: bool) -> None:
+        """Handle uninstall completion."""
+        if success:
+            self.notify("Uninstall complete! Refreshing...", severity="information")
+            self.action_refresh()
+        else:
+            self.notify("Uninstall had errors.", severity="warning")
 
 
 if __name__ == "__main__":
