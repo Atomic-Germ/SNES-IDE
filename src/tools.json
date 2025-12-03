@@ -1,6 +1,11 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "SNES-IDE Mini - Build-on-demand tool configuration",
+  "schema_notes": {
+    "dependency_format": "Dependencies can be arrays of package names (standard install) or objects with 'command' and 'args' keys for custom commands like 'builddep'. Example: {\"command\": \"builddep\", \"args\": [\"package-name\"]}",
+    "repo_install": "Tools can have a 'repo_install' section for direct package manager installation as an alternative to building from source. When present, users get 'Install' and 'Build' buttons instead of 'Start'.",
+    "package_name": "Use this field when the package name differs from the tool name. For example, 'ca65' is part of the 'cc65' package. This is the first candidate checked for dynamic repo install detection."
+  },
   "system_requirements": {
     "common": ["git", "make", "cmake", "python3"],
     "linux": {
@@ -67,6 +72,7 @@
       "category": "assemblers",
       "docs_url": "https://cc65.github.io/doc/ca65.html",
       "priority": "optional",
+      "package_name": "cc65",
       "source": {
         "type": "tarball",
         "url": "https://github.com/cc65/cc65/archive/refs/tags/V2.19.tar.gz",
@@ -356,6 +362,17 @@
         {"label": "Launch ROM", "script": "open-emulator.py", "args": ["--emulator", "bsnes"]},
         {"label": "Launch with Debugger", "script": "open-emulator.py", "args": ["--emulator", "bsnes", "--debug"]}
       ],
+      "repo_install": {
+        "description": "Install pre-built package from system repositories",
+        "linux": {
+          "apt": ["bsnes"],
+          "dnf": ["bsnes"],
+          "pacman": ["bsnes"]
+        },
+        "darwin": {
+          "brew": ["bsnes"]
+        }
+      },
       "source": {
         "type": "tarball",
         "url": "https://github.com/bsnes-emu/bsnes/archive/refs/tags/v115.tar.gz",
@@ -405,6 +422,17 @@
       "commands": [
         {"label": "Open Tracker", "script": "audio-impulse-tracker-init.py", "args": []}
       ],
+      "repo_install": {
+        "description": "Install pre-built package from system repositories",
+        "linux": {
+          "apt": ["schismtracker"],
+          "dnf": ["schismtracker"],
+          "pacman": ["schismtracker"]
+        },
+        "darwin": {
+          "brew": ["schismtracker"]
+        }
+      },
       "source": {
         "type": "git",
         "url": "https://github.com/schismtracker/schismtracker.git",
@@ -529,6 +557,20 @@
         {"label": "Open Map Editor", "script": "gfx-tmx-editor.py", "args": []},
         {"label": "Convert TMX to SNES", "script": "gfx-tmx-tmj-converter.py", "args": []}
       ],
+      "repo_install": {
+        "description": "Install pre-built package from system repositories (faster, recommended)",
+        "linux": {
+          "apt": ["tiled"],
+          "dnf": ["tiled"],
+          "pacman": ["tiled"]
+        },
+        "darwin": {
+          "brew": ["tiled"]
+        },
+        "win32": {
+          "note": "Download installer from https://www.mapeditor.org/"
+        }
+      },
       "source": {
         "type": "git",
         "url": "https://github.com/mapeditor/tiled.git",
@@ -567,7 +609,10 @@
       "dependencies": {
         "linux": {
           "apt": ["build-essential", "qt6-base-dev", "qt6-declarative-dev", "qt6-tools-dev", "qbs", "zlib1g-dev"],
-          "dnf": ["gcc", "gcc-c++", "qt6-qtbase-devel", "qt6-qtdeclarative-devel", "qt6-qttools-devel", "zlib-devel"]
+          "dnf": {
+            "command": "builddep",
+            "args": ["tiled"]
+          }
         },
         "darwin": {
           "brew": ["qt@6"]
@@ -822,7 +867,7 @@
       },
       "build": {
         "linux": {
-          "commands": ["make -C bass"],
+          "commands": ["mkdir build && cd build && cmake .. --build . -- -j4"],
           "env": {}
         },
         "darwin": {
