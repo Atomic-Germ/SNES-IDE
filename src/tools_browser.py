@@ -42,6 +42,16 @@ from textual.widgets import (
 from textual.widgets.tree import TreeNode
 import webbrowser
 
+# Note: textual-terminal was considered for embedded terminal support, but it uses
+# pty.fork() which only works on Linux with a real terminal - not in web/browser mode.
+# We use app.suspend() for terminal mode and show manual instructions for browser mode.
+#
+# FUTURE ENHANCEMENT: Find or create a browser-compatible terminal widget that can:
+# - Display output from subprocess commands in real-time
+# - Accept password input for sudo (securely)
+# - Work in both terminal and Textual web/browser modes
+# Options to explore: WebSocket-based PTY proxy, or a Textual-native terminal emulator
+
 
 def get_platform() -> str:
     """Get the current platform identifier."""
@@ -77,7 +87,8 @@ class ToolInstaller:
         self, 
         tools_dir: Path | None = None, 
         log_callback: Callable[[str], None] | None = None,
-        progress_callback: Callable[[float, float, float | None], None] | None = None
+        progress_callback: Callable[[float, float, float | None], None] | None = None,
+        sudo_callback: Callable[[list[str]], bool] | None = None
     ):
         """Initialize the installer.
         
@@ -85,6 +96,8 @@ class ToolInstaller:
             tools_dir: Directory to install tools to. Defaults to ~/.snes-ide/tools
             log_callback: Function to call with log messages
             progress_callback: Function to call with (current, total, eta_seconds)
+            sudo_callback: Function to call when sudo command needs to run in terminal.
+                          Takes command list, returns True if successful.
         """
         if tools_dir is None:
             tools_dir = Path.home() / ".snes-ide" / "tools"
@@ -92,6 +105,7 @@ class ToolInstaller:
         self.tools_dir.mkdir(parents=True, exist_ok=True)
         self.log = log_callback or print
         self.progress_callback = progress_callback
+        self.sudo_callback = sudo_callback
         self.platform = get_platform()
         self.pkg_manager = get_package_manager()
 
@@ -155,10 +169,6 @@ class ToolInstaller:
 
         # Check if we need sudo
         needs_sudo = self.pkg_manager in ("apt", "dnf")
-        
-        if needs_sudo:
-            self.log_info("[yellow]Root privileges required to install system packages[/yellow]")
-            self.log_info("You may be prompted for your password...")
 
         # Build the install command
         if self.pkg_manager == "apt":
@@ -174,6 +184,22 @@ class ToolInstaller:
             return False
 
         self.log_cmd(" ".join(cmd))
+        
+        # If we need sudo and have a sudo callback, use it to run in terminal
+        if needs_sudo and self.sudo_callback:
+            self.log_info("[yellow]Root privileges required - switching to terminal...[/yellow]")
+            self.log_info("[dim]The TUI will pause while you enter your password[/dim]")
+            
+            # Run synchronously via the callback (which suspends TUI)
+            success = self.sudo_callback(cmd)
+            
+            if success:
+                self.log_success("Dependencies installed")
+            else:
+                self.log_error("Dependency installation failed or was cancelled")
+            return success
+        
+        # Non-sudo path (brew, msys2) or no callback - run async with streaming
         try:
             process = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -192,8 +218,6 @@ class ToolInstaller:
             
             if process.returncode != 0:
                 self.log_error(f"Dependency installation failed with code {process.returncode}")
-                if needs_sudo:
-                    self.log_info("[dim]Tip: You may need to run with proper sudo access[/dim]")
                 return False
             
             self.log_success("Dependencies installed")
@@ -967,9 +991,123 @@ class InstallScreen(ModalScreen):
             if not self.installing:
                 self.installing = True
                 event.button.disabled = True
-                self.run_worker(self._run_install())
+                # Check if we need sudo first
+                self._check_and_install()
         elif event.button.id == "close-btn":
             self.dismiss(self.install_complete)
+
+    def _check_and_install(self) -> None:
+        """Check for sudo requirements and start installation."""
+        # Check if dependencies need sudo
+        deps = self.tool_config.get("dependencies", {})
+        plat = get_platform()
+        pkg_manager = get_package_manager()
+        plat_deps = deps.get(plat, {})
+        
+        needs_sudo = False
+        missing_packages = []
+        
+        if plat_deps and pkg_manager in ("apt", "dnf"):
+            packages = plat_deps.get(pkg_manager, [])
+            # Check which packages are missing
+            installer = ToolInstaller()
+            for pkg in packages:
+                binary_name = installer._package_to_binary(pkg)
+                if not (binary_name and shutil.which(binary_name)):
+                    missing_packages.append(pkg)
+            
+            if missing_packages:
+                needs_sudo = True
+        
+        if needs_sudo:
+            self.log_message("[yellow]━━━ System Dependencies ━━━[/yellow]")
+            self.log_message(f"[yellow]Missing packages: {', '.join(missing_packages)}[/yellow]")
+            
+            # Build the command
+            if pkg_manager == "apt":
+                cmd = ["sudo", "apt-get", "install", "-y"] + missing_packages
+                cmd_str = f"sudo apt-get install -y {' '.join(missing_packages)}"
+            else:  # dnf
+                cmd = ["sudo", "dnf", "install", "-y"] + missing_packages
+                cmd_str = f"sudo dnf install -y {' '.join(missing_packages)}"
+            
+            # Check if we're in web/browser mode - can't do sudo there
+            if self.app.is_web:
+                self.log_message("[red]━━━ Manual Installation Required ━━━[/red]")
+                self.log_message("[yellow]Running in browser mode - cannot run sudo commands.[/yellow]")
+                self.log_message("")
+                self.log_message("[cyan]Please install the dependencies manually in a terminal:[/cyan]")
+                self.log_message(f"[white bold]  {cmd_str}[/white bold]")
+                self.log_message("")
+                self.log_message("[dim]After installing, close this dialog and try again.[/dim]")
+                self.installing = False
+                self.query_one("#start-btn", Button).disabled = False
+                self.query_one("#start-btn", Button).label = "Retry"
+                self.query_one("#close-btn", Button).disabled = False
+                return
+            
+            # Use suspend() to run sudo in the terminal
+            # Note: textual-terminal uses PTY which doesn't work in all environments
+            self.log_message("[dim]Switching to terminal for password entry...[/dim]")
+            success = self._run_sudo_in_terminal(cmd)
+            
+            if not success:
+                self.log_message("[red]Dependency installation failed or was cancelled[/red]")
+                self.log_message("[dim]You can try installing manually and retry[/dim]")
+                self.installing = False
+                self.query_one("#start-btn", Button).disabled = False
+                self.query_one("#start-btn", Button).label = "Retry"
+                self.query_one("#close-btn", Button).disabled = False
+                return
+            
+            self.log_message("[green]✓ Dependencies installed[/green]")
+        
+        # Continue with the rest of the installation
+        self.run_worker(self._run_install())
+
+    def _run_sudo_in_terminal(self, cmd: list[str]) -> bool:
+        """Run a sudo command by suspending the TUI.
+        
+        This allows the user to enter their password in the terminal.
+        Returns True if the command succeeded.
+        """
+        success = False
+        
+        with self.app.suspend():
+            print("\n" + "="*60)
+            print("SNES-IDE: Installing system dependencies")
+            print("="*60)
+            print(f"\nRunning: {' '.join(cmd)}\n")
+            
+            try:
+                result = subprocess.run(cmd)
+                success = (result.returncode == 0)
+                
+                if success:
+                    print("\n✓ Dependencies installed successfully!")
+                else:
+                    print(f"\n✗ Command failed with exit code {result.returncode}")
+                
+                print("\nPress Enter to return to SNES-IDE...")
+                input()
+            except KeyboardInterrupt:
+                print("\n\nCancelled by user.")
+                print("\nPress Enter to return to SNES-IDE...")
+                try:
+                    input()
+                except:
+                    pass
+                success = False
+            except Exception as e:
+                print(f"\n✗ Error: {e}")
+                print("\nPress Enter to return to SNES-IDE...")
+                try:
+                    input()
+                except:
+                    pass
+                success = False
+        
+        return success
 
     def action_close(self) -> None:
         """Close the screen."""
@@ -1011,6 +1149,7 @@ class InstallScreen(ModalScreen):
         installer = ToolInstaller(
             log_callback=self.log_message,
             progress_callback=self.update_progress
+            # No sudo_callback needed - we handle sudo deps upfront in _check_and_install
         )
         
         try:
