@@ -1,4 +1,9 @@
-"""SNES-IDE Tool Manager TUI - Textual implementation.
+"""SNES-IDE - Integrated Development Environment for SNES.
+
+A Textual-based TUI providing:
+- Tool management (install, update, verify, uninstall)
+- Code browsing with syntax highlighting
+- Project file navigation
 
 Run with:
     python src/snes-ide.py --tui
@@ -20,13 +25,20 @@ import tarfile
 from pathlib import Path
 from typing import Dict, Any, Callable
 
+from rich.syntax import Syntax
+from rich.traceback import Traceback
+
 from textual.app import App, ComposeResult
 from textual.command import Hit, Hits, Provider
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
-from textual.reactive import reactive
+from textual.reactive import reactive, var
 from textual.screen import ModalScreen
 from textual.widget import Widget
-from textual.widgets import Footer, Header, Label, ListItem, ListView, Static, Rule, Button, RichLog, ProgressBar
+from textual.widgets import (
+    Footer, Header, Label, ListItem, ListView, Static, Rule, 
+    Button, RichLog, ProgressBar, DirectoryTree, Collapsible, Tree
+)
+from textual.widgets.tree import TreeNode
 import webbrowser
 
 
@@ -755,7 +767,25 @@ class ToolCommandProvider(Provider):
         command = "Toggle Sidebar"
         score = matcher.match(command)
         if score > 0:
-            yield Hit(score, command, self._app.action_toggle_sidebar, help="Show/hide tool list")
+            yield Hit(score, command, self._app.action_toggle_sidebar, help="Show/hide sidebar")
+
+        # Open project
+        command = "Open Project"
+        score = matcher.match(command)
+        if score > 0:
+            yield Hit(score, command, self._app.action_open_project, help="Open project directory")
+
+        # Toggle files/tools view
+        command = "Toggle Code/Tools View"
+        score = matcher.match(command)
+        if score > 0:
+            yield Hit(score, command, self._app.action_toggle_files, help="Switch between code and tools view")
+
+        # Show tools view
+        command = "Show Tools"
+        score = matcher.match(command)
+        if score > 0:
+            yield Hit(score, command, self._app.action_show_tools, help="Show tools panel")
 
         # === Tool-specific commands (require a selected tool) ===
         if tool_data:
@@ -1199,25 +1229,190 @@ class UninstallScreen(ModalScreen):
         self.query_one("#cancel-btn", Button).disabled = False
 
 
+class CodeViewer(Static):
+    """Syntax-highlighted code viewer panel."""
+
+    DEFAULT_CSS = """
+    CodeViewer {
+        width: 100%;
+        height: 100%;
+        overflow: auto scroll;
+        padding: 0 1;
+        background: $surface;
+    }
+    
+    CodeViewer > Static {
+        width: auto;
+    }
+    """
+
+    file_path: reactive[Path | None] = reactive(None)
+
+    def compose(self) -> ComposeResult:
+        yield Static(id="code-content")
+
+    def watch_file_path(self, file_path: Path | None) -> None:
+        """Load and display the file when path changes."""
+        content = self.query_one("#code-content", Static)
+        
+        if file_path is None:
+            content.update("[dim italic]Select a file from the project tree to view its contents[/dim italic]")
+            return
+        
+        if not file_path.exists():
+            content.update(f"[red]File not found: {file_path}[/red]")
+            return
+        
+        if not file_path.is_file():
+            content.update(f"[dim]{file_path} is a directory[/dim]")
+            return
+        
+        try:
+            # Check file size - don't try to load huge files
+            file_size = file_path.stat().st_size
+            if file_size > 1_000_000:  # 1MB limit
+                content.update(f"[yellow]File too large to display ({file_size:,} bytes)[/yellow]")
+                return
+            
+            code = file_path.read_text(encoding="utf-8", errors="replace")
+            
+            # Determine lexer from file extension
+            ext = file_path.suffix.lower()
+            lexer_map = {
+                ".py": "python",
+                ".c": "c",
+                ".h": "c",
+                ".cpp": "cpp",
+                ".hpp": "cpp",
+                ".cc": "cpp",
+                ".cxx": "cpp",
+                ".asm": "nasm",
+                ".s": "gas",
+                ".inc": "nasm",
+                ".json": "json",
+                ".yaml": "yaml",
+                ".yml": "yaml",
+                ".toml": "toml",
+                ".md": "markdown",
+                ".rst": "rst",
+                ".sh": "bash",
+                ".bash": "bash",
+                ".zsh": "zsh",
+                ".fish": "fish",
+                ".ps1": "powershell",
+                ".bat": "batch",
+                ".cmd": "batch",
+                ".js": "javascript",
+                ".ts": "typescript",
+                ".html": "html",
+                ".htm": "html",
+                ".css": "css",
+                ".xml": "xml",
+                ".java": "java",
+                ".cs": "csharp",
+                ".rs": "rust",
+                ".go": "go",
+                ".rb": "ruby",
+                ".lua": "lua",
+                ".make": "make",
+                ".mk": "make",
+            }
+            # Handle Makefile specially
+            if file_path.name.lower() in ("makefile", "gnumakefile"):
+                lexer = "make"
+            else:
+                lexer = lexer_map.get(ext, "text")
+            
+            syntax = Syntax(
+                code, 
+                lexer, 
+                theme="monokai",
+                line_numbers=True,
+                word_wrap=False,
+            )
+            content.update(syntax)
+            
+        except UnicodeDecodeError:
+            content.update("[yellow]Binary file - cannot display[/yellow]")
+        except Exception as e:
+            content.update(Traceback(theme="monokai", width=None))
+
+
+class ProjectTree(DirectoryTree):
+    """Project file browser with filtering for relevant files."""
+    
+    DEFAULT_CSS = """
+    ProjectTree {
+        height: auto;
+        max-height: 20;
+        background: $panel;
+        scrollbar-gutter: stable;
+    }
+    """
+
+    # File extensions to show
+    SHOW_EXTENSIONS = {
+        ".c", ".h", ".cpp", ".hpp", ".cc", ".cxx",
+        ".asm", ".s", ".inc",
+        ".py", ".java", ".cs",
+        ".json", ".yaml", ".yml", ".toml",
+        ".md", ".rst", ".txt",
+        ".sh", ".bash", ".bat", ".cmd", ".ps1",
+        ".xml", ".html", ".css",
+        ".lua", ".rb", ".rs", ".go",
+    }
+    
+    # Filenames to always show (case-insensitive)
+    SHOW_NAMES = {
+        "makefile", "gnumakefile", "cmakelists.txt", 
+        "readme", "license", "copying", "changelog",
+        ".gitignore", ".gitattributes",
+    }
+    
+    # Directories to hide
+    HIDE_DIRS = {
+        "__pycache__", ".git", ".svn", ".hg", 
+        "node_modules", ".venv", "venv", ".env",
+        "build", "dist", ".tox", ".pytest_cache",
+        ".mypy_cache", ".ruff_cache", "target",
+    }
+
+    def filter_paths(self, paths: list[Path]) -> list[Path]:
+        """Filter paths to show only relevant files."""
+        filtered = []
+        for path in paths:
+            name_lower = path.name.lower()
+            
+            if path.is_dir():
+                # Hide certain directories
+                if name_lower not in self.HIDE_DIRS:
+                    filtered.append(path)
+            else:
+                # Show files with relevant extensions or special names
+                if (path.suffix.lower() in self.SHOW_EXTENSIONS or 
+                    name_lower in self.SHOW_NAMES or
+                    any(name_lower.startswith(n) for n in self.SHOW_NAMES)):
+                    filtered.append(path)
+        
+        return sorted(filtered, key=lambda p: (not p.is_dir(), p.name.lower()))
+
+
 class Sidebar(Widget):
-    """Animated sidebar containing the tool list."""
+    """Animated sidebar with collapsible sections for Tools and Project."""
 
     DEFAULT_CSS = """
     Sidebar {
-        width: 40;
+        width: 45;
         layer: sidebar;
         dock: left;
         offset-x: -100%;
         background: $panel;
         border-right: tall $background;
         transition: offset 200ms;
+        overflow-y: auto;
         
         &.-visible {
             offset-x: 0;
-        }
-        
-        & > Vertical {
-            height: 100%;
         }
         
         #sidebar-title {
@@ -1229,8 +1424,24 @@ class Sidebar(Widget):
             text-align: center;
         }
         
+        Collapsible {
+            padding: 0;
+            border: none;
+            background: $panel;
+        }
+        
+        CollapsibleTitle {
+            padding: 0 1;
+            background: $primary 30%;
+        }
+        
+        CollapsibleTitle:hover {
+            background: $primary 50%;
+        }
+        
         ListView {
-            height: 1fr;
+            height: auto;
+            max-height: 25;
             background: $panel;
         }
         
@@ -1245,13 +1456,48 @@ class Sidebar(Widget):
         ListItem.-selected {
             background: $accent 30%;
         }
+        
+        #project-tree-container {
+            height: auto;
+            max-height: 20;
+            background: $panel;
+        }
+        
+        #no-project-label {
+            padding: 1 2;
+            color: $text-muted;
+        }
     }
     """
+    
+    project_path: reactive[Path | None] = reactive(None)
 
     def compose(self) -> ComposeResult:
-        with Vertical():
-            yield Label("🛠 SNES-IDE Tools", id="sidebar-title")
-            yield ListView(id="tool-list")
+        yield Label("⚡ SNES-IDE", id="sidebar-title")
+        with VerticalScroll():
+            with Collapsible(title="📁 Project", collapsed=False, id="project-section"):
+                yield Label("[dim]No project open[/dim]", id="no-project-label")
+                # ProjectTree will be added dynamically when a project is opened
+            with Collapsible(title="🛠 Tools", collapsed=True, id="tools-section"):
+                yield ListView(id="tool-list")
+    
+    def watch_project_path(self, project_path: Path | None) -> None:
+        """Update the project tree when path changes."""
+        project_section = self.query_one("#project-section", Collapsible)
+        no_project_label = self.query_one("#no-project-label", Label)
+        
+        # Remove existing ProjectTree if any
+        for tree in self.query(ProjectTree):
+            tree.remove()
+        
+        if project_path and project_path.exists():
+            no_project_label.display = False
+            tree = ProjectTree(project_path, id="project-tree")
+            project_section.mount(tree)
+            project_section.collapsed = False
+        else:
+            no_project_label.display = True
+            no_project_label.update("[dim]No project open[/dim]")
 
 
 class ToolDetailPanel(Static):
@@ -1378,9 +1624,9 @@ class ToolDetailPanel(Static):
 
 
 class ToolBrowser(App):
-    """SNES-IDE Tool Browser TUI."""
+    """SNES-IDE - Integrated Development Environment for SNES."""
 
-    TITLE = "SNES-IDE Tool Manager"
+    TITLE = "SNES-IDE"
     COMMANDS = {ToolCommandProvider}
     
     DEFAULT_CSS = """
@@ -1394,37 +1640,63 @@ class ToolBrowser(App):
         height: 100%;
     }
     
-    #welcome {
+    #content-switcher {
         width: 100%;
         height: 100%;
-        content-align: center middle;
     }
     
-    #welcome Label {
-        text-align: center;
+    #tool-panel {
+        width: 100%;
+        height: 100%;
+    }
+    
+    #code-panel {
+        width: 100%;
+        height: 100%;
+    }
+    
+    #file-path-bar {
+        dock: top;
+        height: 1;
+        padding: 0 1;
+        background: $primary 30%;
+        color: $text-muted;
     }
     """
 
     BINDINGS = [
         ("s", "toggle_sidebar", "Sidebar"),
+        ("f", "toggle_files", "Files"),
         ("i", "install", "Install"),
+        ("o", "open_project", "Open Project"),
         ("q", "quit", "Quit"),
         ("r", "refresh", "Refresh"),
+        ("escape", "show_tools", "Tools View"),
     ]
 
     show_sidebar = reactive(False)
+    current_view = reactive("tools")  # "tools" or "code"
+    current_file: reactive[Path | None] = reactive(None)
+    project_path: reactive[Path | None] = reactive(None)
 
-    def __init__(self):
+    def __init__(self, project_path: Path | None = None):
         super().__init__()
         self.tools_by_category: Dict[str, list] = {}
         self.all_tools_map: Dict[str, Dict[str, Any]] = {}
+        self._initial_project_path = project_path
         self.load_tools_from_json()
 
     def compose(self) -> ComposeResult:
         yield Header()
         yield Sidebar()
-        with VerticalScroll(id="main-content"):
-            yield ToolDetailPanel()
+        with Container(id="main-content"):
+            # Tool detail view
+            with VerticalScroll(id="tool-panel"):
+                yield ToolDetailPanel()
+            # Code viewer
+            with Vertical(id="code-panel"):
+                yield Label("", id="file-path-bar")
+                yield CodeViewer()
         yield Footer()
 
     def on_mount(self) -> None:
@@ -1432,6 +1704,89 @@ class ToolBrowser(App):
         self.populate_tool_list()
         # Start with sidebar visible
         self.show_sidebar = True
+        # Set initial project if provided
+        if self._initial_project_path:
+            self.project_path = self._initial_project_path
+        else:
+            # Default to current working directory
+            self.project_path = Path.cwd()
+        # Show tools panel by default
+        self.current_view = "tools"
+    
+    def watch_current_view(self, view: str) -> None:
+        """Switch between tool and code views."""
+        tool_panel = self.query_one("#tool-panel")
+        code_panel = self.query_one("#code-panel")
+        
+        if view == "tools":
+            tool_panel.display = True
+            code_panel.display = False
+            self.sub_title = "Tools"
+        else:
+            tool_panel.display = False
+            code_panel.display = True
+            if self.current_file:
+                self.sub_title = str(self.current_file.name)
+    
+    def watch_current_file(self, file_path: Path | None) -> None:
+        """Update the code viewer when a file is selected."""
+        code_viewer = self.query_one(CodeViewer)
+        code_viewer.file_path = file_path
+        
+        path_bar = self.query_one("#file-path-bar", Label)
+        if file_path:
+            # Show relative path if within project
+            if self.project_path and file_path.is_relative_to(self.project_path):
+                rel_path = file_path.relative_to(self.project_path)
+                path_bar.update(f"📄 {rel_path}")
+            else:
+                path_bar.update(f"📄 {file_path}")
+            self.sub_title = file_path.name
+        else:
+            path_bar.update("")
+    
+    def watch_project_path(self, project_path: Path | None) -> None:
+        """Update sidebar when project path changes."""
+        sidebar = self.query_one(Sidebar)
+        sidebar.project_path = project_path
+        if project_path:
+            self.notify(f"Opened project: {project_path.name}", severity="information")
+    
+    def on_directory_tree_file_selected(self, event: DirectoryTree.FileSelected) -> None:
+        """Handle file selection from the project tree."""
+        event.stop()
+        self.current_file = event.path
+        self.current_view = "code"
+        # Auto-hide sidebar after selection
+        self.show_sidebar = False
+    
+    def action_toggle_files(self) -> None:
+        """Toggle between tools and code view."""
+        if self.current_view == "tools":
+            if self.current_file:
+                self.current_view = "code"
+            elif self.project_path:
+                self.notify("Select a file from the Project tree", severity="information")
+                self.show_sidebar = True
+        else:
+            self.current_view = "tools"
+    
+    def action_show_tools(self) -> None:
+        """Show the tools panel."""
+        self.current_view = "tools"
+    
+    def action_open_project(self) -> None:
+        """Open a project directory (placeholder - could show a dialog)."""
+        # For now, just use current directory
+        # In future, could integrate with a file picker
+        self.project_path = Path.cwd()
+        self.show_sidebar = True
+        # Expand project section
+        try:
+            project_section = self.query_one("#project-section", Collapsible)
+            project_section.collapsed = False
+        except Exception:
+            pass
 
     def load_tools_from_json(self) -> None:
         """Load tools from tools.json."""
@@ -1655,4 +2010,6 @@ class ToolBrowser(App):
 
 
 if __name__ == "__main__":
-    ToolBrowser().run()
+    # Accept optional project path as argument
+    project = Path(sys.argv[1]) if len(sys.argv) > 1 else None
+    ToolBrowser(project_path=project).run()
