@@ -1,0 +1,50 @@
+#amk 2
+#samples
+{
+"smm2/POW Block.brr"
+"smm2/P-Switch.brr"
+"smm2/Spike Ball.brr"
+"smm2/Snowball.brr"
+"smm2/Cannon.brr"
+"smm2/Yoshi's Egg.brr"
+"smm2/Shoe Stilleto.brr"
+"smm2/Chain Chomp's Post.brr"
+"smm2/Trampoline.brr"
+"smm2/Sideways Trampoline.brr" 
+"smm2/Coin.brr"
+"smm2/Gong.brr"
+"smm2/Bill Blaster.brr"
+"smm2/Thwomp.brr"
+}
+#instruments
+{
+"smm2/POW Block.brr" $FF $E0 $B8 $06 $00
+"smm2/P-Switch.brr" $FF $E0 $B8 $06 $00
+"smm2/Spike Ball.brr" $FF $E0 $B8 $06 $00
+"smm2/Snowball.brr" $FF $E0 $B8 $04 $00
+"smm2/Cannon.brr" $8F $E0 $B8 $06 $00
+"smm2/Yoshi's Egg.brr" $8F $E0 $B8 $06 $00
+"smm2/Shoe Stilleto.brr" $8F $E0 $B8 $06 $00
+"smm2/Chain Chomp's Post.brr" $8F $E0 $B8 $06 $00
+"smm2/Trampoline.brr" $8F $6F $B8 $06 $00
+"smm2/Sideways Trampoline.brr" $8F $71 $B8 $06 $00
+"smm2/Coin.brr" $8F $E0 $B8 $05 $00
+"smm2/Gong.brr" $8F $6D $B8 $04 $00
+"smm2/Bill Blaster.brr" $8F $6A $B8 $04 $00
+"smm2/Thwomp.brr" $8F $6A $B8 $04 $00
+}
+#0
+@30 [o4 c4] 
+@31 *
+@32 *
+@33 *
+@34 *
+@35 *
+@36 *
+@37 *
+@38 *
+@39 *
+@40 *
+@41 *
+@42 *
+@43 *

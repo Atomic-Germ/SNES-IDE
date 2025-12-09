@@ -1,0 +1,38 @@
+#amk 2
+#samples
+{
+"smm2/Stiletto Goomba.brr"
+"smm2/Super Mushroom.brr"
+"smm2/Super Star.brr"
+"smm2/Unchained Chomp.brr"
+"smm2/Wiggler.brr"
+"smm2/Yoshi.brr"
+"smm2/Bob-Omb.brr"
+"smm2/Zappa Mechakoopa A.brr"
+"smm2/Zappa Mechakoopa B.brr"
+"smm2/Koopa Clown Car.brr"
+}
+#instruments
+{
+"smm2/Stiletto Goomba.brr" $8F $6A $B8 $04 $00
+"smm2/Super Mushroom.brr" $8F $6A $B8 $03 $00
+"smm2/Super Star.brr" $8F $6A $B8 $03 $00
+"smm2/Unchained Chomp.brr" $8F $6A $B8 $04 $00
+"smm2/Wiggler.brr" $8F $6F $B8 $03 $00
+"smm2/Yoshi.brr" $8F $6A $B8 $03 $00
+"smm2/Bob-Omb.brr" $8F $E0 $B8 $05 $00
+"smm2/Zappa Mechakoopa A.brr" $8F $6A $B8 $06 $00
+"smm2/Zappa Mechakoopa B.brr" $8F $6A $B8 $06 $00
+"smm2/Koopa Clown Car.brr" $8F $6A $B8 $04 $00
+}
+#0 t60
+@30 [o2 c4 o3 c4 o4 c4 o5 c4]
+@31 *
+@32 *
+@33 *
+@34 *
+@35 *
+@36 *
+@37 *
+@38 *
+@39 *

@@ -1,0 +1,65 @@
+/* SNES-IDE Tools Browser - Textual CSS */
+
+Screen {
+    layout: vertical;
+    background: $surface;
+}
+
+Header {
+    dock: top;
+    height: 1;
+    background: $boost;
+}
+
+Footer {
+    dock: bottom;
+    height: 1;
+    background: $boost;
+}
+
+#tree-view {
+    display: none;
+    scrollbar-gutter: stable;
+    overflow: auto;
+    width: auto;
+    height: 100%;
+    dock: left;
+    border-right: solid $accent;
+}
+
+ToolBrowser.-show-tree #tree-view {
+    display: block;
+    max-width: 50%;
+}
+
+#detail-view {
+    overflow: auto scroll;
+    min-width: 100%;
+    height: 100%;
+}
+
+ToolDetailView {
+    width: auto;
+    padding: 2 3;
+    background: $surface;
+    border: solid $panel;
+}
+
+/* Tree styling */
+Tree {
+    background: $panel;
+    border: none;
+}
+
+Tree > .tree--cursor {
+    background: $primary 50%;
+    color: $text;
+}
+
+Tree > .tree--line {
+    color: $accent;
+}
+
+Tree > .tree--guides {
+    color: $panel;
+}

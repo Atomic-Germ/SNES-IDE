@@ -1,0 +1,968 @@
+{
+  "version": "1.1.0",
+  "description": "SNES-IDE Mini - Build-on-demand tool configuration",
+  "schema_notes": {
+    "dependency_format": "Dependencies can be arrays of package names (standard install) or objects with 'command' and 'args' keys for custom commands like 'builddep'. Example: {\"command\": \"builddep\", \"args\": [\"package-name\"]}",
+    "repo_install": "Tools can have a 'repo_install' section for direct package manager installation as an alternative to building from source. When present, users get 'Install' and 'Build' buttons instead of 'Start'.",
+    "package_name": "Use this field when the package name differs from the tool name. For example, 'ca65' is part of the 'cc65' package. This is the first candidate checked for dynamic repo install detection."
+  },
+  "system_requirements": {
+    "common": ["git", "make", "cmake", "python3"],
+    "linux": {
+      "apt": ["build-essential", "cmake", "git", "libpng-dev", "zlib1g-dev"],
+      "dnf": ["gcc", "gcc-c++", "make", "cmake", "git", "libpng-devel", "zlib-devel"]
+    },
+    "darwin": {
+      "brew": ["cmake", "libpng", "zlib"]
+    },
+    "win32": {
+      "msys2": ["mingw-w64-x86_64-cmake", "mingw-w64-x86_64-gcc", "make"]
+    }
+  },
+  "tools": [
+    {
+      "name": "64tass",
+      "description": "Powerful cross-assembler supporting 6502, 65C02, 65816, and R65C02. Features macros, conditional assembly, multiple output formats (binary, Intel HEX, S-record), and extensive expression evaluation. Highly portable with excellent error diagnostics.",
+      "category": "assemblers",
+      "docs_url": "https://tass64.sourceforge.net/",
+      "priority": "optional",
+      "source": {
+        "type": "tarball",
+        "url": "https://github.com/irmen/64tass/archive/refs/tags/v1.59.3120.tar.gz",
+        "strip_components": 1
+      },
+      "binary_path": "64tass",
+      "binary_name": {
+        "linux": "64tass",
+        "darwin": "64tass",
+        "win32": "64tass.exe"
+      },
+      "build": {
+        "linux": {
+          "commands": ["make"],
+          "env": {}
+        },
+        "darwin": {
+          "commands": ["make"],
+          "env": {}
+        },
+        "win32": {
+          "commands": ["make"],
+          "env": {}
+        }
+      },
+      "dependencies": {
+        "linux": {
+          "apt": ["build-essential"],
+          "dnf": ["gcc", "make"]
+        },
+        "darwin": {
+          "brew": []
+        },
+        "win32": {
+          "msys2": ["mingw-w64-x86_64-gcc", "make"]
+        }
+      },
+      "patches": [],
+      "verify_command": ["64tass", "--version"]
+    },
+    {
+      "name": "ca65",
+      "description": "Macro assembler from the cc65 cross-compiler suite. Supports 6502/65C02 with powerful macro system, conditional assembly, and symbol management. Part of a complete toolchain with linker, librarian, and C compiler for NES, Commodore, Atari, and Apple II.",
+      "category": "assemblers",
+      "docs_url": "https://cc65.github.io/doc/ca65.html",
+      "priority": "optional",
+      "package_name": "cc65",
+      "source": {
+        "type": "tarball",
+        "url": "https://github.com/cc65/cc65/archive/refs/tags/V2.19.tar.gz",
+        "strip_components": 1
+      },
+      "binary_path": "bin/ca65",
+      "binary_name": {
+        "linux": "ca65",
+        "darwin": "ca65",
+        "win32": "ca65.exe"
+      },
+      "build": {
+        "linux": {
+          "commands": ["make"],
+          "env": {}
+        },
+        "darwin": {
+          "commands": ["make"],
+          "env": {}
+        },
+        "win32": {
+          "commands": ["make"],
+          "env": {}
+        }
+      },
+      "dependencies": {
+        "linux": {
+          "apt": ["build-essential"],
+          "dnf": ["gcc", "make"]
+        },
+        "darwin": {
+          "brew": []
+        },
+        "win32": {
+          "msys2": ["mingw-w64-x86_64-gcc", "make"]
+        }
+      },
+      "patches": [],
+      "verify_command": ["ca65", "--version"]
+    },
+    {
+      "name": "wla-dx",
+      "description": "Versatile cross-assembler suite supporting 65816, Z80, 6502, 6800, and more. The wla-65816 variant is optimized for SNES with bank management, object file linking, and ROM patching. Widely used for SNES homebrew and ROM hacking projects.",
+      "category": "assemblers",
+      "docs_url": "https://github.com/vhelin/wla-dx/blob/master/doc/wla_dx_manual.rst",
+      "priority": "required",
+      "source": {
+        "type": "tarball",
+        "url": "https://github.com/vhelin/wla-dx/archive/refs/tags/v10.6.tar.gz",
+        "strip_components": 1
+      },
+      "binary_path": "binaries/wla-65816",
+      "binary_name": {
+        "linux": "wla-65816",
+        "darwin": "wla-65816",
+        "win32": "wla-65816.exe"
+      },
+      "build": {
+        "linux": {
+          "commands": [
+            "mkdir -p build",
+            "cd build && cmake ..",
+            "cd build && make"
+          ],
+          "env": {}
+        },
+        "darwin": {
+          "commands": [
+            "mkdir -p build",
+            "cd build && cmake ..",
+            "cd build && make"
+          ],
+          "env": {}
+        },
+        "win32": {
+          "commands": [
+            "mkdir -p build",
+            "cd build && cmake .. -G 'MinGW Makefiles'",
+            "cd build && mingw32-make"
+          ],
+          "env": {}
+        }
+      },
+      "dependencies": {
+        "linux": {
+          "apt": ["build-essential", "cmake"],
+          "dnf": ["gcc", "gcc-c++", "make", "cmake"]
+        },
+        "darwin": {
+          "brew": ["cmake"]
+        },
+        "win32": {
+          "msys2": ["mingw-w64-x86_64-cmake", "mingw-w64-x86_64-gcc"]
+        }
+      },
+      "patches": [],
+      "verify_command": ["wla-65816", "-V"]
+    },
+    {
+      "name": "superfamiconv",
+      "description": "Flexible tile graphics converter for SNES and retro consoles. Converts PNG images to native tile, palette, and map data. Supports multiple modes (SNES, Mode 7, GB, GBA, MD), color depth options, tile optimization, and sprite layouts. Essential for graphics asset pipelines.",
+      "category": "graphics",
+      "docs_url": "https://github.com/Optiroc/SuperFamiconv#readme",
+      "priority": "required",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/Optiroc/SuperFamiconv.git",
+        "branch": "master"
+      },
+      "binary_path": "build/superfamiconv",
+      "binary_name": {
+        "linux": "superfamiconv",
+        "darwin": "superfamiconv",
+        "win32": "superfamiconv.exe"
+      },
+      "commands": [
+        {
+          "label": "Convert Image",
+          "script": "gfx-png-bmp-snes-converter.py",
+          "args": ["--tool", "superfamiconv"]
+        }
+      ],
+      "build": {
+        "linux": {
+          "commands": [
+            "mkdir -p build",
+            "cd build && cmake ..",
+            "cd build && make"
+          ],
+          "env": {}
+        },
+        "darwin": {
+          "commands": [
+            "mkdir -p build",
+            "cd build && cmake ..",
+            "cd build && make"
+          ],
+          "env": {}
+        },
+        "win32": {
+          "commands": [
+            "mkdir -p build",
+            "cd build && cmake .. -G 'MinGW Makefiles'",
+            "cd build && mingw32-make"
+          ],
+          "env": {}
+        }
+      },
+      "dependencies": {
+        "linux": {
+          "apt": ["build-essential", "cmake", "libpng-dev"],
+          "dnf": ["gcc", "gcc-c++", "make", "cmake", "libpng-devel"]
+        },
+        "darwin": {
+          "brew": ["cmake", "libpng"]
+        },
+        "win32": {
+          "msys2": ["mingw-w64-x86_64-cmake", "mingw-w64-x86_64-gcc", "mingw-w64-x86_64-libpng"]
+        }
+      },
+      "patches": [],
+      "verify_command": ["superfamiconv", "--help"]
+    },
+    {
+      "name": "pvsneslib",
+      "description": "Comprehensive C-based SNES development SDK. Includes 816-tcc compiler, linker, graphics/audio tools, and runtime libraries. Enables high-level C programming for SNES with built-in sprite, background, input, and sound handling. The primary SDK for SNES-IDE projects.",
+      "category": "sdk",
+      "docs_url": "https://github.com/alekmaul/pvsneslib/wiki",
+      "priority": "required",
+      "commands": [
+        {"label": "Create New Project", "script": "create-pvsneslib-proj.py", "args": []},
+        {"label": "Compile Project", "script": "compile-pvsneslib-proj.py", "args": []}
+      ],
+      "source": {
+        "type": "git",
+        "url": "https://github.com/alekmaul/pvsneslib.git",
+        "branch": "master",
+        "tag": "4.4.0"
+      },
+      "binary_path": "",
+      "is_sdk": true,
+      "build": {
+        "linux": {
+          "commands": [
+            "cd devkitsnes && make",
+            "cd pvsneslib && make"
+          ],
+          "env": {
+            "PVSNESLIB_HOME": "${TOOL_DIR}"
+          }
+        },
+        "darwin": {
+          "commands": [
+            "cd devkitsnes && make",
+            "cd pvsneslib && make"
+          ],
+          "env": {
+            "PVSNESLIB_HOME": "${TOOL_DIR}"
+          }
+        },
+        "win32": {
+          "commands": [
+            "cd devkitsnes && make",
+            "cd pvsneslib && make"
+          ],
+          "env": {
+            "PVSNESLIB_HOME": "${TOOL_DIR}"
+          }
+        }
+      },
+      "dependencies": {
+        "linux": {
+          "apt": ["build-essential", "libpng-dev", "zlib1g-dev"],
+          "dnf": ["gcc", "gcc-c++", "make", "libpng-devel", "zlib-devel"]
+        },
+        "darwin": {
+          "brew": ["libpng", "zlib"]
+        },
+        "win32": {
+          "msys2": ["mingw-w64-x86_64-gcc", "mingw-w64-x86_64-libpng", "mingw-w64-x86_64-zlib"]
+        }
+      },
+      "patches": ["16k-pagesize"],
+      "post_install": {
+        "create_symlinks": [
+          {"from": "devkitsnes/bin", "to": "bin"},
+          {"from": "devkitsnes/tools", "to": "tools"}
+        ]
+      }
+    },
+    {
+      "name": "lakesnes",
+      "description": "Fast, lightweight SNES emulator written in C. Features clean codebase, good compatibility, and low resource usage. Ideal for quick testing during development. Uses SDL2 for cross-platform graphics and input handling.",
+      "category": "emulators",
+      "docs_url": "https://github.com/angelo-wf/LakeSnes#readme",
+      "priority": "required",
+      "commands": [
+        {"label": "Launch ROM", "script": "open-emulator.py", "args": ["--emulator", "lakesnes"]}
+      ],
+      "source": {
+        "type": "git",
+        "url": "https://github.com/angelo-wf/LakeSnes.git",
+        "branch": "main"
+      },
+      "binary_path": "lakesnes",
+      "binary_name": {
+        "linux": "lakesnes",
+        "darwin": "lakesnes",
+        "win32": "lakesnes.exe"
+      },
+      "build": {
+        "linux": {
+          "commands": ["make"],
+          "env": {}
+        },
+        "darwin": {
+          "commands": ["make"],
+          "env": {}
+        },
+        "win32": {
+          "commands": ["make"],
+          "env": {}
+        }
+      },
+      "dependencies": {
+        "linux": {
+          "apt": ["build-essential", "libsdl2-dev"],
+          "dnf": ["gcc", "make", "SDL2-devel"]
+        },
+        "darwin": {
+          "brew": ["sdl2"]
+        },
+        "win32": {
+          "msys2": ["mingw-w64-x86_64-gcc", "mingw-w64-x86_64-SDL2"]
+        }
+      },
+      "patches": ["16k-pagesize"],
+      "verify_command": []
+    },
+    {
+      "name": "bsnes",
+      "description": "Cycle-accurate SNES emulator by Near (byuu). Known for pixel-perfect accuracy and comprehensive debugging tools: memory viewer, CPU/SMP/PPU state, breakpoints, and trace logging. The gold standard for testing ROM accuracy and debugging.",
+      "category": "emulators",
+      "docs_url": "https://github.com/bsnes-emu/bsnes#readme",
+      "priority": "optional",
+      "commands": [
+        {"label": "Launch ROM", "script": "open-emulator.py", "args": ["--emulator", "bsnes"]},
+        {"label": "Launch with Debugger", "script": "open-emulator.py", "args": ["--emulator", "bsnes", "--debug"]}
+      ],
+      "repo_install": {
+        "description": "Install pre-built package from system repositories",
+        "linux": {
+          "apt": ["bsnes"],
+          "dnf": ["bsnes"],
+          "pacman": ["bsnes"]
+        },
+        "darwin": {
+          "brew": ["bsnes"]
+        }
+      },
+      "source": {
+        "type": "tarball",
+        "url": "https://github.com/bsnes-emu/bsnes/archive/refs/tags/v115.tar.gz",
+        "strip_components": 1
+      },
+      "binary_path": "bsnes/out/bsnes",
+      "binary_name": {
+        "linux": "bsnes",
+        "darwin": "bsnes.app",
+        "win32": "bsnes.exe"
+      },
+      "build": {
+        "linux": {
+          "commands": ["make -C bsnes"],
+          "env": {}
+        },
+        "darwin": {
+          "commands": ["make -C bsnes"],
+          "env": {}
+        },
+        "win32": {
+          "commands": ["make -C bsnes"],
+          "env": {}
+        }
+      },
+      "dependencies": {
+        "linux": {
+          "apt": ["build-essential", "libgtk-3-dev", "libsdl2-dev", "libopenal-dev", "libpulse-dev", "libao-dev", "libasound2-dev"],
+          "dnf": ["gcc", "gcc-c++", "make", "gtk3-devel", "SDL2-devel", "openal-soft-devel", "pulseaudio-libs-devel", "alsa-lib-devel"]
+        },
+        "darwin": {
+          "brew": ["sdl2"]
+        },
+        "win32": {
+          "msys2": ["mingw-w64-x86_64-gcc", "mingw-w64-x86_64-SDL2", "mingw-w64-x86_64-gtk3"]
+        }
+      },
+      "patches": ["16k-pagesize"],
+      "verify_command": []
+    },
+    {
+      "name": "schismtracker",
+      "description": "Cross-platform Impulse Tracker clone for composing chiptune and tracker music. Full IT format compatibility with samples, instruments, and effects. Output can be converted to SNES SPC format using smconv. Features classic DOS-style interface with modern improvements.",
+      "category": "audio",
+      "docs_url": "https://github.com/schismtracker/schismtracker/wiki",
+      "priority": "optional",
+      "commands": [
+        {"label": "Open Tracker", "script": "audio-impulse-tracker-init.py", "args": []}
+      ],
+      "repo_install": {
+        "description": "Install pre-built package from system repositories",
+        "linux": {
+          "apt": ["schismtracker"],
+          "dnf": ["schismtracker"],
+          "pacman": ["schismtracker"]
+        },
+        "darwin": {
+          "brew": ["schismtracker"]
+        }
+      },
+      "source": {
+        "type": "git",
+        "url": "https://github.com/schismtracker/schismtracker.git",
+        "branch": "master"
+      },
+      "binary_path": "schismtracker",
+      "binary_name": {
+        "linux": "schismtracker",
+        "darwin": "Schism Tracker.app",
+        "win32": "schismtracker.exe"
+      },
+      "build": {
+        "linux": {
+          "commands": [
+            "autoreconf -i",
+            "./configure",
+            "make"
+          ],
+          "env": {}
+        },
+        "darwin": {
+          "commands": [
+            "autoreconf -i",
+            "./configure",
+            "make"
+          ],
+          "env": {}
+        },
+        "win32": {
+          "commands": [
+            "autoreconf -i",
+            "./configure",
+            "make"
+          ],
+          "env": {}
+        }
+      },
+      "dependencies": {
+        "linux": {
+          "apt": ["build-essential", "autoconf", "automake", "libsdl2-dev", "libasound2-dev"],
+          "dnf": ["gcc", "make", "autoconf", "automake", "SDL2-devel", "alsa-lib-devel"]
+        },
+        "darwin": {
+          "brew": ["autoconf", "automake", "sdl2"]
+        },
+        "win32": {
+          "msys2": ["mingw-w64-x86_64-gcc", "mingw-w64-x86_64-SDL2", "autoconf", "automake"]
+        }
+      },
+      "patches": [],
+      "verify_command": ["schismtracker", "--version"]
+    },
+    {
+      "name": "libresprite",
+      "description": "Free, open-source pixel art and animation editor forked from Aseprite. Features layers, frames, onion skinning, palette management, and tile mode. Exports to PNG, GIF, and sprite sheets. Ideal for creating SNES sprites and tiles with indexed color support.",
+      "category": "graphics",
+      "docs_url": "https://libresprite.github.io/",
+      "priority": "optional",
+      "commands": [
+        {"label": "Open Sprite Editor", "script": "gfx-png-bmp-editor.py", "args": ["--editor", "libresprite"]}
+      ],
+      "source": {
+        "type": "git",
+        "url": "https://github.com/LibreSprite/LibreSprite.git",
+        "branch": "master",
+        "recursive": true
+      },
+      "binary_path": "build/bin/libresprite",
+      "binary_name": {
+        "linux": "libresprite",
+        "darwin": "LibreSprite.app",
+        "win32": "libresprite.exe"
+      },
+      "build": {
+        "linux": {
+          "commands": [
+            "mkdir -p build",
+            "cd build && cmake .. -DCMAKE_BUILD_TYPE=Release",
+            "cd build && make"
+          ],
+          "env": {}
+        },
+        "darwin": {
+          "commands": [
+            "mkdir -p build",
+            "cd build && cmake .. -DCMAKE_BUILD_TYPE=Release",
+            "cd build && make"
+          ],
+          "env": {}
+        },
+        "win32": {
+          "commands": [
+            "mkdir -p build",
+            "cd build && cmake .. -G 'MinGW Makefiles' -DCMAKE_BUILD_TYPE=Release",
+            "cd build && mingw32-make"
+          ],
+          "env": {}
+        }
+      },
+      "dependencies": {
+        "linux": {
+          "apt": ["build-essential", "cmake", "libfreetype6-dev", "libpng-dev", "libjpeg-dev", "libgif-dev", "libtinyxml-dev", "libpixman-1-dev", "libx11-dev", "libxcursor-dev"],
+          "dnf": ["gcc", "gcc-c++", "cmake", "freetype-devel", "libpng-devel", "libjpeg-turbo-devel", "giflib-devel", "tinyxml-devel", "pixman-devel", "libX11-devel", "libXcursor-devel"]
+        },
+        "darwin": {
+          "brew": ["cmake", "freetype", "libpng", "jpeg", "giflib", "tinyxml", "pixman"]
+        },
+        "win32": {
+          "msys2": ["mingw-w64-x86_64-cmake", "mingw-w64-x86_64-gcc", "mingw-w64-x86_64-freetype", "mingw-w64-x86_64-libpng", "mingw-w64-x86_64-libjpeg-turbo", "mingw-w64-x86_64-giflib"]
+        }
+      },
+      "patches": [],
+      "verify_command": []
+    },
+    {
+      "name": "tiled",
+      "description": "Powerful, flexible tile map editor for 2D game development. Supports orthogonal, isometric, and hexagonal maps. Features layers, objects, custom properties, and tileset management. Exports to TMX/JSON for conversion to SNES-compatible formats via tmx2snes.",
+      "category": "graphics",
+      "docs_url": "https://doc.mapeditor.org/en/stable/",
+      "priority": "optional",
+      "commands": [
+        {"label": "Open Map Editor", "script": "gfx-tmx-editor.py", "args": []},
+        {"label": "Convert TMX to SNES", "script": "gfx-tmx-tmj-converter.py", "args": []}
+      ],
+      "repo_install": {
+        "description": "Install pre-built package from system repositories (faster, recommended)",
+        "linux": {
+          "apt": ["tiled"],
+          "dnf": ["tiled"],
+          "pacman": ["tiled"]
+        },
+        "darwin": {
+          "brew": ["tiled"]
+        },
+        "win32": {
+          "note": "Download installer from https://www.mapeditor.org/"
+        }
+      },
+      "source": {
+        "type": "git",
+        "url": "https://github.com/mapeditor/tiled.git",
+        "branch": "master",
+        "tag": "v1.11.90"
+      },
+      "binary_path": "default/install-root/bin/tiled",
+      "binary_name": {
+        "linux": "tiled",
+        "darwin": "Tiled.app",
+        "win32": "tiled.exe"
+      },
+      "build": {
+        "linux": {
+          "commands": [
+            "qbs setup-toolchains --detect",
+            "qbs"
+          ],
+          "env": {}
+        },
+        "darwin": {
+          "commands": [
+            "qbs setup-toolchains --detect",
+            "qbs"
+          ],
+          "env": {}
+        },
+        "win32": {
+          "commands": [
+            "qbs setup-toolchains --detect",
+            "qbs"
+          ],
+          "env": {}
+        }
+      },
+      "dependencies": {
+        "linux": {
+          "apt": ["build-essential", "qtbase5-dev", "libqt5svg5", "qttools5-dev-tools", "zlib1g-dev", "qtdeclarative5-dev", "qbs"],
+          "dnf": {
+            "command": "builddep",
+            "args": ["tiled"]
+          }
+        },
+        "darwin": {
+          "brew": ["qbs"]
+        },
+        "win32": {
+          "msys2": ["mingw-w64-x86_64-qbs", "mingw-w64-x86_64-qt5-base", "mingw-w64-x86_64-qt5-declarative", "mingw-w64-x86_64-qt5-tools"]
+        }
+      },
+      "patches": [],
+      "verify_command": ["tiled", "--version"]
+    },
+    {
+      "name": "make",
+      "description": "GNU Make build automation tool. Reads Makefiles to compile and link projects efficiently by tracking file dependencies. Essential for building pvsneslib projects and most SNES development tools. Typically pre-installed on Linux/macOS.",
+      "category": "build-tools",
+      "docs_url": "https://www.gnu.org/software/make/manual/make.html",
+      "priority": "required",
+      "use_system": true,
+      "system_binary": {
+        "linux": "make",
+        "darwin": "make",
+        "win32": "make"
+      },
+      "fallback_source": {
+        "type": "tarball",
+        "url": "https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz",
+        "strip_components": 1
+      },
+      "build": {
+        "linux": {
+          "commands": ["./configure", "make"],
+          "env": {}
+        },
+        "darwin": {
+          "commands": ["./configure", "make"],
+          "env": {}
+        },
+        "win32": {
+          "commands": ["./configure", "make"],
+          "env": {}
+        }
+      },
+      "verify_command": ["make", "--version"]
+    },
+    {
+      "name": "dotnet8",
+      "description": ".NET 8 SDK required for DotnetSnes development. Enables writing SNES games in C# using the DotnetSnes transpiler, which converts .NET IL to 65816 assembly. Includes runtime, compiler, and package management. Installed via Microsoft's official script.",
+      "category": "sdk",
+      "docs_url": "https://github.com/KallDrexx/DotnetSnes#readme",
+      "priority": "optional",
+      "commands": [
+        {"label": "Create DotnetSnes Project", "script": "create-dotnetsnes-proj.py", "args": []},
+        {"label": "Compile DotnetSnes Project", "script": "compile-dotnetsnes-proj.py", "args": []}
+      ],
+      "source": {
+        "type": "script",
+        "install_script": {
+          "linux": "curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 8.0 --install-dir ${TOOL_DIR}",
+          "darwin": "curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 8.0 --install-dir ${TOOL_DIR}",
+          "win32": "powershell -Command \"& {Invoke-WebRequest -Uri 'https://dot.net/v1/dotnet-install.ps1' -OutFile 'dotnet-install.ps1'; ./dotnet-install.ps1 -Channel 8.0 -InstallDir '${TOOL_DIR}'}\""
+        }
+      },
+      "binary_path": "dotnet",
+      "binary_name": {
+        "linux": "dotnet",
+        "darwin": "dotnet",
+        "win32": "dotnet.exe"
+      },
+      "is_sdk": true,
+      "dependencies": {
+        "linux": {
+          "apt": ["curl", "libicu-dev"],
+          "dnf": ["curl", "libicu"]
+        },
+        "darwin": {
+          "brew": []
+        },
+        "win32": {
+          "msys2": []
+        }
+      },
+      "patches": [],
+      "verify_command": ["dotnet", "--version"]
+    },
+    {
+      "name": "jdk8",
+      "description": "Azul Zulu OpenJDK 8 with JavaFX for JavaSnes development. Required to run the JavaSnes transpiler that converts Java bytecode to 65816 assembly. This build includes JavaFX for GUI tools. Pre-built binaries for x64 and ARM64 architectures.",
+      "category": "sdk",
+      "docs_url": "https://github.com/BrunoRNS/javasnes#readme",
+      "priority": "optional",
+      "commands": [
+        {"label": "Create JavaSnes Project", "script": "create-javasnes-proj.py", "args": []},
+        {"label": "Compile JavaSnes Project", "script": "compile-javasnes-proj.py", "args": []}
+      ],
+      "source": {
+        "type": "tarball",
+        "url": {
+          "linux_x64": "https://cdn.azul.com/zulu/bin/zulu8.80.0.17-ca-fx-jdk8.0.422-linux_x64.tar.gz",
+          "linux_aarch64": "https://cdn.azul.com/zulu/bin/zulu8.80.0.17-ca-fx-jdk8.0.422-linux_aarch64.tar.gz",
+          "darwin_x64": "https://cdn.azul.com/zulu/bin/zulu8.80.0.17-ca-fx-jdk8.0.422-macosx_x64.tar.gz",
+          "darwin_aarch64": "https://cdn.azul.com/zulu/bin/zulu8.80.0.17-ca-fx-jdk8.0.422-macosx_aarch64.tar.gz",
+          "win32": "https://cdn.azul.com/zulu/bin/zulu8.80.0.17-ca-fx-jdk8.0.422-win_x64.zip"
+        },
+        "strip_components": 1
+      },
+      "binary_path": "bin/java",
+      "binary_name": {
+        "linux": "java",
+        "darwin": "java",
+        "win32": "java.exe"
+      },
+      "is_sdk": true,
+      "build": {
+        "linux": {"commands": [], "env": {}},
+        "darwin": {"commands": [], "env": {}},
+        "win32": {"commands": [], "env": {}}
+      },
+      "dependencies": {
+        "linux": {"apt": [], "dnf": []},
+        "darwin": {"brew": []},
+        "win32": {"msys2": []}
+      },
+      "patches": [],
+      "verify_command": ["java", "-version"]
+    },
+    {
+      "name": "superfamicheck",
+      "description": "SNES ROM header validation and analysis tool. Checks ROM integrity, displays header information (title, region, ROM/RAM size, checksum), and validates internal structure. Essential for verifying your ROM builds are correctly formatted before distribution or testing.",
+      "category": "build-tools",
+      "docs_url": "https://github.com/Optiroc/SuperFamicheck#readme",
+      "priority": "optional",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/Optiroc/SuperFamicheck.git",
+        "branch": "master"
+      },
+      "binary_path": "build/superfamicheck",
+      "binary_name": {
+        "linux": "superfamicheck",
+        "darwin": "superfamicheck",
+        "win32": "superfamicheck.exe"
+      },
+      "commands": [
+        {"label": "Validate ROM", "script": "validate-rom.py", "args": []}
+      ],
+      "build": {
+        "linux": {
+          "commands": [
+            "mkdir -p build",
+            "cd build && cmake ..",
+            "cd build && make"
+          ],
+          "env": {}
+        },
+        "darwin": {
+          "commands": [
+            "mkdir -p build",
+            "cd build && cmake ..",
+            "cd build && make"
+          ],
+          "env": {}
+        },
+        "win32": {
+          "commands": [
+            "mkdir -p build",
+            "cd build && cmake .. -G 'MinGW Makefiles'",
+            "cd build && mingw32-make"
+          ],
+          "env": {}
+        }
+      },
+      "dependencies": {
+        "linux": {
+          "apt": ["build-essential", "cmake"],
+          "dnf": ["gcc", "gcc-c++", "make", "cmake"]
+        },
+        "darwin": {
+          "brew": ["cmake"]
+        },
+        "win32": {
+          "msys2": ["mingw-w64-x86_64-cmake", "mingw-w64-x86_64-gcc"]
+        }
+      },
+      "patches": [],
+      "verify_command": ["superfamicheck", "--help"]
+    },
+    {
+      "name": "snesgss",
+      "description": "SNES GSS (Game Sound System) driver and tools for creating music and sound effects. Provides a complete audio solution with tracker-style editor, sound effect utilities, and SPC700 driver. Outputs data compatible with pvsneslib projects.",
+      "category": "audio",
+      "docs_url": "https://github.com/alekmaul/sneskit/tree/master/snesgss",
+      "priority": "optional",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/alekmaul/sneskit.git",
+        "branch": "master"
+      },
+      "binary_path": "snesgss/snesgss",
+      "binary_name": {
+        "linux": "snesgss",
+        "darwin": "snesgss",
+        "win32": "snesgss.exe"
+      },
+      "commands": [
+        {"label": "Open GSS Editor", "script": "audio-sample-generator.py", "args": ["--tool", "snesgss"]}
+      ],
+      "build": {
+        "linux": {
+          "commands": ["cd snesgss && make"],
+          "env": {}
+        },
+        "darwin": {
+          "commands": ["cd snesgss && make"],
+          "env": {}
+        },
+        "win32": {
+          "commands": ["cd snesgss && make"],
+          "env": {}
+        }
+      },
+      "dependencies": {
+        "linux": {
+          "apt": ["build-essential"],
+          "dnf": ["gcc", "make"]
+        },
+        "darwin": {
+          "brew": []
+        },
+        "win32": {
+          "msys2": ["mingw-w64-x86_64-gcc", "make"]
+        }
+      },
+      "patches": [],
+      "verify_command": []
+    },
+    {
+      "name": "bass",
+      "description": "Modern, powerful macro assembler with 65816 support. Features a clean syntax, powerful macro system, and excellent error messages. Popular for SNES ROM hacking and homebrew with support for patches, includes, and binary file manipulation.",
+      "category": "assemblers",
+      "docs_url": "https://github.com/ARM9/bass#readme",
+      "priority": "optional",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/ARM9/bass.git",
+        "branch": "master"
+      },
+      "binary_path": "bass/out/bass",
+      "binary_name": {
+        "linux": "bass",
+        "darwin": "bass",
+        "win32": "bass.exe"
+      },
+      "build": {
+        "linux": {
+          "commands": ["mkdir build && cd build && cmake .. --build . -- -j4"],
+          "env": {}
+        },
+        "darwin": {
+          "commands": ["make -C bass"],
+          "env": {}
+        },
+        "win32": {
+          "commands": ["make -C bass"],
+          "env": {}
+        }
+      },
+      "dependencies": {
+        "linux": {
+          "apt": ["build-essential"],
+          "dnf": ["gcc", "gcc-c++", "make"]
+        },
+        "darwin": {
+          "brew": []
+        },
+        "win32": {
+          "msys2": ["mingw-w64-x86_64-gcc", "make"]
+        }
+      },
+      "patches": [],
+      "verify_command": ["bass", "--version"]
+    },
+    {
+      "name": "mesen",
+      "description": "Highly accurate multi-system emulator with excellent SNES support. Features comprehensive debugging tools including CPU/SMP/PPU debuggers, memory viewer, trace logger, tile/sprite viewers, and event viewer. Cross-platform with modern UI.",
+      "category": "emulators",
+      "docs_url": "https://www.mesen.ca/docs/",
+      "priority": "optional",
+      "commands": [
+        {"label": "Launch ROM", "script": "open-emulator.py", "args": ["--emulator", "mesen"]},
+        {"label": "Launch with Debugger", "script": "open-emulator.py", "args": ["--emulator", "mesen", "--debug"]}
+      ],
+      "source": {
+        "type": "git",
+        "url": "https://github.com/SourMesen/Mesen2.git",
+        "branch": "master"
+      },
+      "binary_path": "bin/linux-x64/Release/Mesen",
+      "binary_name": {
+        "linux": "Mesen",
+        "darwin": "Mesen.app",
+        "win32": "Mesen.exe"
+      },
+      "build": {
+        "linux": {
+          "commands": ["make"],
+          "env": {}
+        },
+        "darwin": {
+          "commands": ["make"],
+          "env": {}
+        },
+        "win32": {
+          "commands": ["dotnet build -c Release"],
+          "env": {}
+        }
+      },
+      "dependencies": {
+        "linux": {
+          "apt": ["build-essential", "libsdl2-dev", "dotnet-sdk-8.0"],
+          "dnf": ["gcc", "gcc-c++", "make", "SDL2-devel", "dotnet-sdk-8.0"]
+        },
+        "darwin": {
+          "brew": ["sdl2", "dotnet"]
+        },
+        "win32": {
+          "msys2": ["mingw-w64-x86_64-gcc", "mingw-w64-x86_64-SDL2"]
+        }
+      },
+      "patches": [],
+      "verify_command": []
+    }
+  ],
+  "patch_sets": {
+    "16k-pagesize": {
+      "description": "Patches for systems with 16K page size (e.g., Asahi Linux on Apple Silicon)",
+      "detection": {
+        "command": "getconf PAGESIZE",
+        "condition": "output > 4096"
+      },
+      "files": []
+    }
+  },
+  "platform_detection": {
+    "asahi": {
+      "check_file": "/etc/os-release",
+      "contains": "asahi"
+    },
+    "pagesize_16k": {
+      "command": "getconf PAGESIZE",
+      "equals": "16384"
+    }
+  }
+}

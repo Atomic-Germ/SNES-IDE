@@ -1,0 +1,5160 @@
+"""SNES-IDE - Integrated Development Environment for SNES.
+
+A Textual-based TUI providing:
+- Tool management (install, update, verify, uninstall)
+- Code browsing with syntax highlighting
+- Project file navigation
+
+Run with:
+    python src/snes-ide.py --tui
+"""
+
+from __future__ import annotations
+
+import asyncio
+import os
+import platform
+import shutil
+import subprocess
+import sys
+import json
+import tempfile
+import time
+import urllib.request
+import tarfile
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, Any, Callable, List, Tuple
+
+from rich.markdown import Markdown
+from rich.segment import Segment
+from rich.style import Style
+from rich.syntax import Syntax
+from rich.text import Text
+from rich.traceback import Traceback
+
+# Optional PIL for graphics editing
+try:
+    from PIL import Image
+    HAS_PIL = True
+except ImportError:
+    HAS_PIL = False
+
+from textual.app import App, ComposeResult
+from textual.command import Hit, Hits, Provider
+from textual.containers import Container, Horizontal, Vertical, VerticalScroll
+from textual.events import Click
+from textual.geometry import Size
+from textual.message import Message
+from textual.reactive import reactive, var
+from textual.screen import ModalScreen
+from textual.scroll_view import ScrollView
+from textual.strip import Strip
+from textual.widget import Widget
+from textual.widgets import (
+    Footer, Header, Label, ListItem, ListView, Static, Rule, 
+    Button, RichLog, ProgressBar, DirectoryTree, Collapsible, Tree,
+    Input, Select
+)
+from textual.widgets.tree import TreeNode
+import webbrowser
+
+# Note: textual-terminal was considered for embedded terminal support, but it uses
+# pty.fork() which only works on Linux with a real terminal - not in web/browser mode.
+# We use app.suspend() for terminal mode and show manual instructions for browser mode.
+#
+# FUTURE ENHANCEMENT: Find or create a browser-compatible terminal widget that can:
+# - Display output from subprocess commands in real-time
+# - Accept password input for sudo (securely)
+# - Work in both terminal and Textual web/browser modes
+# Options to explore: WebSocket-based PTY proxy, or a Textual-native terminal emulator
+
+
+def get_platform() -> str:
+    """Get the current platform identifier."""
+    system = platform.system()
+    if system == "Darwin":
+        return "darwin"
+    elif system == "Windows":
+        return "win32"
+    return "linux"
+
+
+def get_package_manager() -> str | None:
+    """Detect the available package manager on the system."""
+    plat = get_platform()
+    if plat == "darwin":
+        if shutil.which("brew"):
+            return "brew"
+    elif plat == "linux":
+        if shutil.which("apt-get"):
+            return "apt"
+        elif shutil.which("dnf"):
+            return "dnf"
+    elif plat == "win32":
+        if shutil.which("pacman"):  # MSYS2
+            return "msys2"
+    return None
+
+
+def check_package_available(package_name: str, pkg_manager: str | None = None) -> bool:
+    """Check if a package is available in the system package manager.
+    
+    Args:
+        package_name: Name of the package to check
+        pkg_manager: Package manager to use (auto-detected if None)
+    
+    Returns:
+        True if package is available for installation
+    """
+    if pkg_manager is None:
+        pkg_manager = get_package_manager()
+    
+    if not pkg_manager:
+        return False
+    
+    try:
+        if pkg_manager == "apt":
+            # Use apt-cache to check if package exists
+            result = subprocess.run(
+                ["apt-cache", "show", package_name],
+                capture_output=True,
+                timeout=10
+            )
+            return result.returncode == 0
+        
+        elif pkg_manager == "dnf":
+            # Use dnf info to check if package exists
+            result = subprocess.run(
+                ["dnf", "info", "--available", package_name],
+                capture_output=True,
+                timeout=10
+            )
+            return result.returncode == 0
+        
+        elif pkg_manager == "brew":
+            # Use brew info to check if formula/cask exists
+            result = subprocess.run(
+                ["brew", "info", package_name],
+                capture_output=True,
+                timeout=10
+            )
+            return result.returncode == 0
+        
+        elif pkg_manager == "msys2":
+            # Use pacman to check if package exists
+            result = subprocess.run(
+                ["pacman", "-Ss", f"^{package_name}$"],
+                capture_output=True,
+                timeout=10
+            )
+            return result.returncode == 0 and package_name in result.stdout.decode()
+        
+    except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
+        return False
+    
+    return False
+
+
+def check_package_available_cached(package_name: str, pkg_manager: str | None = None) -> bool:
+    """Cached version of check_package_available.
+    
+    Results are cached for the lifetime of the process to avoid
+    repeated slow lookups.
+    """
+    if not hasattr(check_package_available_cached, '_cache'):
+        check_package_available_cached._cache = {}
+    
+    if pkg_manager is None:
+        pkg_manager = get_package_manager()
+    
+    cache_key = (package_name, pkg_manager)
+    if cache_key not in check_package_available_cached._cache:
+        check_package_available_cached._cache[cache_key] = check_package_available(package_name, pkg_manager)
+    
+    return check_package_available_cached._cache[cache_key]
+
+
+# =============================================================================
+# SNES Graphics Core Classes
+# =============================================================================
+
+class SNESPalette:
+    """SNES palette management with 15-bit RGB support.
+    
+    SNES uses 15-bit color: 5 bits per R, G, B channel = 32768 possible colors.
+    Format: 0BBBBBGGGGGRRRRR (little-endian in memory)
+    
+    Palette structure depends on BPP mode:
+    - 2bpp: 4 colors per palette, 8 palettes max
+    - 4bpp: 16 colors per palette, 8 palettes max  
+    - 8bpp: 256 colors, single palette
+    
+    Color index 0 is transparent for sprites.
+    """
+    
+    def __init__(self, bpp: int = 4, num_palettes: int = 1):
+        """Initialize palette.
+        
+        Args:
+            bpp: Bits per pixel (2, 4, or 8)
+            num_palettes: Number of palettes (1-8 for 2/4bpp, always 1 for 8bpp)
+        """
+        self.bpp = bpp
+        self.colors_per_palette = 2 ** bpp
+        self.num_palettes = num_palettes if bpp < 8 else 1
+        # Store as 24-bit RGB tuples for display, convert to 15-bit on export
+        self.palettes: List[List[Tuple[int, int, int]]] = [
+            [(0, 0, 0)] * self.colors_per_palette 
+            for _ in range(self.num_palettes)
+        ]
+    
+    @staticmethod
+    def rgb24_to_snes(r: int, g: int, b: int) -> int:
+        """Convert 24-bit RGB to 15-bit SNES color.
+        
+        Args:
+            r, g, b: 8-bit color components (0-255)
+            
+        Returns:
+            15-bit SNES color value (0BBBBBGGGGGRRRRR)
+        """
+        return ((b >> 3) << 10) | ((g >> 3) << 5) | (r >> 3)
+    
+    @staticmethod
+    def snes_to_rgb24(color: int) -> Tuple[int, int, int]:
+        """Convert 15-bit SNES color to 24-bit RGB.
+        
+        Args:
+            color: 15-bit SNES color value
+            
+        Returns:
+            Tuple of (r, g, b) as 8-bit values
+        """
+        r = (color & 0x1F) << 3
+        g = ((color >> 5) & 0x1F) << 3
+        b = ((color >> 10) & 0x1F) << 3
+        # Replicate top bits into bottom for full range
+        r |= r >> 5
+        g |= g >> 5
+        b |= b >> 5
+        return (r, g, b)
+    
+    def get_color(self, palette_idx: int, color_idx: int) -> Tuple[int, int, int]:
+        """Get a color from the palette as 24-bit RGB."""
+        if 0 <= palette_idx < self.num_palettes and 0 <= color_idx < self.colors_per_palette:
+            return self.palettes[palette_idx][color_idx]
+        return (0, 0, 0)
+    
+    def set_color(self, palette_idx: int, color_idx: int, r: int, g: int, b: int) -> None:
+        """Set a color in the palette (stores as SNES-quantized RGB)."""
+        if 0 <= palette_idx < self.num_palettes and 0 <= color_idx < self.colors_per_palette:
+            # Quantize to 15-bit and back to get SNES-accurate color
+            snes = self.rgb24_to_snes(r, g, b)
+            self.palettes[palette_idx][color_idx] = self.snes_to_rgb24(snes)
+    
+    def from_pil_image(self, image: "Image.Image", palette_idx: int = 0) -> None:
+        """Extract palette from an indexed PIL image.
+        
+        Args:
+            image: PIL Image in 'P' (palette) mode
+            palette_idx: Which palette slot to populate
+        """
+        if not HAS_PIL:
+            return
+        if image.mode != 'P':
+            return
+            
+        pal_data = image.getpalette()
+        if not pal_data:
+            return
+            
+        # Extract up to colors_per_palette colors
+        for i in range(min(self.colors_per_palette, len(pal_data) // 3)):
+            r = pal_data[i * 3]
+            g = pal_data[i * 3 + 1]
+            b = pal_data[i * 3 + 2]
+            self.set_color(palette_idx, i, r, g, b)
+
+
+class SNESTile:
+    """SNES tile representation with indexed pixel data.
+    
+    Tiles are 8x8 or 16x16 pixels, stored as palette indices.
+    BPP mode determines max colors: 2bpp=4, 4bpp=16, 8bpp=256.
+    
+    SNES stores tiles in planar bitplane format for export,
+    but we store as simple indexed array for editing.
+    """
+    
+    def __init__(self, width: int = 8, height: int = 8, bpp: int = 4):
+        """Initialize a tile.
+        
+        Args:
+            width: Tile width (usually 8 or 16)
+            height: Tile height (usually 8 or 16)
+            bpp: Bits per pixel (2, 4, or 8)
+        """
+        self.width = width
+        self.height = height
+        self.bpp = bpp
+        self.max_color_index = (2 ** bpp) - 1
+        # 2D array of palette indices
+        self.pixels: List[List[int]] = [[0] * width for _ in range(height)]
+    
+    def get_pixel(self, x: int, y: int) -> int:
+        """Get palette index at position."""
+        if 0 <= x < self.width and 0 <= y < self.height:
+            return self.pixels[y][x]
+        return 0
+    
+    def set_pixel(self, x: int, y: int, color_index: int) -> None:
+        """Set palette index at position, clamping to valid range."""
+        if 0 <= x < self.width and 0 <= y < self.height:
+            self.pixels[y][x] = max(0, min(color_index, self.max_color_index))
+    
+    def clear(self, color_index: int = 0) -> None:
+        """Fill entire tile with a color index."""
+        color_index = max(0, min(color_index, self.max_color_index))
+        self.pixels = [[color_index] * self.width for _ in range(self.height)]
+    
+    def from_pil_region(self, image: "Image.Image", x: int, y: int) -> None:
+        """Load tile data from a region of an indexed PIL image.
+        
+        Args:
+            image: PIL Image in 'P' (palette) mode
+            x, y: Top-left corner of region to extract
+        """
+        if not HAS_PIL:
+            return
+        if image.mode != 'P':
+            return
+            
+        for ty in range(self.height):
+            for tx in range(self.width):
+                px = x + tx
+                py = y + ty
+                if 0 <= px < image.width and 0 <= py < image.height:
+                    idx = image.getpixel((px, py))
+                    self.set_pixel(tx, ty, idx)
+
+
+class SNESTileset:
+    """Collection of SNES tiles with shared palette.
+    
+    Typically loaded from a sprite sheet or tileset image.
+    """
+    
+    def __init__(self, tile_width: int = 8, tile_height: int = 8, bpp: int = 4):
+        """Initialize tileset.
+        
+        Args:
+            tile_width: Width of each tile (8 or 16)
+            tile_height: Height of each tile (8 or 16)
+            bpp: Bits per pixel for tiles
+        """
+        self.tile_width = tile_width
+        self.tile_height = tile_height
+        self.bpp = bpp
+        self.tiles: List[SNESTile] = []
+        self.palette = SNESPalette(bpp=bpp)
+        self.image_width = 0  # Original image dimensions
+        self.image_height = 0
+        self.tiles_per_row = 0
+    
+    def get_tile(self, index: int) -> SNESTile | None:
+        """Get a tile by index."""
+        if 0 <= index < len(self.tiles):
+            return self.tiles[index]
+        return None
+    
+    @property
+    def tile_count(self) -> int:
+        """Number of tiles in the tileset."""
+        return len(self.tiles)
+    
+    def from_pil_image(self, image: "Image.Image") -> bool:
+        """Load tileset from a PIL image.
+        
+        Splits image into tiles and extracts palette.
+        Image should be indexed (mode 'P') for best results.
+        
+        Args:
+            image: PIL Image to load
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not HAS_PIL:
+            return False
+        
+        # Convert to indexed if not already
+        if image.mode != 'P':
+            # Quantize to palette matching BPP
+            max_colors = 2 ** self.bpp
+            image = image.quantize(colors=max_colors)
+        
+        self.image_width = image.width
+        self.image_height = image.height
+        
+        # Extract palette
+        self.palette.from_pil_image(image)
+        
+        # Split into tiles
+        self.tiles = []
+        self.tiles_per_row = image.width // self.tile_width
+        
+        for y in range(0, image.height, self.tile_height):
+            for x in range(0, image.width, self.tile_width):
+                tile = SNESTile(self.tile_width, self.tile_height, self.bpp)
+                tile.from_pil_region(image, x, y)
+                self.tiles.append(tile)
+        
+        return True
+    
+    def load_from_path(self, path: Path) -> bool:
+        """Load tileset from an image file path.
+        
+        Args:
+            path: Path to PNG/BMP file
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not HAS_PIL:
+            return False
+        
+        try:
+            image = Image.open(path)
+            return self.from_pil_image(image)
+        except Exception:
+            return False
+    
+    @classmethod
+    def create_new(
+        cls,
+        width_tiles: int,
+        height_tiles: int,
+        tile_width: int = 8,
+        tile_height: int = 8,
+        bpp: int = 4,
+    ) -> "SNESTileset":
+        """Create a new empty tileset with the specified dimensions.
+        
+        Args:
+            width_tiles: Number of tiles wide
+            height_tiles: Number of tiles tall
+            tile_width: Width of each tile (8 or 16)
+            tile_height: Height of each tile (8 or 16)
+            bpp: Bits per pixel (2, 4, or 8)
+            
+        Returns:
+            New SNESTileset with empty tiles and default palette
+        """
+        tileset = cls(tile_width=tile_width, tile_height=tile_height, bpp=bpp)
+        tileset.image_width = width_tiles * tile_width
+        tileset.image_height = height_tiles * tile_height
+        tileset.tiles_per_row = width_tiles
+        
+        # Create empty tiles (filled with color index 0)
+        total_tiles = width_tiles * height_tiles
+        for _ in range(total_tiles):
+            tile = SNESTile(tile_width, tile_height, bpp)
+            tileset.tiles.append(tile)
+        
+        # Set up a default SNES-style palette
+        tileset.palette = SNESPalette(bpp=bpp)
+        max_colors = 2 ** bpp
+        
+        # Default palette: black, white, and some common colors
+        default_colors = [
+            (0, 0, 0),       # 0: Black (transparent)
+            (255, 255, 255), # 1: White
+            (255, 0, 0),     # 2: Red
+            (0, 255, 0),     # 3: Green
+            (0, 0, 255),     # 4: Blue
+            (255, 255, 0),   # 5: Yellow
+            (255, 0, 255),   # 6: Magenta
+            (0, 255, 255),   # 7: Cyan
+            (128, 128, 128), # 8: Gray
+            (192, 192, 192), # 9: Light Gray
+            (128, 0, 0),     # A: Dark Red
+            (0, 128, 0),     # B: Dark Green
+            (0, 0, 128),     # C: Dark Blue
+            (128, 128, 0),   # D: Olive
+            (128, 0, 128),   # E: Purple
+            (0, 128, 128),   # F: Teal
+        ]
+        
+        # Fill palette with defaults up to max colors
+        for i in range(min(max_colors, len(default_colors))):
+            r, g, b = default_colors[i]
+            tileset.palette.set_color(0, i, r, g, b)
+        
+        return tileset
+
+
+class NewTilesetScreen(ModalScreen):
+    """Modal dialog for creating a new tileset with SNES-appropriate options."""
+    
+    DEFAULT_CSS = """
+    NewTilesetScreen {
+        align: center middle;
+    }
+    
+    #new-tileset-dialog {
+        width: 65;
+        height: auto;
+        border: thick $primary;
+        background: $surface;
+        padding: 1 2;
+    }
+    
+    #new-tileset-title {
+        text-align: center;
+        text-style: bold;
+        padding: 1;
+        background: $accent;
+        margin-bottom: 1;
+    }
+    
+    .form-row {
+        height: auto;
+        margin-bottom: 1;
+    }
+    
+    .form-row Label {
+        width: 18;
+        text-align: right;
+        margin-right: 1;
+    }
+    
+    .form-row Input {
+        width: 1fr;
+    }
+    
+    .form-row Select {
+        width: 1fr;
+    }
+    
+    #form-buttons {
+        height: auto;
+        align: center middle;
+        margin-top: 1;
+    }
+    
+    #form-buttons Button {
+        margin: 0 2;
+    }
+    
+    #bpp-help {
+        color: $text-muted;
+        text-align: center;
+        padding: 0 1;
+        margin-top: 1;
+    }
+    """
+    
+    BINDINGS = [
+        ("escape", "cancel", "Cancel"),
+    ]
+    
+    def __init__(self, default_dir: Path | None = None):
+        super().__init__()
+        self.default_dir = default_dir or Path.home()
+    
+    def compose(self) -> ComposeResult:
+        with Vertical(id="new-tileset-dialog"):
+            yield Label("📐 New Tileset", id="new-tileset-title")
+            
+            with Horizontal(classes="form-row"):
+                yield Label("Filename:")
+                yield Input(value="tileset.png", id="filename-input")
+            
+            with Horizontal(classes="form-row"):
+                yield Label("Width (tiles):")
+                yield Input(value="16", type="integer", id="width-input")
+            
+            with Horizontal(classes="form-row"):
+                yield Label("Height (tiles):")
+                yield Input(value="16", type="integer", id="height-input")
+            
+            with Horizontal(classes="form-row"):
+                yield Label("Tile Size:")
+                yield Select(
+                    [("8×8 (standard)", "8"), ("16×16 (large)", "16")],
+                    value="8",
+                    id="tile-size-select"
+                )
+            
+            with Horizontal(classes="form-row"):
+                yield Label("Colors (BPP):")
+                yield Select(
+                    [
+                        ("4 colors (2bpp) - Mode 0 BGs", "2"),
+                        ("16 colors (4bpp) - Mode 1 BGs, sprites", "4"),
+                        ("256 colors (8bpp) - Mode 3/7", "8"),
+                    ],
+                    value="4",
+                    id="bpp-select"
+                )
+            
+            yield Label(
+                "[dim]Mode 0: 4×2bpp BGs | Mode 1: 4bpp+4bpp+2bpp | Mode 3: 8bpp[/dim]",
+                id="bpp-help"
+            )
+            
+            with Horizontal(id="form-buttons"):
+                yield Button("Create", id="create-btn", variant="primary")
+                yield Button("Cancel", id="cancel-btn", variant="default")
+    
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button presses."""
+        if event.button.id == "create-btn":
+            self._create_tileset()
+        elif event.button.id == "cancel-btn":
+            self.dismiss(None)
+    
+    def action_cancel(self) -> None:
+        """Cancel and close the dialog."""
+        self.dismiss(None)
+    
+    def _create_tileset(self) -> None:
+        """Validate inputs and create the tileset."""
+        try:
+            filename_input = self.query_one("#filename-input", Input)
+            width_input = self.query_one("#width-input", Input)
+            height_input = self.query_one("#height-input", Input)
+            tile_size_select = self.query_one("#tile-size-select", Select)
+            bpp_select = self.query_one("#bpp-select", Select)
+            
+            # Get values
+            filename = filename_input.value.strip() or "tileset.png"
+            if not filename.endswith(".png"):
+                filename += ".png"
+            
+            width_tiles = int(width_input.value or "16")
+            height_tiles = int(height_input.value or "16")
+            tile_size = int(tile_size_select.value or "8")
+            bpp = int(bpp_select.value or "4")
+            
+            # Validate ranges
+            if width_tiles < 1 or width_tiles > 64:
+                self.notify("Width must be 1-64 tiles", severity="error")
+                return
+            if height_tiles < 1 or height_tiles > 64:
+                self.notify("Height must be 1-64 tiles", severity="error")
+                return
+            if tile_size not in (8, 16):
+                self.notify("Tile size must be 8 or 16", severity="error")
+                return
+            if bpp not in (2, 4, 8):
+                self.notify("BPP must be 2, 4, or 8", severity="error")
+                return
+            
+            # Create the tileset
+            tileset = SNESTileset.create_new(
+                width_tiles=width_tiles,
+                height_tiles=height_tiles,
+                tile_width=tile_size,
+                tile_height=tile_size,
+                bpp=bpp
+            )
+            
+            # Determine file path
+            file_path = self.default_dir / filename
+            
+            # Return the config as a dict for the caller
+            result = {
+                "tileset": tileset,
+                "file_path": file_path,
+                "width_tiles": width_tiles,
+                "height_tiles": height_tiles,
+                "tile_size": tile_size,
+                "bpp": bpp
+            }
+            self.dismiss(result)
+            
+        except ValueError as e:
+            self.notify(f"Invalid input: {e}", severity="error")
+
+
+class SliceImageScreen(ModalScreen):
+    """Modal dialog for slicing an existing image into a tileset."""
+    
+    DEFAULT_CSS = """
+    SliceImageScreen {
+        align: center middle;
+    }
+    
+    #slice-dialog {
+        width: 60;
+        height: auto;
+        border: thick $primary;
+        background: $surface;
+        padding: 1 2;
+    }
+    
+    #slice-title {
+        text-align: center;
+        text-style: bold;
+        padding: 1;
+        background: $accent;
+        margin-bottom: 1;
+    }
+    
+    .form-row {
+        height: auto;
+        margin-bottom: 1;
+    }
+    
+    .form-row Label {
+        width: 18;
+        text-align: right;
+        margin-right: 1;
+    }
+    
+    .form-row Input, .form-row Select {
+        width: 1fr;
+    }
+    
+    #form-buttons {
+        height: auto;
+        align: center middle;
+        margin-top: 1;
+    }
+    
+    #form-buttons Button {
+        margin: 0 2;
+    }
+    
+    #image-info {
+        color: $text-muted;
+        text-align: center;
+        padding: 0 1;
+        margin-bottom: 1;
+    }
+    """
+    
+    BINDINGS = [
+        ("escape", "cancel", "Cancel"),
+    ]
+    
+    def __init__(self, image_path: Path):
+        super().__init__()
+        self.image_path = image_path
+        self.image_width = 0
+        self.image_height = 0
+        
+        # Try to get image dimensions
+        if HAS_PIL:
+            try:
+                from PIL import Image
+                img = Image.open(image_path)
+                self.image_width, self.image_height = img.size
+            except Exception:
+                pass
+    
+    def compose(self) -> ComposeResult:
+        with Vertical(id="slice-dialog"):
+            yield Label("✂️ Slice Image into Tileset", id="slice-title")
+            
+            yield Label(
+                f"[dim]{self.image_path.name} ({self.image_width}×{self.image_height}px)[/dim]",
+                id="image-info"
+            )
+            
+            with Horizontal(classes="form-row"):
+                yield Label("Tile Size:")
+                yield Select(
+                    [("8×8 (standard)", "8"), ("16×16 (large)", "16")],
+                    value="8",
+                    id="tile-size-select"
+                )
+            
+            with Horizontal(classes="form-row"):
+                yield Label("Colors (BPP):")
+                yield Select(
+                    [
+                        ("4 colors (2bpp) - Mode 0 BGs", "2"),
+                        ("16 colors (4bpp) - Mode 1 BGs, sprites", "4"),
+                        ("256 colors (8bpp) - Mode 3/7", "8"),
+                    ],
+                    value="4",
+                    id="bpp-select"
+                )
+            
+            with Horizontal(id="form-buttons"):
+                yield Button("Slice", id="slice-btn", variant="primary")
+                yield Button("Cancel", id="cancel-btn", variant="default")
+    
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "slice-btn":
+            self._slice_image()
+        elif event.button.id == "cancel-btn":
+            self.dismiss(None)
+    
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+    
+    def _slice_image(self) -> None:
+        """Slice the image into a tileset."""
+        try:
+            tile_size_select = self.query_one("#tile-size-select", Select)
+            bpp_select = self.query_one("#bpp-select", Select)
+            
+            tile_size = int(tile_size_select.value or "8")
+            bpp = int(bpp_select.value or "4")
+            
+            # Create tileset with specified parameters
+            tileset = SNESTileset(tile_width=tile_size, tile_height=tile_size, bpp=bpp)
+            
+            if tileset.load_from_path(self.image_path):
+                tiles_x = self.image_width // tile_size
+                tiles_y = self.image_height // tile_size
+                
+                result = {
+                    "tileset": tileset,
+                    "file_path": self.image_path,
+                    "tile_size": tile_size,
+                    "bpp": bpp,
+                    "tiles_x": tiles_x,
+                    "tiles_y": tiles_y
+                }
+                self.dismiss(result)
+            else:
+                self.notify("Failed to load image", severity="error")
+                
+        except Exception as e:
+            self.notify(f"Error: {e}", severity="error")
+
+
+class ToolInstaller:
+    """Handles downloading, building, and installing tools."""
+
+    def __init__(
+        self, 
+        tools_dir: Path | None = None, 
+        log_callback: Callable[[str], None] | None = None,
+        progress_callback: Callable[[float, float, float | None], None] | None = None,
+        sudo_callback: Callable[[list[str]], bool] | None = None
+    ):
+        """Initialize the installer.
+        
+        Args:
+            tools_dir: Directory to install tools to. Defaults to ~/.snes-ide/tools
+            log_callback: Function to call with log messages
+            progress_callback: Function to call with (current, total, eta_seconds)
+            sudo_callback: Function to call when sudo command needs to run in terminal.
+                          Takes command list, returns True if successful.
+        """
+        if tools_dir is None:
+            tools_dir = Path.home() / ".snes-ide" / "tools"
+        self.tools_dir = tools_dir
+        self.tools_dir.mkdir(parents=True, exist_ok=True)
+        self.log = log_callback or print
+        self.progress_callback = progress_callback
+        self.sudo_callback = sudo_callback
+        self.platform = get_platform()
+        self.pkg_manager = get_package_manager()
+
+    def update_progress(self, current: float, total: float, eta_seconds: float | None = None) -> None:
+        """Update the progress bar."""
+        if self.progress_callback:
+            self.progress_callback(current, total, eta_seconds)
+
+    def log_info(self, msg: str) -> None:
+        """Log an info message."""
+        self.log(f"[cyan]INFO:[/cyan] {msg}")
+
+    def log_error(self, msg: str) -> None:
+        """Log an error message."""
+        self.log(f"[red]ERROR:[/red] {msg}")
+
+    def log_success(self, msg: str) -> None:
+        """Log a success message."""
+        self.log(f"[green]SUCCESS:[/green] {msg}")
+
+    def log_cmd(self, msg: str) -> None:
+        """Log a command being run."""
+        self.log(f"[yellow]RUN:[/yellow] {msg}")
+
+    async def install_dependencies(self, tool_config: Dict[str, Any]) -> bool:
+        """Install system dependencies for a tool.
+        
+        Returns True if successful, False otherwise.
+        """
+        deps = tool_config.get("dependencies", {})
+        plat_deps = deps.get(self.platform, {})
+        
+        if not plat_deps:
+            self.log_info("No dependencies to install")
+            return True
+
+        if not self.pkg_manager:
+            self.log_error(f"No package manager detected for {self.platform}")
+            return False
+
+        packages = plat_deps.get(self.pkg_manager, [])
+        if not packages:
+            self.log_info(f"No {self.pkg_manager} packages required")
+            return True
+
+        # Handle dict-style dependency specs with custom commands (e.g., dnf builddep)
+        if isinstance(packages, dict):
+            custom_cmd = packages.get("command", "install")
+            custom_args = packages.get("args", [])
+            self.log_info(f"Using custom command: {self.pkg_manager} {custom_cmd} {' '.join(custom_args)}")
+            # For builddep and similar, we can't easily check if deps are installed
+            # So we just run the command
+            missing_packages = custom_args  # Treat args as "packages" for command building
+        else:
+            # Standard package list - check which are already available in PATH
+            missing_packages = []
+            for pkg in packages:
+                # Map package names to binary names for common packages
+                binary_name = self._package_to_binary(pkg)
+                if binary_name and shutil.which(binary_name):
+                    self.log_info(f"✓ {pkg} already available ({binary_name})")
+            else:
+                missing_packages.append(pkg)
+
+        if not missing_packages:
+            self.log_success("All dependencies already available!")
+            return True
+
+        self.log_info(f"Missing dependencies: {', '.join(missing_packages)}")
+
+        # Check if we need sudo
+        needs_sudo = self.pkg_manager in ("apt", "dnf")
+
+        # Build the install command
+        if self.pkg_manager == "apt":
+            # Check if packages is a dict with custom command
+            if isinstance(packages, dict):
+                apt_cmd = packages.get("command", "install")
+                apt_args = packages.get("args", [])
+                cmd = ["sudo", "apt-get", apt_cmd, "-y"] + apt_args
+            else:
+                cmd = ["sudo", "apt-get", "install", "-y"] + missing_packages
+        elif self.pkg_manager == "dnf":
+            # Check if packages is a dict with custom command (e.g., builddep)
+            if isinstance(packages, dict):
+                dnf_cmd = packages.get("command", "install")
+                dnf_args = packages.get("args", [])
+                cmd = ["sudo", "dnf", dnf_cmd, "-y"] + dnf_args
+            else:
+                cmd = ["sudo", "dnf", "install", "-y"] + missing_packages
+        elif self.pkg_manager == "brew":
+            cmd = ["brew", "install"] + missing_packages
+        elif self.pkg_manager == "msys2":
+            cmd = ["pacman", "-S", "--noconfirm"] + missing_packages
+        else:
+            self.log_error(f"Unknown package manager: {self.pkg_manager}")
+            return False
+
+        self.log_cmd(" ".join(cmd))
+        
+        # If we need sudo and have a sudo callback, use it to run in terminal
+        if needs_sudo and self.sudo_callback:
+            self.log_info("[yellow]Root privileges required - switching to terminal...[/yellow]")
+            self.log_info("[dim]The TUI will pause while you enter your password[/dim]")
+            
+            # Run synchronously via the callback (which suspends TUI)
+            success = self.sudo_callback(cmd)
+            
+            if success:
+                self.log_success("Dependencies installed")
+            else:
+                self.log_error("Dependency installation failed or was cancelled")
+            return success
+        
+        # Non-sudo path (brew, msys2) or no callback - run async with streaming
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT
+            )
+            
+            # Stream output line by line in real-time
+            while True:
+                line = await process.stdout.readline()
+                if not line:
+                    break
+                self.log(f"  {line.decode().rstrip()}")
+            
+            await process.wait()
+            
+            if process.returncode != 0:
+                self.log_error(f"Dependency installation failed with code {process.returncode}")
+                return False
+            
+            self.log_success("Dependencies installed")
+            return True
+        except Exception as e:
+            self.log_error(f"Failed to install dependencies: {e}")
+            return False
+
+    def _package_to_binary(self, package: str) -> str | None:
+        """Map a package name to its primary binary name for PATH checking."""
+        # Common mappings for build dependencies
+        mappings = {
+            # Build essentials
+            "build-essential": "gcc",
+            "gcc": "gcc",
+            "g++": "g++",
+            "gcc-c++": "g++",
+            "make": "make",
+            "cmake": "cmake",
+            "git": "git",
+            "mingw-w64-x86_64-gcc": "gcc",
+            "mingw-w64-x86_64-cmake": "cmake",
+            # Libraries - these don't have binaries, return None
+            "libpng-dev": None,
+            "libpng-devel": None,
+            "libpng": None,
+            "mingw-w64-x86_64-libpng": None,
+            "zlib1g-dev": None,
+            "zlib-devel": None,
+            "zlib": None,
+        }
+        return mappings.get(package, package)  # Default: try package name as binary
+        return False
+
+    async def download_source(self, tool_config: Dict[str, Any]) -> Path | None:
+        """Download the source code for a tool.
+        
+        Returns the path to the source directory, or None on failure.
+        """
+        source = tool_config.get("source", {})
+        source_type = source.get("type")
+        tool_name = tool_config.get("name", "unknown")
+        
+        tool_dir = self.tools_dir / tool_name
+        
+        if source_type == "git":
+            return await self._clone_git(source, tool_dir)
+        elif source_type == "tarball":
+            return await self._download_tarball(source, tool_dir)
+        else:
+            self.log_error(f"Unknown source type: {source_type}")
+            return None
+
+    async def _clone_git(self, source: Dict[str, Any], tool_dir: Path) -> Path | None:
+        """Clone a git repository."""
+        url = source.get("url")
+        if not url:
+            self.log_error("No git URL specified")
+            return None
+
+        branch = source.get("branch", "master")
+        tag = source.get("tag")
+
+        # Remove existing directory if it exists
+        if tool_dir.exists():
+            self.log_info(f"Removing existing directory: {tool_dir}")
+            shutil.rmtree(tool_dir)
+
+        self.log_info(f"Cloning {url}")
+        
+        cmd = ["git", "clone", "--depth", "1"]
+        if tag:
+            cmd.extend(["--branch", tag])
+        elif branch:
+            cmd.extend(["--branch", branch])
+        cmd.extend([url, str(tool_dir)])
+
+        self.log_cmd(" ".join(cmd))
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT
+            )
+            
+            # Stream output line by line in real-time
+            while True:
+                line = await process.stdout.readline()
+                if not line:
+                    break
+                self.log(f"  {line.decode().rstrip()}")
+            
+            await process.wait()
+
+            if process.returncode != 0:
+                self.log_error(f"Git clone failed with code {process.returncode}")
+                return None
+
+            self.log_success(f"Cloned to {tool_dir}")
+            return tool_dir
+        except Exception as e:
+            self.log_error(f"Git clone failed: {e}")
+            return None
+
+    async def _download_tarball(self, source: Dict[str, Any], tool_dir: Path) -> Path | None:
+        """Download and extract a tarball."""
+        url = source.get("url")
+        if not url:
+            self.log_error("No tarball URL specified")
+            return None
+
+        strip_components = source.get("strip_components", 0)
+
+        # Remove existing directory if it exists
+        if tool_dir.exists():
+            self.log_info(f"Removing existing directory: {tool_dir}")
+            shutil.rmtree(tool_dir)
+
+        tool_dir.mkdir(parents=True, exist_ok=True)
+
+        self.log_info(f"Downloading {url}")
+
+        try:
+            # Download to temp file
+            with tempfile.NamedTemporaryFile(suffix=".tar.gz", delete=False) as tmp:
+                tmp_path = Path(tmp.name)
+
+            # Use curl or wget for download (more reliable than urllib)
+            if shutil.which("curl"):
+                cmd = ["curl", "-L", "-o", str(tmp_path), url]
+            elif shutil.which("wget"):
+                cmd = ["wget", "-O", str(tmp_path), url]
+            else:
+                # Fallback to urllib
+                self.log_info("Downloading with urllib...")
+                urllib.request.urlretrieve(url, tmp_path)
+                cmd = None
+
+            if cmd:
+                self.log_cmd(" ".join(cmd))
+                process = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT
+                )
+                stdout, _ = await process.communicate()
+                if process.returncode != 0:
+                    self.log_error(f"Download failed with code {process.returncode}")
+                    return None
+
+            self.log_info(f"Extracting to {tool_dir}")
+
+            # Extract tarball
+            with tarfile.open(tmp_path, "r:*") as tar:
+                if strip_components > 0:
+                    # Extract with strip components
+                    for member in tar.getmembers():
+                        parts = Path(member.name).parts
+                        if len(parts) > strip_components:
+                            member.name = str(Path(*parts[strip_components:]))
+                            tar.extract(member, tool_dir)
+                else:
+                    tar.extractall(tool_dir)
+
+            tmp_path.unlink()
+            self.log_success(f"Extracted to {tool_dir}")
+            return tool_dir
+        except Exception as e:
+            self.log_error(f"Download/extract failed: {e}")
+            return None
+
+    async def build_tool(
+        self, 
+        tool_config: Dict[str, Any], 
+        source_dir: Path
+    ) -> bool:
+        """Build a tool from source.
+        
+        Returns True if successful, False otherwise.
+        """
+        build = tool_config.get("build", {})
+        plat_build = build.get(self.platform, {})
+        commands = plat_build.get("commands", [])
+        env_vars = plat_build.get("env", {})
+
+        if not commands:
+            self.log_info("No build commands specified")
+            return True
+
+        self.log_info(f"Building in {source_dir}")
+
+        # Count source files to estimate build progress
+        source_extensions = {'.c', '.cpp', '.cc', '.cxx', '.s', '.asm'}
+        source_files = set()
+        for ext in source_extensions:
+            for f in source_dir.rglob(f'*{ext}'):
+                # Store just the filename for matching
+                source_files.add(f.name)
+        
+        total_source_files = max(len(source_files), 1)  # At least 1 to avoid division issues
+        self.log_info(f"Found {len(source_files)} source files to track")
+        
+        # Set progress bar total to the number of source files for granular tracking
+        # Build phase is 75% of total progress (25%-100%), so scale total by 4/3
+        # and start at 25% to reflect download/extract/deps already done
+        progress_total = int(total_source_files * 4 / 3)
+        progress_offset = progress_total // 4  # 25% starting point
+        self.update_progress(progress_offset, progress_total, None)
+
+        # Set up environment
+        env = os.environ.copy()
+        for key, value in env_vars.items():
+            # Replace ${TOOL_DIR} with actual path
+            value = value.replace("${TOOL_DIR}", str(source_dir))
+            env[key] = value
+            self.log_info(f"Setting {key}={value}")
+
+        # Track files compiled across all commands and timing for ETA
+        files_compiled = set()
+        compile_times: list[float] = []  # Time taken to compile each file (excluding outliers)
+        last_compile_time = time.monotonic()
+        build_start_time = last_compile_time
+        MIN_COMPILE_TIME = 0.5  # Ignore files that compile in under 0.5s (likely cached/trivial)
+        
+        for i, cmd_str in enumerate(commands, 1):
+            self.log(f"[bold cyan]Command {i}/{len(commands)}:[/bold cyan]")
+            self.log_cmd(cmd_str)
+            try:
+                process = await asyncio.create_subprocess_shell(
+                    cmd_str,
+                    cwd=source_dir,
+                    env=env,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT
+                )
+                
+                # Stream output line by line in real-time
+                line_count = 0
+                while True:
+                    line = await process.stdout.readline()
+                    if not line:
+                        break
+                    line_count += 1
+                    decoded = line.decode().rstrip()
+                    
+                    # Check if this line mentions any of our source files
+                    for src_file in source_files:
+                        if src_file in decoded:
+                            if src_file not in files_compiled:
+                                # New file compiled - track timing
+                                now = time.monotonic()
+                                elapsed = now - last_compile_time
+                                last_compile_time = now
+                                files_compiled.add(src_file)
+                                
+                                # Only include substantial compile times (filter outliers)
+                                if elapsed >= MIN_COMPILE_TIME:
+                                    compile_times.append(elapsed)
+                                
+                                # Calculate ETA based on average compile time
+                                eta_seconds = None
+                                if compile_times:
+                                    avg_time = sum(compile_times) / len(compile_times)
+                                    remaining_files = total_source_files - len(files_compiled)
+                                    eta_seconds = avg_time * remaining_files
+                                
+                                # Update progress with ETA (offset by 25% for pre-build phases)
+                                self.update_progress(progress_offset + len(files_compiled), progress_total, eta_seconds)
+                            break  # Only count once per line
+                    
+                    # Show all lines but dim the verbose compiler output
+                    if any(x in decoded.lower() for x in ['warning:', 'error:', 'undefined']):
+                        self.log(f"  [yellow]{decoded}[/yellow]")
+                    elif decoded.startswith('cc ') or decoded.startswith('gcc ') or decoded.startswith('g++ '):
+                        # Shorten long compile commands
+                        if len(decoded) > 80:
+                            self.log(f"  [dim]{decoded[:77]}...[/dim]")
+                        else:
+                            self.log(f"  [dim]{decoded}[/dim]")
+                    else:
+                        self.log(f"  {decoded}")
+
+                await process.wait()
+                
+                if process.returncode != 0:
+                    self.log_error(f"Build command failed with code {process.returncode}")
+                    return False
+                    
+                self.log_info(f"Command completed ({line_count} lines, {len(files_compiled)}/{total_source_files} files)")
+            except Exception as e:
+                self.log_error(f"Build failed: {e}")
+                return False
+
+        # Ensure we show 100% at end of build with 0 ETA
+        total_build_time = time.monotonic() - build_start_time
+        self.update_progress(progress_total, progress_total, 0)
+        self.log_success(f"Build completed ({len(files_compiled)} files in {total_build_time:.1f}s)")
+        return True
+
+    async def install_binary(self, tool_config: Dict[str, Any], source_dir: Path) -> bool:
+        """Install the built binary to PATH.
+        
+        Returns True if successful, False otherwise.
+        """
+        binary_path = tool_config.get("binary_path", "")
+        binary_name = tool_config.get("binary_name", {})
+        
+        if isinstance(binary_name, dict):
+            binary_name = binary_name.get(self.platform)
+        
+        if not binary_name:
+            binary_name = tool_config.get("name")
+
+        if tool_config.get("is_sdk"):
+            # For SDKs, we just add to shell config
+            self.log_info(f"SDK detected - adding {source_dir} to environment")
+            return await self._setup_sdk_env(tool_config, source_dir)
+
+        # Find the binary
+        if binary_path:
+            binary_file = source_dir / binary_path
+        else:
+            binary_file = source_dir / binary_name
+
+        if not binary_file.exists():
+            # Search for it
+            for pattern in [binary_name, f"**/{binary_name}"]:
+                matches = list(source_dir.glob(pattern))
+                if matches:
+                    binary_file = matches[0]
+                    break
+
+        if not binary_file.exists():
+            self.log_error(f"Binary not found: {binary_file}")
+            return False
+
+        # Install to ~/.local/bin
+        install_dir = Path.home() / ".local" / "bin"
+        install_dir.mkdir(parents=True, exist_ok=True)
+        
+        dest = install_dir / binary_name
+        self.log_info(f"Installing {binary_file} -> {dest}")
+
+        try:
+            shutil.copy2(binary_file, dest)
+            dest.chmod(0o755)
+            self.log_success(f"Installed to {dest}")
+            
+            # Check if ~/.local/bin is in PATH
+            if str(install_dir) not in os.environ.get("PATH", ""):
+                self.log_info(f"Note: Add {install_dir} to your PATH")
+            
+            return True
+        except Exception as e:
+            self.log_error(f"Install failed: {e}")
+            return False
+
+    async def _setup_sdk_env(self, tool_config: Dict[str, Any], source_dir: Path) -> bool:
+        """Set up environment variables for an SDK."""
+        tool_name = tool_config.get("name", "").upper().replace("-", "_")
+        env_var = f"{tool_name}_HOME"
+        
+        self.log_info(f"SDK installed at: {source_dir}")
+        self.log_info(f"Add to your shell config:")
+        self.log(f"  export {env_var}={source_dir}")
+        self.log(f"  export PATH=$PATH:${env_var}/devkitsnes/tools")
+        return True
+
+    async def verify_installation(self, tool_config: Dict[str, Any]) -> bool:
+        """Verify that a tool is properly installed.
+        
+        Returns True if verification passes, False otherwise.
+        """
+        verify_cmd = tool_config.get("verify_command", [])
+        if not verify_cmd:
+            self.log_info("No verify command specified")
+            return True
+
+        self.log_info(f"Verifying installation: {' '.join(verify_cmd)}")
+
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *verify_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT
+            )
+            stdout, _ = await process.communicate()
+            if stdout:
+                for line in stdout.decode().splitlines()[:3]:  # First 3 lines
+                    self.log(f"  {line}")
+
+            if process.returncode == 0:
+                self.log_success("Verification passed!")
+                return True
+            else:
+                self.log_error(f"Verification failed with code {process.returncode}")
+                return False
+        except FileNotFoundError:
+            self.log_error(f"Command not found: {verify_cmd[0]}")
+            return False
+        except Exception as e:
+            self.log_error(f"Verification failed: {e}")
+            return False
+
+    async def install(self, tool_config: Dict[str, Any]) -> bool:
+        """Perform a full installation of a tool.
+        
+        Returns True if successful, False otherwise.
+        """
+        tool_name = tool_config.get("name", "unknown")
+        
+        # Use a simple 4-step progress for non-build phases
+        # Build phase will dynamically set its own total based on source file count
+        
+        self.update_progress(0, 4)
+        
+        self.log(f"[bold]{'='*50}[/bold]")
+        self.log(f"[bold]Installing: {tool_name}[/bold]")
+        self.log(f"[bold]{'='*50}[/bold]")
+        self.log("")
+
+        # Step 1: Install dependencies
+        self.log("[bold cyan]Step 1/4: Installing dependencies...[/bold cyan]")
+        if not await self.install_dependencies(tool_config):
+            return False
+        self.update_progress(1, 4)
+        self.log("")
+
+        # Step 2: Download source
+        self.log("[bold cyan]Step 2/4: Downloading source...[/bold cyan]")
+        source_dir = await self.download_source(tool_config)
+        if not source_dir:
+            return False
+        self.update_progress(2, 4)
+        self.log("")
+
+        # Step 3: Build (progress bar will be dynamically set to source file count)
+        self.log("[bold cyan]Step 3/4: Building...[/bold cyan]")
+        if not await self.build_tool(tool_config, source_dir):
+            return False
+        # Build sets its own progress, now reset to step-based for remaining phases
+        self.update_progress(3, 4)
+        self.log("")
+
+        # Step 4: Install binary
+        self.log("[bold cyan]Step 4/4: Installing binary...[/bold cyan]")
+        if not await self.install_binary(tool_config, source_dir):
+            return False
+        self.log("")
+
+        # Verify
+        self.log("[bold cyan]Verifying installation...[/bold cyan]")
+        await self.verify_installation(tool_config)
+        self.update_progress(4, 4)
+        self.log("")
+
+        self.log(f"[bold green]{'='*50}[/bold green]")
+        self.log(f"[bold green]Installation of {tool_name} complete![/bold green]")
+        self.log(f"[bold green]{'='*50}[/bold green]")
+        return True
+
+    async def uninstall(self, tool_config: Dict[str, Any]) -> bool:
+        """Uninstall a tool by removing its binary and source.
+        
+        Returns True if successful, False otherwise.
+        """
+        tool_name = tool_config.get("name", "unknown")
+        
+        self.log(f"[bold]{'='*50}[/bold]")
+        self.log(f"[bold]Uninstalling: {tool_name}[/bold]")
+        self.log(f"[bold]{'='*50}[/bold]")
+        self.log("")
+
+        success = True
+
+        # Remove binary from ~/.local/bin
+        binary_name = tool_config.get("binary_name", {})
+        if isinstance(binary_name, dict):
+            binary_name = binary_name.get(self.platform)
+        if not binary_name:
+            binary_name = tool_name
+
+        binary_path = Path.home() / ".local" / "bin" / binary_name
+        if binary_path.exists():
+            self.log_info(f"Removing binary: {binary_path}")
+            try:
+                binary_path.unlink()
+                self.log_success(f"Removed {binary_path}")
+            except Exception as e:
+                self.log_error(f"Failed to remove binary: {e}")
+                success = False
+        else:
+            self.log_info(f"Binary not found: {binary_path}")
+
+        # Remove source directory
+        source_dir = self.tools_dir / tool_name
+        if source_dir.exists():
+            self.log_info(f"Removing source: {source_dir}")
+            try:
+                shutil.rmtree(source_dir)
+                self.log_success(f"Removed {source_dir}")
+            except Exception as e:
+                self.log_error(f"Failed to remove source: {e}")
+                success = False
+        else:
+            self.log_info(f"Source directory not found: {source_dir}")
+
+        if success:
+            self.log(f"[bold green]{'='*50}[/bold green]")
+            self.log(f"[bold green]Uninstall of {tool_name} complete![/bold green]")
+            self.log(f"[bold green]{'='*50}[/bold green]")
+        else:
+            self.log(f"[bold yellow]{'='*50}[/bold yellow]")
+            self.log(f"[bold yellow]Uninstall of {tool_name} had errors[/bold yellow]")
+            self.log(f"[bold yellow]{'='*50}[/bold yellow]")
+        
+        return success
+
+
+# Category to scripts mapping
+CATEGORY_SCRIPTS: Dict[str, list[Dict[str, str]]] = {
+    "audio": [
+        {"label": "Convert WAV to BRR", "script": "audio-wav-brr-converter.py"},
+        {"label": "Convert BRR to WAV", "script": "audio-brr-wav-converter.py"},
+        {"label": "Generate Audio Sample", "script": "audio-sample-generator.py"},
+        {"label": "Initialize Impulse Tracker", "script": "audio-impulse-tracker-init.py"},
+    ],
+    "graphics": [
+        {"label": "Convert PNG to SNES", "script": "gfx-png-bmp-snes-converter.py"},
+        {"label": "Edit PNG/BMP", "script": "gfx-png-bmp-editor.py"},
+        {"label": "Edit TMX Map", "script": "gfx-tmx-editor.py"},
+        {"label": "Convert TMX to TMJ", "script": "gfx-tmx-tmj-converter.py"},
+    ],
+    "emulators": [
+        {"label": "Open in Emulator", "script": "open-emulator.py"},
+    ],
+    "sdk": [
+        {"label": "Create PVSnesLib Project", "script": "create-pvsneslib-proj.py"},
+        {"label": "Compile PVSnesLib Project", "script": "compile-pvsneslib-proj.py"},
+        {"label": "Create DotnetSnes Project", "script": "create-dotnetsnes-proj.py"},
+        {"label": "Compile DotnetSnes Project", "script": "compile-dotnetsnes-proj.py"},
+        {"label": "Create JavaSnes Project", "script": "create-javasnes-proj.py"},
+        {"label": "Compile JavaSnes Project", "script": "compile-javasnes-proj.py"},
+    ],
+}
+
+
+class ToolCommandProvider(Provider):
+    """Provides contextual commands for the selected tool."""
+
+    @property
+    def _app(self) -> "ToolBrowser":
+        return self.app  # type: ignore
+
+    async def search(self, query: str) -> Hits:
+        """Yield command hits based on current context."""
+        matcher = self.matcher(query)
+        scripts_dir = Path(__file__).parent / "scripts"
+
+        # Get currently selected tool
+        detail_panel = self._app.query_one(ToolDetailPanel)
+        tool_data = detail_panel.tool_data
+        tool_name = tool_data.get("name", "tool") if tool_data else None
+        is_installed = tool_data.get("available", False) if tool_data else False
+        category = tool_data.get("category") if tool_data else None
+
+        # === Always-available commands ===
+        
+        # Refresh
+        command = "Refresh Tools"
+        score = matcher.match(command)
+        if score > 0:
+            yield Hit(score, command, self._app.action_refresh, help="Reload tool list")
+
+        # Toggle sidebar
+        command = "Toggle Sidebar"
+        score = matcher.match(command)
+        if score > 0:
+            yield Hit(score, command, self._app.action_toggle_sidebar, help="Show/hide sidebar")
+
+        # Open project
+        command = "Open Project"
+        score = matcher.match(command)
+        if score > 0:
+            yield Hit(score, command, self._app.action_open_project, help="Open project directory")
+
+        # Toggle files/tools view
+        command = "Toggle Code/Tools View"
+        score = matcher.match(command)
+        if score > 0:
+            yield Hit(score, command, self._app.action_toggle_files, help="Switch between code and tools view")
+
+        # Show tools view
+        command = "Show Tools"
+        score = matcher.match(command)
+        if score > 0:
+            yield Hit(score, command, self._app.action_show_tools, help="Show tools panel")
+
+        # Open in Editor (only when viewing a file)
+        current_file = self._app.current_file
+        if current_file:
+            command = f"Open in Editor: {current_file.name}"
+            score = matcher.match(command)
+            if score > 0:
+                yield Hit(score, command, self._app.action_open_in_editor, help="Edit file in external editor")
+
+        # === Tool-specific commands (require a selected tool) ===
+        if tool_data:
+            # Install (only if not installed)
+            if not is_installed:
+                command = f"Install {tool_name}"
+                score = matcher.match(command)
+                if score > 0:
+                    yield Hit(score, command, self._app.action_install, help=f"Download and build {tool_name}")
+
+            # Update (re-run install, only if installed)
+            if is_installed:
+                command = f"Update {tool_name}"
+                score = matcher.match(command)
+                if score > 0:
+                    yield Hit(score, command, self._app.action_update, help=f"Re-download and rebuild {tool_name}")
+
+            # Verify (only if installed)
+            if is_installed:
+                command = f"Verify {tool_name}"
+                score = matcher.match(command)
+                if score > 0:
+                    yield Hit(score, command, self._app.action_verify, help=f"Check {tool_name} installation")
+
+            # Uninstall (only if installed)
+            if is_installed:
+                command = f"Uninstall {tool_name}"
+                score = matcher.match(command)
+                if score > 0:
+                    yield Hit(score, command, self._app.action_uninstall, help=f"Remove {tool_name} binary and source")
+
+            # Documentation (if docs_url exists)
+            docs_url = tool_data.get("docs_url")
+            if docs_url:
+                command = f"Documentation: {tool_name}"
+                score = matcher.match(command)
+                if score > 0:
+                    yield Hit(score, command, lambda: webbrowser.open(docs_url), help=f"Open {tool_name} docs in browser")
+
+            # Per-tool custom commands from tools.json
+            tool_commands = tool_data.get("commands", [])
+            for cmd in tool_commands:
+                label = cmd.get("label", "")
+                script = cmd.get("script", "")
+                args = cmd.get("args", [])
+                if label:
+                    command = f"{tool_name}: {label}"
+                    score = matcher.match(command)
+                    if score > 0:
+                        script_path = scripts_dir / script if script else None
+                        yield Hit(
+                            score, 
+                            command, 
+                            lambda s=script_path, a=args: self._run_script(s, a),
+                            help=f"Run {script}" if script else label
+                        )
+
+            # Category-based commands
+            if category and category in CATEGORY_SCRIPTS:
+                for cat_cmd in CATEGORY_SCRIPTS[category]:
+                    label = cat_cmd.get("label", "")
+                    script = cat_cmd.get("script", "")
+                    command = label
+                    score = matcher.match(command)
+                    if score > 0:
+                        script_path = scripts_dir / script
+                        yield Hit(
+                            score,
+                            command,
+                            lambda s=script_path: self._run_script(s, []),
+                            help=f"Run {script}"
+                        )
+
+    def _run_script(self, script_path: Path | None, args: list[str]) -> None:
+        """Run a script with arguments."""
+        if script_path and script_path.exists():
+            self._app.notify(f"Running {script_path.name}...", severity="information")
+            # For now, just notify - full implementation would run the script
+            # subprocess.Popen([sys.executable, str(script_path)] + args)
+        else:
+            self._app.notify(f"Script not found: {script_path}", severity="error")
+
+
+class InstallScreen(ModalScreen):
+    """Modal screen for tool installation with progress log."""
+
+    DEFAULT_CSS = """
+    InstallScreen {
+        align: center middle;
+    }
+    
+    #install-dialog {
+        width: 80%;
+        height: 80%;
+        border: thick $primary;
+        background: $surface;
+        padding: 1 2;
+    }
+    
+    #install-title {
+        text-align: center;
+        text-style: bold;
+        padding: 1;
+        background: $accent;
+        margin-bottom: 1;
+    }
+    
+    #install-log {
+        height: 1fr;
+        border: solid $primary;
+        margin-bottom: 1;
+    }
+    
+    #progress-container {
+        height: auto;
+        padding: 0 1;
+        margin-bottom: 1;
+    }
+    
+    #install-progress {
+        width: 1fr;
+    }
+    
+    #eta-label {
+        width: auto;
+        margin-left: 1;
+        color: $text-muted;
+    }
+    
+    #install-buttons {
+        height: auto;
+        align: center middle;
+    }
+    
+    #install-buttons Button {
+        margin: 0 2;
+    }
+    
+    #mode-description {
+        text-align: center;
+        color: $text-muted;
+        padding: 0 2;
+        margin-bottom: 1;
+        height: auto;
+    }
+    """
+
+    BINDINGS = [
+        ("escape", "close", "Close"),
+    ]
+
+    def __init__(self, tool_config: Dict[str, Any], title_prefix: str = "Installing"):
+        super().__init__()
+        self.tool_config = tool_config
+        self.title_prefix = title_prefix
+        self.installing = False
+        self.install_complete = False
+        self.install_mode = None  # "repo" or "build"
+        self.repo_package_name = None  # Name of package in repo (if available)
+        
+        # Check if this tool supports repo install (either explicit or dynamic)
+        self.has_repo_install, self.repo_package_name = self._check_repo_install()
+    
+    def _check_repo_install(self) -> tuple[bool, str | None]:
+        """Check if this tool can be installed from package manager.
+        
+        First checks for explicit repo_install config, then tries dynamic
+        detection using the tool's binary name (unless skip_repo_check is set).
+        
+        Returns:
+            Tuple of (is_available, package_name)
+        """
+        tool_name = self.tool_config.get("name", "")
+        plat = get_platform()
+        pkg_manager = get_package_manager()
+        
+        # Check if dynamic repo checking is disabled for this tool
+        if self.tool_config.get("skip_repo_check", False):
+            return False, None
+        
+        # SDKs typically aren't in package managers in the right form
+        if self.tool_config.get("is_sdk", False):
+            return False, None
+        
+        # First check for explicit repo_install configuration
+        repo_install = self.tool_config.get("repo_install", {})
+        if repo_install:
+            plat_config = repo_install.get(plat, {})
+            
+            # Check for a note (e.g., Windows manual install)
+            if "note" in plat_config:
+                return False, None
+            
+            if pkg_manager and pkg_manager in plat_config:
+                packages = plat_config.get(pkg_manager, [])
+                if packages:
+                    return True, packages[0]
+        
+        # Dynamic detection: try the tool name as a package name
+        if pkg_manager:
+            # Try common package name patterns
+            candidates = []
+            
+            # First priority: explicit package_name from config
+            explicit_pkg = self.tool_config.get("package_name")
+            if explicit_pkg:
+                candidates.append(explicit_pkg)
+            
+            # Then try the tool name variations
+            candidates.extend([
+                tool_name,  # e.g., "tiled"
+                tool_name.lower(),  # e.g., "Tiled" -> "tiled"
+                tool_name.replace("-", ""),  # e.g., "wla-dx" -> "wladx"
+                tool_name.replace("_", "-"),  # e.g., "some_tool" -> "some-tool"
+            ])
+            
+            # Add binary name as candidate
+            binary_name = self.tool_config.get("binary_name", {})
+            if isinstance(binary_name, dict):
+                bin_name = binary_name.get(plat, "")
+                if bin_name and bin_name not in candidates:
+                    candidates.append(bin_name.lower().replace(".exe", "").replace(".app", ""))
+            
+            # Check each candidate
+            for candidate in candidates:
+                if candidate and check_package_available_cached(candidate, pkg_manager):
+                    return True, candidate
+        
+        return False, None
+    
+    def _get_repo_description(self) -> str:
+        """Get the description for repo install option."""
+        repo_install = self.tool_config.get("repo_install", {})
+        if repo_install.get("description"):
+            return repo_install["description"]
+        if self.repo_package_name:
+            return f"Install '{self.repo_package_name}' from package manager"
+        return "Install from system package manager"
+
+    def compose(self) -> ComposeResult:
+        tool_name = self.tool_config.get("name", "Unknown")
+        with Vertical(id="install-dialog"):
+            yield Label(f"{self.title_prefix}: {tool_name}", id="install-title")
+            yield Label("", id="mode-description")
+            yield RichLog(id="install-log", highlight=True, markup=True)
+            with Horizontal(id="progress-container"):
+                yield ProgressBar(id="install-progress", total=100, show_eta=False)
+                yield Label("", id="eta-label")
+            with Horizontal(id="install-buttons"):
+                if self.has_repo_install:
+                    yield Button("Install", id="install-btn", variant="success")
+                    yield Button("Build", id="build-btn", variant="primary")
+                else:
+                    yield Button("Start", id="start-btn", variant="primary")
+                yield Button("Close", id="close-btn", variant="default")
+
+    def on_mount(self) -> None:
+        """Set up the dialog when mounted."""
+        self.query_one("#close-btn", Button).disabled = True
+        
+        # Show description based on available options
+        desc_label = self.query_one("#mode-description", Label)
+        if self.has_repo_install:
+            desc_label.update("[cyan]Install[/cyan] from package manager (fast) or [cyan]Build[/cyan] from source")
+        else:
+            desc_label.update("")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button presses."""
+        if event.button.id == "start-btn":
+            # Legacy single-button mode
+            if not self.installing:
+                self.installing = True
+                self.install_mode = "build"
+                event.button.disabled = True
+                self._check_and_install()
+        elif event.button.id == "install-btn":
+            # Repo install mode
+            if not self.installing:
+                self.installing = True
+                self.install_mode = "repo"
+                event.button.disabled = True
+                self.query_one("#build-btn", Button).disabled = True
+                self.query_one("#mode-description", Label).update("[green]Installing from package manager...[/green]")
+                self._run_repo_install()
+        elif event.button.id == "build-btn":
+            # Build from source mode
+            if not self.installing:
+                self.installing = True
+                self.install_mode = "build"
+                event.button.disabled = True
+                self.query_one("#install-btn", Button).disabled = True
+                self.query_one("#mode-description", Label).update("[blue]Building from source...[/blue]")
+                self._check_and_install()
+        elif event.button.id == "close-btn":
+            self.dismiss(self.install_complete)
+
+    def _run_repo_install(self) -> None:
+        """Install from system package manager."""
+        plat = get_platform()
+        pkg_manager = get_package_manager()
+        
+        # Determine package name - either from explicit config or dynamic detection
+        packages = []
+        repo_install = self.tool_config.get("repo_install", {})
+        plat_config = repo_install.get(plat, {})
+        
+        # Check for note (e.g., Windows manual install)
+        if "note" in plat_config:
+            self.log_message(f"[yellow]Note: {plat_config['note']}[/yellow]")
+            self.installing = False
+            self.query_one("#close-btn", Button).disabled = False
+            return
+        
+        # Use explicit packages if defined, otherwise use dynamically detected name
+        if pkg_manager and pkg_manager in plat_config:
+            packages = plat_config.get(pkg_manager, [])
+        
+        if not packages and self.repo_package_name:
+            packages = [self.repo_package_name]
+        
+        if not packages:
+            self.log_message(f"[red]No packages found for {pkg_manager}[/red]")
+            self.installing = False
+            self.query_one("#close-btn", Button).disabled = False
+            return
+        
+        # Build the install command
+        if pkg_manager == "apt":
+            cmd = ["sudo", "apt-get", "install", "-y"] + packages
+            cmd_str = f"sudo apt-get install -y {' '.join(packages)}"
+        elif pkg_manager == "dnf":
+            cmd = ["sudo", "dnf", "install", "-y"] + packages
+            cmd_str = f"sudo dnf install -y {' '.join(packages)}"
+        elif pkg_manager == "pacman":
+            cmd = ["sudo", "pacman", "-S", "--noconfirm"] + packages
+            cmd_str = f"sudo pacman -S --noconfirm {' '.join(packages)}"
+        elif pkg_manager == "brew":
+            cmd = ["brew", "install"] + packages
+            cmd_str = f"brew install {' '.join(packages)}"
+        elif pkg_manager == "msys2":
+            cmd = ["pacman", "-S", "--noconfirm"] + packages
+            cmd_str = f"pacman -S --noconfirm {' '.join(packages)}"
+        else:
+            self.log_message(f"[red]Unknown package manager: {pkg_manager}[/red]")
+            self.installing = False
+            self.query_one("#close-btn", Button).disabled = False
+            return
+        
+        self.log_message(f"[cyan]Installing: {' '.join(packages)}[/cyan]")
+        
+        # Check if we need sudo
+        needs_sudo = pkg_manager in ("apt", "dnf", "pacman")
+        
+        if needs_sudo:
+            # Check if we're in web/browser mode
+            if self.app.is_web:
+                self.log_message("[red]━━━ Manual Installation Required ━━━[/red]")
+                self.log_message("[yellow]Running in browser mode - cannot run sudo commands.[/yellow]")
+                self.log_message("")
+                self.log_message("[cyan]Please install manually in a terminal:[/cyan]")
+                self.log_message(f"[white bold]  {cmd_str}[/white bold]")
+                self.log_message("")
+                self.installing = False
+                self.query_one("#close-btn", Button).disabled = False
+                return
+            
+            # Run with sudo in terminal
+            self.log_message("[dim]Switching to terminal for password entry...[/dim]")
+            success = self._run_sudo_in_terminal(cmd)
+            
+            if success:
+                self.log_message("[green]✓ Package installed successfully![/green]")
+                self.install_complete = True
+            else:
+                self.log_message("[red]Installation failed or was cancelled[/red]")
+            
+            self.installing = False
+            self.query_one("#close-btn", Button).disabled = False
+        else:
+            # No sudo needed (e.g., brew)
+            self.run_worker(self._run_repo_install_async(cmd))
+
+    def _check_and_install(self) -> None:
+        """Check for sudo requirements and start installation."""
+        # Check if dependencies need sudo
+        deps = self.tool_config.get("dependencies", {})
+        plat = get_platform()
+        pkg_manager = get_package_manager()
+        plat_deps = deps.get(plat, {})
+        
+        needs_sudo = False
+        missing_packages = []
+        
+        if plat_deps and pkg_manager in ("apt", "dnf"):
+            packages = plat_deps.get(pkg_manager, [])
+            
+            # Handle dict-style dependency specs with custom commands (e.g., dnf builddep)
+            if isinstance(packages, dict):
+                custom_cmd = packages.get("command", "install")
+                custom_args = packages.get("args", [])
+                # For builddep and similar, we can't easily check if deps are installed
+                # So we always need to run the command
+                needs_sudo = True
+                missing_packages = custom_args
+                is_custom_command = True
+            else:
+                is_custom_command = False
+                # Check which packages are missing
+                installer = ToolInstaller()
+                for pkg in packages:
+                    binary_name = installer._package_to_binary(pkg)
+                    if not (binary_name and shutil.which(binary_name)):
+                        missing_packages.append(pkg)
+                
+                if missing_packages:
+                    needs_sudo = True
+        else:
+            is_custom_command = False
+        
+        if needs_sudo:
+            self.log_message("[yellow]━━━ System Dependencies ━━━[/yellow]")
+            
+            # Build the command based on whether it's custom or standard
+            if pkg_manager == "apt":
+                if is_custom_command:
+                    apt_cmd = packages.get("command", "install")
+                    cmd = ["sudo", "apt-get", apt_cmd, "-y"] + missing_packages
+                    cmd_str = f"sudo apt-get {apt_cmd} -y {' '.join(missing_packages)}"
+                    self.log_message(f"[yellow]Running: {cmd_str}[/yellow]")
+                else:
+                    cmd = ["sudo", "apt-get", "install", "-y"] + missing_packages
+                    cmd_str = f"sudo apt-get install -y {' '.join(missing_packages)}"
+                    self.log_message(f"[yellow]Missing packages: {', '.join(missing_packages)}[/yellow]")
+            else:  # dnf
+                if is_custom_command:
+                    dnf_cmd = packages.get("command", "install")
+                    cmd = ["sudo", "dnf", dnf_cmd, "-y"] + missing_packages
+                    cmd_str = f"sudo dnf {dnf_cmd} -y {' '.join(missing_packages)}"
+                    self.log_message(f"[yellow]Running: {cmd_str}[/yellow]")
+                else:
+                    cmd = ["sudo", "dnf", "install", "-y"] + missing_packages
+                    cmd_str = f"sudo dnf install -y {' '.join(missing_packages)}"
+                    self.log_message(f"[yellow]Missing packages: {', '.join(missing_packages)}[/yellow]")
+            
+            # Check if we're in web/browser mode - can't do sudo there
+            if self.app.is_web:
+                self.log_message("[red]━━━ Manual Installation Required ━━━[/red]")
+                self.log_message("[yellow]Running in browser mode - cannot run sudo commands.[/yellow]")
+                self.log_message("")
+                self.log_message("[cyan]Please install the dependencies manually in a terminal:[/cyan]")
+                self.log_message(f"[white bold]  {cmd_str}[/white bold]")
+                self.log_message("")
+                self.log_message("[dim]After installing, close this dialog and try again.[/dim]")
+                self.installing = False
+                
+                # Re-enable appropriate button
+                if self.install_mode == "build":
+                    try:
+                        self.query_one("#build-btn", Button).disabled = False
+                        self.query_one("#build-btn", Button).label = "Retry"
+                    except:
+                        self.query_one("#start-btn", Button).disabled = False
+                        self.query_one("#start-btn", Button).label = "Retry"
+                
+                self.query_one("#close-btn", Button).disabled = False
+                return
+            
+            # Use suspend() to run sudo in the terminal
+            # Note: textual-terminal uses PTY which doesn't work in all environments
+            self.log_message("[dim]Switching to terminal for password entry...[/dim]")
+            success = self._run_sudo_in_terminal(cmd)
+            
+            if not success:
+                self.log_message("[red]Dependency installation failed or was cancelled[/red]")
+                self.log_message("[dim]You can try installing manually and retry[/dim]")
+                self.installing = False
+                
+                # Re-enable appropriate button
+                if self.install_mode == "build":
+                    try:
+                        self.query_one("#build-btn", Button).disabled = False
+                        self.query_one("#build-btn", Button).label = "Retry"
+                    except:
+                        self.query_one("#start-btn", Button).disabled = False
+                        self.query_one("#start-btn", Button).label = "Retry"
+                
+                self.query_one("#close-btn", Button).disabled = False
+                return
+            
+            self.log_message("[green]✓ Dependencies installed[/green]")
+        
+        # Continue with the rest of the installation
+        self.run_worker(self._run_install())
+
+    def _run_sudo_in_terminal(self, cmd: list[str]) -> bool:
+        """Run a sudo command by suspending the TUI.
+        
+        This allows the user to enter their password in the terminal.
+        Returns True if the command succeeded.
+        """
+        success = False
+        
+        with self.app.suspend():
+            print("\n" + "="*60)
+            print("SNES-IDE: Installing system dependencies")
+            print("="*60)
+            print(f"\nRunning: {' '.join(cmd)}\n")
+            
+            try:
+                result = subprocess.run(cmd)
+                success = (result.returncode == 0)
+                
+                if success:
+                    print("\n✓ Dependencies installed successfully!")
+                else:
+                    print(f"\n✗ Command failed with exit code {result.returncode}")
+                
+                print("\nPress Enter to return to SNES-IDE...")
+                input()
+            except KeyboardInterrupt:
+                print("\n\nCancelled by user.")
+                print("\nPress Enter to return to SNES-IDE...")
+                try:
+                    input()
+                except:
+                    pass
+                success = False
+            except Exception as e:
+                print(f"\n✗ Error: {e}")
+                print("\nPress Enter to return to SNES-IDE...")
+                try:
+                    input()
+                except:
+                    pass
+                success = False
+        
+        return success
+
+    async def _run_repo_install_async(self, cmd: list[str]) -> None:
+        """Run repo install for package managers that don't need sudo (e.g., brew)."""
+        self.log_message(f"[yellow]Running:[/yellow] {' '.join(cmd)}")
+        
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT
+            )
+            
+            async for line in process.stdout:
+                self.log_message(line.decode().rstrip())
+            
+            await process.wait()
+            
+            if process.returncode == 0:
+                self.log_message("[green]✓ Package installed successfully![/green]")
+                self.install_complete = True
+            else:
+                self.log_message(f"[red]Installation failed with exit code {process.returncode}[/red]")
+        except Exception as e:
+            self.log_message(f"[red]Error: {e}[/red]")
+        
+        self.installing = False
+        self.query_one("#close-btn", Button).disabled = False
+        self.query_one("#install-btn", Button).label = "Done" if self.install_complete else "Failed"
+
+    def action_close(self) -> None:
+        """Close the screen."""
+        if not self.installing:
+            self.dismiss(False)
+
+    def log_message(self, msg: str) -> None:
+        """Add a message to the log."""
+        log = self.query_one("#install-log", RichLog)
+        log.write(msg)
+
+    def update_progress(self, current: float, total: float, eta_seconds: float | None = None) -> None:
+        """Update the progress bar and ETA display."""
+        progress_bar = self.query_one("#install-progress", ProgressBar)
+        eta_label = self.query_one("#eta-label", Label)
+        
+        if total > 0:
+            progress_bar.update(total=total, progress=current)
+        
+        # Format and display ETA
+        if eta_seconds is not None:
+            if eta_seconds <= 0:
+                eta_label.update("")
+            elif eta_seconds < 60:
+                eta_label.update(f" ~{int(eta_seconds)}s remaining")
+            elif eta_seconds < 3600:
+                mins = int(eta_seconds // 60)
+                secs = int(eta_seconds % 60)
+                eta_label.update(f" ~{mins}m {secs}s remaining")
+            else:
+                hours = int(eta_seconds // 3600)
+                mins = int((eta_seconds % 3600) // 60)
+                eta_label.update(f" ~{hours}h {mins}m remaining")
+        else:
+            eta_label.update("")
+
+    async def _run_install(self) -> None:
+        """Run the installation process."""
+        installer = ToolInstaller(
+            log_callback=self.log_message,
+            progress_callback=self.update_progress
+            # No sudo_callback needed - we handle sudo deps upfront in _check_and_install
+        )
+        
+        try:
+            self.install_complete = await installer.install(self.tool_config)
+        except Exception as e:
+            self.log_message(f"[red]Installation failed: {e}[/red]")
+            self.install_complete = False
+        
+        # Re-enable close button
+        self.query_one("#close-btn", Button).disabled = False
+        
+        # Update the appropriate button based on mode
+        if self.install_mode == "repo":
+            self.query_one("#install-btn", Button).label = "Done" if self.install_complete else "Failed"
+        elif self.install_mode == "build":
+            # Check if we have build-btn (dual mode) or start-btn (single mode)
+            try:
+                self.query_one("#build-btn", Button).label = "Done" if self.install_complete else "Failed"
+            except:
+                self.query_one("#start-btn", Button).label = "Done" if self.install_complete else "Failed"
+
+
+class VerifyScreen(ModalScreen):
+    """Modal screen for verifying a tool installation."""
+
+    DEFAULT_CSS = """
+    VerifyScreen {
+        align: center middle;
+    }
+    
+    #verify-dialog {
+        width: 60%;
+        height: auto;
+        max-height: 50%;
+        border: thick $primary;
+        background: $surface;
+        padding: 1 2;
+    }
+    
+    #verify-title {
+        text-align: center;
+        text-style: bold;
+        padding: 1;
+        background: $accent;
+        margin-bottom: 1;
+    }
+    
+    #verify-log {
+        height: auto;
+        max-height: 10;
+        border: solid $primary;
+        margin-bottom: 1;
+    }
+    
+    #verify-buttons {
+        height: auto;
+        align: center middle;
+    }
+    """
+
+    BINDINGS = [
+        ("escape", "close", "Close"),
+    ]
+
+    def __init__(self, tool_config: Dict[str, Any]):
+        super().__init__()
+        self.tool_config = tool_config
+        self.verify_success = False
+
+    def compose(self) -> ComposeResult:
+        tool_name = self.tool_config.get("name", "Unknown")
+        with Vertical(id="verify-dialog"):
+            yield Label(f"Verifying: {tool_name}", id="verify-title")
+            yield RichLog(id="verify-log", highlight=True, markup=True)
+            with Horizontal(id="verify-buttons"):
+                yield Button("Close", id="close-btn", variant="default")
+
+    def on_mount(self) -> None:
+        """Start verification when mounted."""
+        self.run_worker(self._run_verify())
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button presses."""
+        if event.button.id == "close-btn":
+            self.dismiss(self.verify_success)
+
+    def action_close(self) -> None:
+        """Close the screen."""
+        self.dismiss(self.verify_success)
+
+    async def _run_verify(self) -> None:
+        """Run the verification."""
+        log = self.query_one("#verify-log", RichLog)
+        verify_cmd = self.tool_config.get("verify_command", [])
+        
+        if not verify_cmd:
+            log.write("[yellow]No verify command specified[/yellow]")
+            self.verify_success = True
+            return
+
+        log.write(f"[cyan]Running:[/cyan] {' '.join(verify_cmd)}")
+        
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *verify_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT
+            )
+            stdout, _ = await process.communicate()
+            if stdout:
+                for line in stdout.decode().splitlines()[:5]:
+                    log.write(f"  {line}")
+
+            if process.returncode == 0:
+                log.write("[green bold]✓ Verification passed![/green bold]")
+                self.verify_success = True
+            else:
+                log.write(f"[red bold]✗ Verification failed (code {process.returncode})[/red bold]")
+                self.verify_success = False
+        except FileNotFoundError:
+            log.write(f"[red]Command not found: {verify_cmd[0]}[/red]")
+            self.verify_success = False
+        except Exception as e:
+            log.write(f"[red]Error: {e}[/red]")
+            self.verify_success = False
+
+
+class UninstallScreen(ModalScreen):
+    """Modal screen for uninstalling a tool."""
+
+    DEFAULT_CSS = """
+    UninstallScreen {
+        align: center middle;
+    }
+    
+    #uninstall-dialog {
+        width: 60%;
+        height: auto;
+        max-height: 60%;
+        border: thick $error;
+        background: $surface;
+        padding: 1 2;
+    }
+    
+    #uninstall-title {
+        text-align: center;
+        text-style: bold;
+        padding: 1;
+        background: $error;
+        margin-bottom: 1;
+    }
+    
+    #uninstall-log {
+        height: auto;
+        max-height: 15;
+        border: solid $primary;
+        margin-bottom: 1;
+    }
+    
+    #uninstall-buttons {
+        height: auto;
+        align: center middle;
+    }
+    
+    #uninstall-buttons Button {
+        margin: 0 2;
+    }
+    """
+
+    BINDINGS = [
+        ("escape", "close", "Close"),
+    ]
+
+    def __init__(self, tool_config: Dict[str, Any]):
+        super().__init__()
+        self.tool_config = tool_config
+        self.uninstalling = False
+        self.uninstall_complete = False
+
+    def compose(self) -> ComposeResult:
+        tool_name = self.tool_config.get("name", "Unknown")
+        with Vertical(id="uninstall-dialog"):
+            yield Label(f"⚠ Uninstall: {tool_name}", id="uninstall-title")
+            yield RichLog(id="uninstall-log", highlight=True, markup=True)
+            with Horizontal(id="uninstall-buttons"):
+                yield Button("Confirm Uninstall", id="confirm-btn", variant="error")
+                yield Button("Cancel", id="cancel-btn", variant="default")
+
+    def on_mount(self) -> None:
+        """Show warning when mounted."""
+        log = self.query_one("#uninstall-log", RichLog)
+        tool_name = self.tool_config.get("name", "Unknown")
+        log.write(f"[yellow]This will remove {tool_name}:[/yellow]")
+        log.write(f"  • Binary from ~/.local/bin")
+        log.write(f"  • Source from ~/.snes-ide/tools/{tool_name}")
+        log.write("")
+        log.write("[dim]Press 'Confirm Uninstall' to proceed or 'Cancel' to abort.[/dim]")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button presses."""
+        if event.button.id == "confirm-btn":
+            if not self.uninstalling:
+                self.uninstalling = True
+                event.button.disabled = True
+                self.query_one("#cancel-btn", Button).disabled = True
+                self.run_worker(self._run_uninstall())
+        elif event.button.id == "cancel-btn":
+            self.dismiss(False)
+
+    def action_close(self) -> None:
+        """Close the screen."""
+        if not self.uninstalling:
+            self.dismiss(False)
+
+    async def _run_uninstall(self) -> None:
+        """Run the uninstall process."""
+        log = self.query_one("#uninstall-log", RichLog)
+        log.write("")
+        log.write("[bold]Starting uninstall...[/bold]")
+        
+        installer = ToolInstaller(
+            log_callback=lambda msg: log.write(msg)
+        )
+        
+        try:
+            self.uninstall_complete = await installer.uninstall(self.tool_config)
+        except Exception as e:
+            log.write(f"[red]Uninstall failed: {e}[/red]")
+            self.uninstall_complete = False
+        
+        # Update buttons
+        self.query_one("#confirm-btn", Button).label = "Done" if self.uninstall_complete else "Failed"
+        self.query_one("#cancel-btn", Button).label = "Close"
+        self.query_one("#cancel-btn", Button).disabled = False
+
+
+class CodeViewer(Static):
+    """Syntax-highlighted code viewer panel."""
+
+    DEFAULT_CSS = """
+    CodeViewer {
+        width: 100%;
+        height: 100%;
+        overflow: auto scroll;
+        padding: 0 1;
+        background: $surface;
+    }
+    
+    CodeViewer > Static {
+        width: auto;
+    }
+    """
+
+    file_path: reactive[Path | None] = reactive(None)
+
+    def compose(self) -> ComposeResult:
+        yield Static(id="code-content")
+
+    def watch_file_path(self, file_path: Path | None) -> None:
+        """Load and display the file when path changes."""
+        content = self.query_one("#code-content", Static)
+        
+        if file_path is None:
+            content.update("[dim italic]Select a file from the project tree to view its contents[/dim italic]")
+            return
+        
+        if not file_path.exists():
+            content.update(f"[red]File not found: {file_path}[/red]")
+            return
+        
+        if not file_path.is_file():
+            content.update(f"[dim]{file_path} is a directory[/dim]")
+            return
+        
+        try:
+            # Check file size - don't try to load huge files
+            file_size = file_path.stat().st_size
+            if file_size > 1_000_000:  # 1MB limit
+                content.update(f"[yellow]File too large to display ({file_size:,} bytes)[/yellow]")
+                return
+            
+            code = file_path.read_text(encoding="utf-8", errors="replace")
+            
+            # Determine lexer from file extension
+            ext = file_path.suffix.lower()
+            lexer_map = {
+                ".py": "python",
+                ".c": "c",
+                ".h": "c",
+                ".cpp": "cpp",
+                ".hpp": "cpp",
+                ".cc": "cpp",
+                ".cxx": "cpp",
+                ".asm": "nasm",
+                ".s": "gas",
+                ".inc": "nasm",
+                ".json": "json",
+                ".yaml": "yaml",
+                ".yml": "yaml",
+                ".toml": "toml",
+                ".md": "markdown",
+                ".rst": "rst",
+                ".sh": "bash",
+                ".bash": "bash",
+                ".zsh": "zsh",
+                ".fish": "fish",
+                ".ps1": "powershell",
+                ".bat": "batch",
+                ".cmd": "batch",
+                ".js": "javascript",
+                ".ts": "typescript",
+                ".html": "html",
+                ".htm": "html",
+                ".css": "css",
+                ".tcss": "css",
+                ".xml": "xml",
+                ".java": "java",
+                ".cs": "csharp",
+                ".rs": "rust",
+                ".go": "go",
+                ".rb": "ruby",
+                ".lua": "lua",
+                ".make": "make",
+                ".mk": "make",
+            }
+            # Handle Makefile specially
+            if file_path.name.lower() in ("makefile", "gnumakefile"):
+                lexer = "make"
+            else:
+                lexer = lexer_map.get(ext, "text")
+            
+            # Render Markdown files specially
+            if ext in (".md", ".markdown"):
+                md = Markdown(code)
+                content.update(md)
+            else:
+                syntax = Syntax(
+                    code, 
+                    lexer, 
+                    theme="monokai",
+                    line_numbers=True,
+                    word_wrap=False,
+                )
+                content.update(syntax)
+            
+        except UnicodeDecodeError:
+            content.update("[yellow]Binary file - cannot display[/yellow]")
+        except Exception as e:
+            content.update(Traceback(theme="monokai", width=None))
+
+
+class PixelCanvas(ScrollView):
+    """Terminal-based pixel canvas for SNES graphics display and editing.
+    
+    Extends ScrollView to provide scrollable content with render_line().
+    
+    EDIT MODE (zoom >= 4):
+    - Each pixel = 2 full block chars wide × 1 row tall (square)
+    - Easy mouse targeting, full precision
+    
+    DISPLAY MODE:
+    - Half-block rendering for compact view
+    - Read-only overview
+    
+    Press 'd' to toggle between modes.
+    """
+    
+    DEFAULT_CSS = """
+    PixelCanvas {
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background: $surface;
+    }
+    """
+    
+    BINDINGS = [
+        ("p", "set_tool('pencil')", "Pencil"),
+        ("i", "set_tool('eyedropper')", "Eyedropper"),
+        ("d", "toggle_edit_mode", "Edit/Display Mode"),
+        ("tab", "next_tile", "Next Tile"),
+        ("shift+tab", "prev_tile", "Previous Tile"),
+    ]
+    
+    # Reactive properties
+    zoom: reactive[int] = reactive(4)  # Minimum 4 for editing (full blocks)
+    current_tile_index: reactive[int] = reactive(0)
+    show_grid: reactive[bool] = reactive(True)
+    current_color_index: reactive[int] = reactive(1)  # Default to color 1 (0 is usually transparent)
+    current_tool: reactive[str] = reactive("pencil")  # "pencil", "eyedropper", "fill", "line", "rect", "ellipse"
+    is_modified: reactive[bool] = reactive(False)
+    edit_mode: reactive[bool] = reactive(True)  # True = full-block editing, False = half-block display
+    
+    # Shape tool state (for preview and drawing)
+    _shape_start: tuple[int, int] | None = None  # Starting point for shape tools
+    _shape_preview: set[tuple[int, int]] = set()  # Pixels to preview (as set for O(1) lookup)
+    
+    # Minimum zoom for editing (each pixel = 2 chars wide x 1 row tall = square)
+    MIN_EDIT_ZOOM = 4
+    
+    # Maximum undo stack size
+    MAX_UNDO_STEPS = 50
+    
+    def __init__(
+        self, 
+        tileset: SNESTileset | None = None,
+        name: str | None = None,
+        id: str | None = None,
+        classes: str | None = None,
+    ):
+        """Initialize the canvas.
+        
+        Args:
+            tileset: Tileset to display
+            name, id, classes: Standard Textual widget parameters
+        """
+        super().__init__(name=name, id=id, classes=classes)
+        self._tileset = tileset
+        self._is_drawing = False
+        self._last_draw_pos: Tuple[int, int] | None = None
+        # Undo/redo stacks store snapshots of tile pixel data
+        self._undo_stack: List[List[List[List[int]]]] = []
+        self._redo_stack: List[List[List[List[int]]]] = []
+    
+    @property
+    def tileset(self) -> SNESTileset | None:
+        return self._tileset
+    
+    @tileset.setter
+    def tileset(self, value: SNESTileset | None) -> None:
+        self._tileset = value
+        self._undo_stack.clear()
+        self._redo_stack.clear()
+        self.is_modified = False
+        self._update_virtual_size()
+        self.refresh()
+    
+    def _update_virtual_size(self) -> None:
+        """Update virtual_size based on tileset dimensions and zoom."""
+        if not self._tileset or not self._tileset.tiles:
+            self.virtual_size = Size(1, 1)
+            return
+        
+        tiles_per_row = self._tileset.tiles_per_row or 1
+        tile_w = self._tileset.tile_width
+        tile_h = self._tileset.tile_height
+        total_tile_rows = (len(self._tileset.tiles) + tiles_per_row - 1) // tiles_per_row
+        pixel_width = tiles_per_row * tile_w
+        pixel_height = total_tile_rows * tile_h
+        
+        zoom = self.zoom
+        if self.edit_mode and zoom >= self.MIN_EDIT_ZOOM:
+            # Edit mode: 2 chars per pixel, 1 row per pixel (at zoom=4)
+            chars_per_pixel = zoom // 2
+            rows_per_pixel = max(1, zoom // 4)
+            grid_chars = (tiles_per_row - 1) if self.show_grid else 0
+            # Add horizontal grid line rows (one between each tile row)
+            h_grid_rows = (total_tile_rows - 1) if self.show_grid else 0
+            width = pixel_width * chars_per_pixel + grid_chars
+            height = pixel_height * rows_per_pixel + h_grid_rows
+        else:
+            # Display mode: 1 char per pixel, 2 pixels per row
+            grid_chars = (tiles_per_row - 1) if self.show_grid else 0
+            # Horizontal grid adds rows between tile rows
+            h_grid_rows = (total_tile_rows - 1) if self.show_grid else 0
+            width = pixel_width + grid_chars
+            height = (pixel_height + 1) // 2 + h_grid_rows
+        
+        self.virtual_size = Size(width, height)
+    
+    def watch_zoom(self, zoom: int) -> None:
+        """Update virtual size when zoom changes."""
+        self._update_virtual_size()
+        self.refresh()
+    
+    def watch_edit_mode(self, edit_mode: bool) -> None:
+        """Update virtual size when edit mode changes."""
+        self._update_virtual_size()
+        self.refresh()
+    
+    def watch_show_grid(self, show_grid: bool) -> None:
+        """Update virtual size when grid visibility changes."""
+        self._update_virtual_size()
+        self.refresh()
+    
+    def render_line(self, y: int) -> Strip:
+        """Render a single line of the canvas.
+        
+        Two rendering modes:
+        
+        EDIT MODE (zoom >= 4, edit_mode=True):
+        - Each pixel = 2 full blocks wide (██) × 1 row tall
+        - At zoom=4: 2 chars per pixel, 1 row per pixel
+        - At zoom=8: 4 chars per pixel, 2 rows per pixel
+        - Square pixels, easy mouse targeting
+        
+        DISPLAY MODE (edit_mode=False):
+        - Half-block rendering for compact view
+        - Use ▄ with fg=bottom, bg=top
+        - 2 pixel rows per terminal row
+        - Read-only (for overview)
+        """
+        if not self._tileset or not self._tileset.tiles:
+            if y == 0:
+                return Strip([Segment("[dim]No image loaded[/dim]")])
+            return Strip([])
+        
+        # Get scroll offset - y is the viewport line, we need to add scroll offset
+        scroll_x, scroll_y = self.scroll_offset
+        content_y = scroll_y + y
+        
+        zoom = self.zoom
+        tiles_per_row = self._tileset.tiles_per_row or 1
+        tile_w = self._tileset.tile_width
+        tile_h = self._tileset.tile_height
+        
+        # Total pixel dimensions
+        total_tile_rows = (len(self._tileset.tiles) + tiles_per_row - 1) // tiles_per_row
+        pixel_height = total_tile_rows * tile_h
+        pixel_width = tiles_per_row * tile_w
+        
+        # Calculate current tile row/col for highlighting
+        current_tile_row = self.current_tile_index // tiles_per_row
+        current_tile_col = self.current_tile_index % tiles_per_row
+        
+        if self.edit_mode and zoom >= self.MIN_EDIT_ZOOM:
+            # EDIT MODE: Full blocks, 1 pixel per row (at base zoom)
+            # chars_per_pixel = zoom // 2 (so zoom=4 -> 2 chars, zoom=8 -> 4 chars)
+            # rows_per_pixel = zoom // 4 (so zoom=4 -> 1 row, zoom=8 -> 2 rows)
+            chars_per_pixel = zoom // 2
+            rows_per_pixel = max(1, zoom // 4)
+            
+            pixel_y = content_y // rows_per_pixel
+            
+            # Check if this is a horizontal grid line row (between tiles)
+            if self.show_grid and pixel_y > 0 and pixel_y % tile_h == 0 and pixel_y < pixel_height:
+                # This is a grid line row - render horizontal separator
+                tile_row_above = (pixel_y - 1) // tile_h
+                segments = []
+                for px in range(pixel_width):
+                    tile_col = px // tile_w
+                    tile_x = px % tile_w
+                    
+                    # Highlight if adjacent to current tile
+                    is_current_grid = (tile_row_above == current_tile_row or tile_row_above + 1 == current_tile_row) and tile_col == current_tile_col
+                    grid_color = "bright_cyan" if is_current_grid else "gray50"
+                    
+                    if tile_x == tile_w - 1 and tile_col < tiles_per_row - 1:
+                        # Intersection with vertical grid
+                        segments.append(Segment("─" * chars_per_pixel + "┼", Style(color=grid_color)))
+                    else:
+                        segments.append(Segment("─" * chars_per_pixel, Style(color=grid_color)))
+                
+                strip = Strip(segments)
+                return strip.crop(scroll_x, scroll_x + self.size.width)
+            
+            if pixel_y >= pixel_height:
+                return Strip([])
+            
+            # Check if this row is part of the current tile
+            current_pixel_row_in_tile = pixel_y // tile_h
+            is_current_tile_row = current_pixel_row_in_tile == current_tile_row
+            is_tile_top_edge = (pixel_y % tile_h == 0) and is_current_tile_row
+            is_tile_bottom_edge = (pixel_y % tile_h == tile_h - 1) and is_current_tile_row
+            
+            segments = []
+            for px in range(pixel_width):
+                tile_col = px // tile_w
+                tile_x = px % tile_w
+                
+                # Check if this pixel is in the current tile (for border highlighting)
+                is_current_tile = (tile_col == current_tile_col and is_current_tile_row)
+                is_left_edge = (tile_x == 0) and is_current_tile
+                is_right_edge = (tile_x == tile_w - 1) and is_current_tile
+                is_edge = is_tile_top_edge or is_tile_bottom_edge or is_left_edge or is_right_edge
+                
+                color = self._get_pixel_color(tile_col, pixel_y, tile_x, pixel_y % tile_h)
+                
+                # For selected tile edges, use a bright visible border
+                if is_current_tile and is_edge:
+                    # Use bright cyan border for selected tile
+                    style = Style(
+                        bgcolor=f"rgb({color[0]},{color[1]},{color[2]})",
+                        color="bright_cyan",
+                        bold=True,
+                        underline=is_tile_bottom_edge,
+                        overline=is_tile_top_edge
+                    )
+                    # Use box-drawing chars for left/right edges
+                    if is_left_edge and is_right_edge:
+                        char = "║" + " " * (chars_per_pixel - 2) + "║" if chars_per_pixel > 2 else "█" * chars_per_pixel
+                    elif is_left_edge:
+                        char = "▌" + " " * (chars_per_pixel - 1)
+                    elif is_right_edge:
+                        char = " " * (chars_per_pixel - 1) + "▐"
+                    else:
+                        char = " " * chars_per_pixel
+                    segments.append(Segment(char, style))
+                else:
+                    style = Style(bgcolor=f"rgb({color[0]},{color[1]},{color[2]})")
+                    segments.append(Segment(" " * chars_per_pixel, style))
+                
+                # Grid line between tiles - highlight if adjacent to current tile
+                if self.show_grid and tile_x == tile_w - 1 and tile_col < tiles_per_row - 1:
+                    is_current_grid = (tile_col == current_tile_col or tile_col + 1 == current_tile_col) and is_current_tile_row
+                    grid_color = "bright_cyan" if is_current_grid else "gray50"
+                    segments.append(Segment("│", Style(color=grid_color)))
+            
+            # Crop horizontally to viewport
+            strip = Strip(segments)
+            return strip.crop(scroll_x, scroll_x + self.size.width)
+        
+        else:
+            # DISPLAY MODE: Half-block rendering (compact, read-only)
+            # Each terminal row shows 2 pixel rows
+            pixel_y_top = content_y * 2
+            pixel_y_bot = pixel_y_top + 1
+            
+            # Check if this is a horizontal grid line row
+            if self.show_grid and pixel_y_top > 0 and pixel_y_top % tile_h == 0 and pixel_y_top < pixel_height:
+                tile_row_above = (pixel_y_top - 1) // tile_h
+                segments = []
+                for px in range(pixel_width):
+                    tile_col = px // tile_w
+                    tile_x = px % tile_w
+                    
+                    is_current_grid = (tile_row_above == current_tile_row or tile_row_above + 1 == current_tile_row) and tile_col == current_tile_col
+                    grid_color = "bright_cyan" if is_current_grid else "gray50"
+                    
+                    if tile_x == tile_w - 1 and tile_col < tiles_per_row - 1:
+                        segments.append(Segment("┼", Style(color=grid_color)))
+                    else:
+                        segments.append(Segment("─", Style(color=grid_color)))
+                
+                strip = Strip(segments)
+                return strip.crop(scroll_x, scroll_x + self.size.width)
+            
+            if pixel_y_top >= pixel_height:
+                return Strip([])
+            
+            segments = []
+            for px in range(pixel_width):
+                tile_col = px // tile_w
+                tile_x = px % tile_w
+                
+                # Check if this pixel column is part of the current tile
+                tile_row_at_top = pixel_y_top // tile_h
+                is_current_tile = (tile_col == current_tile_col and tile_row_at_top == current_tile_row)
+                
+                top_color = self._get_pixel_color(tile_col, pixel_y_top, tile_x, pixel_y_top % tile_h)
+                
+                if pixel_y_bot < pixel_height:
+                    bot_color = self._get_pixel_color(tile_col, pixel_y_bot, tile_x, pixel_y_bot % tile_h)
+                else:
+                    bot_color = (0, 0, 0)
+                
+                # Highlight selected tile with brighter colors
+                if is_current_tile:
+                    # Boost brightness for selected tile
+                    top_color = tuple(min(255, c + 40) for c in top_color)
+                    bot_color = tuple(min(255, c + 40) for c in bot_color)
+                
+                # ▄ with fg=bottom, bg=top
+                style = Style(
+                    color=f"rgb({bot_color[0]},{bot_color[1]},{bot_color[2]})",
+                    bgcolor=f"rgb({top_color[0]},{top_color[1]},{top_color[2]})"
+                )
+                segments.append(Segment("▄", style))
+                
+                # Grid line between tiles - highlight if adjacent to current tile
+                if self.show_grid and tile_x == tile_w - 1 and tile_col < tiles_per_row - 1:
+                    is_current_row = tile_row_at_top == current_tile_row
+                    is_current_grid = (tile_col == current_tile_col or tile_col + 1 == current_tile_col) and is_current_row
+                    grid_color = "bright_cyan" if is_current_grid else "gray50"
+                    segments.append(Segment("│", Style(color=grid_color)))
+            
+            # Crop horizontally to viewport
+            strip = Strip(segments)
+            return strip.crop(scroll_x, scroll_x + self.size.width)
+    
+    def _get_pixel_color(
+        self, tile_col: int, pixel_y: int, tile_x: int, tile_y_in_tile: int
+    ) -> Tuple[int, int, int]:
+        """Get the RGB color for a pixel position.
+        
+        Args:
+            tile_col: Which tile column (0-based)
+            pixel_y: Global Y pixel coordinate
+            tile_x: X position within the tile
+            tile_y_in_tile: Y position within the tile
+            
+        Returns:
+            RGB tuple
+        """
+        if not self._tileset:
+            return (0, 0, 0)
+        
+        tile_h = self._tileset.tile_height
+        tile_w = self._tileset.tile_width
+        tiles_per_row = self._tileset.tiles_per_row or 1
+        
+        tile_row = pixel_y // tile_h
+        tile_idx = tile_row * tiles_per_row + tile_col
+        
+        # Calculate global pixel x
+        global_pixel_x = tile_col * tile_w + tile_x
+        
+        # Check if this pixel is in the shape preview
+        if self._shape_preview and (global_pixel_x, pixel_y) in self._shape_preview:
+            # Return the preview color (the current selected color)
+            return self._tileset.palette.get_color(0, self.current_color_index)
+        
+        tile = self._tileset.get_tile(tile_idx)
+        if not tile:
+            return (0, 0, 0)
+        
+        color_idx = tile.get_pixel(tile_x, tile_y_in_tile)
+        return self._tileset.palette.get_color(0, color_idx)
+    
+    def get_content_height(self, container: Size, viewport: Size, width: int) -> int:
+        """Calculate content height for scrolling."""
+        if not self._tileset or not self._tileset.tiles:
+            return 1
+        
+        tiles_per_row = self._tileset.tiles_per_row or 1
+        tile_h = self._tileset.tile_height
+        total_tile_rows = (len(self._tileset.tiles) + tiles_per_row - 1) // tiles_per_row
+        pixel_height = total_tile_rows * tile_h
+        
+        zoom = self.zoom
+        if self.edit_mode and zoom >= self.MIN_EDIT_ZOOM:
+            # Edit mode: 1 row per pixel (at zoom=4), more at higher zoom
+            rows_per_pixel = max(1, zoom // 4)
+            return pixel_height * rows_per_pixel
+        else:
+            # Display mode: 2 pixels per row (half-blocks)
+            return (pixel_height + 1) // 2
+    
+    def get_content_width(self, container: Size, viewport: Size, height: int) -> int:
+        """Calculate content width for horizontal scrolling."""
+        if not self._tileset or not self._tileset.tiles:
+            return 1
+        
+        tiles_per_row = self._tileset.tiles_per_row or 1
+        tile_w = self._tileset.tile_width
+        pixel_width = tiles_per_row * tile_w
+        
+        zoom = self.zoom
+        if self.edit_mode and zoom >= self.MIN_EDIT_ZOOM:
+            # Edit mode: 2 chars per pixel (at zoom=4), more at higher zoom
+            chars_per_pixel = zoom // 2
+            # Add grid lines between tiles
+            grid_chars = (tiles_per_row - 1) if self.show_grid else 0
+            return pixel_width * chars_per_pixel + grid_chars
+        else:
+            # Display mode: 1 char per pixel
+            grid_chars = (tiles_per_row - 1) if self.show_grid else 0
+            return pixel_width + grid_chars
+    
+    def action_zoom_in(self) -> None:
+        """Increase zoom level."""
+        if self.zoom < 16:
+            self.zoom = min(16, self.zoom * 2)
+            self.refresh()
+    
+    def action_zoom_out(self) -> None:
+        """Decrease zoom level."""
+        # In edit mode, don't go below MIN_EDIT_ZOOM
+        min_zoom = self.MIN_EDIT_ZOOM if self.edit_mode else 1
+        if self.zoom > min_zoom:
+            self.zoom = max(min_zoom, self.zoom // 2)
+            self.refresh()
+    
+    def action_toggle_grid(self) -> None:
+        """Toggle grid display."""
+        self.show_grid = not self.show_grid
+        self.refresh()
+    
+    def action_toggle_edit_mode(self) -> None:
+        """Toggle between edit mode (full blocks) and display mode (half blocks)."""
+        self.edit_mode = not self.edit_mode
+        if self.edit_mode and self.zoom < self.MIN_EDIT_ZOOM:
+            self.zoom = self.MIN_EDIT_ZOOM
+        mode_name = "Edit" if self.edit_mode else "Display"
+        self.app.notify(f"{mode_name} mode", severity="information")
+        self.refresh()
+
+    def action_set_tool(self, tool: str) -> None:
+        """Set the current drawing tool."""
+        valid_tools = ("pencil", "eyedropper", "fill", "line", "rect", "ellipse")
+        if tool in valid_tools:
+            self.current_tool = tool
+            self.app.notify(f"Tool: {tool.capitalize()}", severity="information")
+    
+    def action_next_tile(self) -> None:
+        """Navigate to the next tile."""
+        if not self._tileset or not self._tileset.tiles:
+            return
+        max_idx = len(self._tileset.tiles) - 1
+        if self.current_tile_index < max_idx:
+            self.current_tile_index += 1
+            self.scroll_to_tile(self.current_tile_index)
+    
+    def action_prev_tile(self) -> None:
+        """Navigate to the previous tile."""
+        if not self._tileset or not self._tileset.tiles:
+            return
+        if self.current_tile_index > 0:
+            self.current_tile_index -= 1
+            self.scroll_to_tile(self.current_tile_index)
+    
+    def scroll_to_tile(self, tile_index: int) -> None:
+        """Scroll the canvas to center a specific tile on screen.
+        
+        Args:
+            tile_index: Index of the tile to scroll to
+        """
+        if not self._tileset or not self._tileset.tiles:
+            return
+        
+        if tile_index < 0 or tile_index >= len(self._tileset.tiles):
+            return
+        
+        tiles_per_row = self._tileset.tiles_per_row or 1
+        tile_w = self._tileset.tile_width
+        tile_h = self._tileset.tile_height
+        
+        # Calculate tile position
+        tile_row = tile_index // tiles_per_row
+        tile_col = tile_index % tiles_per_row
+        
+        # Calculate pixel position of tile center
+        pixel_x = tile_col * tile_w + tile_w // 2
+        pixel_y = tile_row * tile_h + tile_h // 2
+        
+        # Convert to terminal coordinates based on mode
+        zoom = self.zoom
+        if self.edit_mode and zoom >= self.MIN_EDIT_ZOOM:
+            chars_per_pixel = zoom // 2
+            rows_per_pixel = max(1, zoom // 4)
+            grid_offset = tile_col if self.show_grid else 0
+            h_grid_offset = tile_row if self.show_grid else 0  # Horizontal grid lines
+            target_x = pixel_x * chars_per_pixel + grid_offset
+            target_y = pixel_y * rows_per_pixel + h_grid_offset
+            
+            # Calculate tile dimensions in terminal chars
+            tile_width_chars = tile_w * chars_per_pixel
+            tile_height_rows = tile_h * rows_per_pixel
+        else:
+            grid_offset = tile_col if self.show_grid else 0
+            h_grid_offset = tile_row if self.show_grid else 0
+            target_x = pixel_x + grid_offset
+            target_y = pixel_y // 2 + h_grid_offset
+            
+            tile_width_chars = tile_w
+            tile_height_rows = tile_h // 2
+        
+        # Center the tile on screen by offsetting by half the viewport
+        viewport_w = self.size.width
+        viewport_h = self.size.height
+        
+        # Calculate scroll position to center the tile
+        scroll_x = max(0, target_x - viewport_w // 2)
+        scroll_y = max(0, target_y - viewport_h // 2)
+        
+        # Scroll to position
+        self.scroll_to(scroll_x, scroll_y, animate=True)
+        
+        # Update the current tile index
+        self.current_tile_index = tile_index
+        
+        # Post message for other widgets to sync
+        self.post_message(self.TileNavigated(tile_index))
+    
+    def watch_current_tile_index(self, tile_index: int) -> None:
+        """React to tile index changes."""
+        self.refresh()
+    
+    class TileNavigated(Message):
+        """Message sent when navigating to a tile."""
+        def __init__(self, tile_index: int):
+            super().__init__()
+            self.tile_index = tile_index
+
+    # =========================================================================
+    # Mouse handling for drawing
+    # =========================================================================
+    
+    def _terminal_to_pixel(self, x: int, y: int) -> Tuple[int, int] | None:
+        """Convert terminal coordinates to pixel coordinates.
+        
+        In EDIT MODE (full blocks):
+        - chars_per_pixel = zoom // 2 (zoom=4 -> 2 chars, zoom=8 -> 4 chars)
+        - rows_per_pixel = zoom // 4 (zoom=4 -> 1 row, zoom=8 -> 2 rows)
+        - Simple integer division gives exact pixel
+        
+        In DISPLAY MODE (half blocks):
+        - 1 char per pixel horizontally
+        - 2 pixels per row vertically (can't distinguish, returns top pixel)
+        
+        Args:
+            x: Terminal column (0-based, viewport-relative)
+            y: Terminal row (0-based, viewport-relative)
+            
+        Returns:
+            (pixel_x, pixel_y) or None if outside image bounds
+        """
+        if not self._tileset or not self._tileset.tiles:
+            return None
+        
+        # Add scroll offset to convert viewport coords to content coords
+        scroll_x, scroll_y = self.scroll_offset
+        content_x = x + scroll_x
+        content_y = y + scroll_y
+        
+        zoom = self.zoom
+        tiles_per_row = self._tileset.tiles_per_row or 1
+        tile_w = self._tileset.tile_width
+        tile_h = self._tileset.tile_height
+        
+        # Total pixel dimensions for bounds checking
+        total_tile_rows = (len(self._tileset.tiles) + tiles_per_row - 1) // tiles_per_row
+        pixel_height = total_tile_rows * tile_h
+        pixel_width = tiles_per_row * tile_w
+        
+        if self.edit_mode and zoom >= self.MIN_EDIT_ZOOM:
+            # EDIT MODE: Full blocks
+            chars_per_pixel = zoom // 2
+            rows_per_pixel = max(1, zoom // 4)
+            
+            # Handle grid lines in X
+            if self.show_grid:
+                chars_per_tile_col = tile_w * chars_per_pixel + 1
+                tile_col = content_x // chars_per_tile_col
+                x_in_tile_area = content_x % chars_per_tile_col
+                
+                # Clicking on grid line?
+                if x_in_tile_area >= tile_w * chars_per_pixel:
+                    return None
+                
+                pixel_x = tile_col * tile_w + x_in_tile_area // chars_per_pixel
+            else:
+                pixel_x = content_x // chars_per_pixel
+            
+            pixel_y = content_y // rows_per_pixel
+        
+        else:
+            # DISPLAY MODE: Half blocks (read-only, but still need coordinate conversion)
+            # 1 char per pixel X, 2 pixels per row Y
+            if self.show_grid:
+                chars_per_tile_col = tile_w + 1
+                tile_col = content_x // chars_per_tile_col
+                x_in_tile_area = content_x % chars_per_tile_col
+                
+                if x_in_tile_area >= tile_w:
+                    return None
+                
+                pixel_x = tile_col * tile_w + x_in_tile_area
+            else:
+                pixel_x = content_x
+            
+            # Can only target top pixel of each pair in display mode
+            pixel_y = content_y * 2
+        
+        # Bounds check
+        if 0 <= pixel_x < pixel_width and 0 <= pixel_y < pixel_height:
+            return (pixel_x, pixel_y)
+        return None
+    
+    def _save_undo_state(self) -> None:
+        """Save current tile state for undo."""
+        if not self._tileset:
+            return
+        
+        # Deep copy all tile pixel data
+        state = []
+        for tile in self._tileset.tiles:
+            tile_data = [row[:] for row in tile.pixels]
+            state.append(tile_data)
+        
+        self._undo_stack.append(state)
+        
+        # Limit stack size
+        if len(self._undo_stack) > self.MAX_UNDO_STEPS:
+            self._undo_stack.pop(0)
+        
+        # Clear redo stack on new edit
+        self._redo_stack.clear()
+    
+    def _restore_state(self, state: List[List[List[int]]]) -> None:
+        """Restore tile state from a snapshot."""
+        if not self._tileset:
+            return
+        
+        for tile_idx, tile_data in enumerate(state):
+            if tile_idx < len(self._tileset.tiles):
+                tile = self._tileset.tiles[tile_idx]
+                tile.pixels = [row[:] for row in tile_data]
+        
+        self.refresh()
+    
+    def action_undo(self) -> None:
+        """Undo the last edit."""
+        if not self._undo_stack or not self._tileset:
+            return
+        
+        # Save current state to redo stack
+        current_state = []
+        for tile in self._tileset.tiles:
+            current_state.append([row[:] for row in tile.pixels])
+        self._redo_stack.append(current_state)
+        
+        # Restore from undo stack
+        state = self._undo_stack.pop()
+        self._restore_state(state)
+        
+        if not self._undo_stack:
+            self.is_modified = False
+    
+    def action_redo(self) -> None:
+        """Redo the last undone edit."""
+        if not self._redo_stack or not self._tileset:
+            return
+        
+        # Save current state to undo stack
+        current_state = []
+        for tile in self._tileset.tiles:
+            current_state.append([row[:] for row in tile.pixels])
+        self._undo_stack.append(current_state)
+        
+        # Restore from redo stack
+        state = self._redo_stack.pop()
+        self._restore_state(state)
+        self.is_modified = True
+    
+    def _set_pixel(self, pixel_x: int, pixel_y: int, color_index: int) -> None:
+        """Set a pixel to the given color index."""
+        if not self._tileset:
+            return
+        
+        tile_w = self._tileset.tile_width
+        tile_h = self._tileset.tile_height
+        tiles_per_row = self._tileset.tiles_per_row or 1
+        
+        tile_col = pixel_x // tile_w
+        tile_row = pixel_y // tile_h
+        tile_idx = tile_row * tiles_per_row + tile_col
+        
+        tile = self._tileset.get_tile(tile_idx)
+        if tile:
+            tile_x = pixel_x % tile_w
+            tile_y = pixel_y % tile_h
+            tile.set_pixel(tile_x, tile_y, color_index)
+    
+    def _get_pixel_index(self, pixel_x: int, pixel_y: int) -> int:
+        """Get the color index at a pixel position."""
+        if not self._tileset:
+            return 0
+        
+        tile_w = self._tileset.tile_width
+        tile_h = self._tileset.tile_height
+        tiles_per_row = self._tileset.tiles_per_row or 1
+        
+        tile_col = pixel_x // tile_w
+        tile_row = pixel_y // tile_h
+        tile_idx = tile_row * tiles_per_row + tile_col
+        
+        tile = self._tileset.get_tile(tile_idx)
+        if tile:
+            tile_x = pixel_x % tile_w
+            tile_y = pixel_y % tile_h
+            return tile.get_pixel(tile_x, tile_y)
+        return 0
+    
+    def _get_image_bounds(self) -> tuple[int, int]:
+        """Get the image dimensions in pixels."""
+        if not self._tileset:
+            return (0, 0)
+        return (self._tileset.image_width, self._tileset.image_height)
+    
+    def _is_in_bounds(self, x: int, y: int) -> bool:
+        """Check if pixel coordinates are within image bounds."""
+        w, h = self._get_image_bounds()
+        return 0 <= x < w and 0 <= y < h
+    
+    def _flood_fill(self, start_x: int, start_y: int, fill_color: int) -> None:
+        """Flood fill from a starting point with the given color.
+        
+        Uses iterative approach to avoid recursion limit issues.
+        """
+        if not self._tileset:
+            return
+        
+        w, h = self._get_image_bounds()
+        if not self._is_in_bounds(start_x, start_y):
+            return
+        
+        target_color = self._get_pixel_index(start_x, start_y)
+        if target_color == fill_color:
+            return  # Nothing to fill
+        
+        # Use a stack for flood fill (iterative)
+        stack = [(start_x, start_y)]
+        visited = set()
+        
+        while stack:
+            x, y = stack.pop()
+            
+            if (x, y) in visited:
+                continue
+            if not self._is_in_bounds(x, y):
+                continue
+            if self._get_pixel_index(x, y) != target_color:
+                continue
+            
+            visited.add((x, y))
+            self._set_pixel(x, y, fill_color)
+            
+            # Add adjacent pixels
+            stack.append((x + 1, y))
+            stack.append((x - 1, y))
+            stack.append((x, y + 1))
+            stack.append((x, y - 1))
+    
+    def _get_line_pixels(self, x0: int, y0: int, x1: int, y1: int) -> list[tuple[int, int]]:
+        """Get pixels on a line using Bresenham's algorithm."""
+        pixels = []
+        
+        dx = abs(x1 - x0)
+        dy = abs(y1 - y0)
+        sx = 1 if x0 < x1 else -1
+        sy = 1 if y0 < y1 else -1
+        err = dx - dy
+        
+        x, y = x0, y0
+        while True:
+            if self._is_in_bounds(x, y):
+                pixels.append((x, y))
+            
+            if x == x1 and y == y1:
+                break
+            
+            e2 = 2 * err
+            if e2 > -dy:
+                err -= dy
+                x += sx
+            if e2 < dx:
+                err += dx
+                y += sy
+        
+        return pixels
+    
+    def _get_rect_pixels(self, x0: int, y0: int, x1: int, y1: int, filled: bool = False) -> list[tuple[int, int]]:
+        """Get pixels for a rectangle (outline or filled)."""
+        pixels = []
+        
+        # Normalize coordinates
+        left = min(x0, x1)
+        right = max(x0, x1)
+        top = min(y0, y1)
+        bottom = max(y0, y1)
+        
+        if filled:
+            for y in range(top, bottom + 1):
+                for x in range(left, right + 1):
+                    if self._is_in_bounds(x, y):
+                        pixels.append((x, y))
+        else:
+            # Top and bottom edges
+            for x in range(left, right + 1):
+                if self._is_in_bounds(x, top):
+                    pixels.append((x, top))
+                if self._is_in_bounds(x, bottom) and top != bottom:
+                    pixels.append((x, bottom))
+            # Left and right edges (excluding corners already added)
+            for y in range(top + 1, bottom):
+                if self._is_in_bounds(left, y):
+                    pixels.append((left, y))
+                if self._is_in_bounds(right, y) and left != right:
+                    pixels.append((right, y))
+        
+        return pixels
+    
+    def _get_ellipse_pixels(self, x0: int, y0: int, x1: int, y1: int, filled: bool = False) -> list[tuple[int, int]]:
+        """Get pixels for an ellipse (outline or filled) using midpoint algorithm."""
+        pixels = []
+        
+        # Calculate center and radii
+        cx = (x0 + x1) // 2
+        cy = (y0 + y1) // 2
+        rx = abs(x1 - x0) // 2
+        ry = abs(y1 - y0) // 2
+        
+        if rx == 0 or ry == 0:
+            # Degenerate case: draw a line
+            return self._get_line_pixels(x0, y0, x1, y1)
+        
+        # Use a set to track pixels (ellipse algorithm may add duplicates)
+        pixel_set = set()
+        
+        # Midpoint ellipse algorithm
+        rx2 = rx * rx
+        ry2 = ry * ry
+        
+        # Region 1
+        x = 0
+        y = ry
+        d1 = ry2 - rx2 * ry + 0.25 * rx2
+        
+        while ry2 * x < rx2 * y:
+            if filled:
+                # Fill horizontal line from -x to x
+                for px in range(cx - x, cx + x + 1):
+                    if self._is_in_bounds(px, cy + y):
+                        pixel_set.add((px, cy + y))
+                    if self._is_in_bounds(px, cy - y):
+                        pixel_set.add((px, cy - y))
+            else:
+                # Add outline points
+                for px, py in [(cx + x, cy + y), (cx - x, cy + y), 
+                               (cx + x, cy - y), (cx - x, cy - y)]:
+                    if self._is_in_bounds(px, py):
+                        pixel_set.add((px, py))
+            
+            if d1 < 0:
+                x += 1
+                d1 += 2 * ry2 * x + ry2
+            else:
+                x += 1
+                y -= 1
+                d1 += 2 * ry2 * x - 2 * rx2 * y + ry2
+        
+        # Region 2
+        d2 = ry2 * (x + 0.5) ** 2 + rx2 * (y - 1) ** 2 - rx2 * ry2
+        
+        while y >= 0:
+            if filled:
+                for px in range(cx - x, cx + x + 1):
+                    if self._is_in_bounds(px, cy + y):
+                        pixel_set.add((px, cy + y))
+                    if self._is_in_bounds(px, cy - y):
+                        pixel_set.add((px, cy - y))
+            else:
+                for px, py in [(cx + x, cy + y), (cx - x, cy + y),
+                               (cx + x, cy - y), (cx - x, cy - y)]:
+                    if self._is_in_bounds(px, py):
+                        pixel_set.add((px, py))
+            
+            if d2 > 0:
+                y -= 1
+                d2 -= 2 * rx2 * y + rx2
+            else:
+                x += 1
+                y -= 1
+                d2 += 2 * ry2 * x - 2 * rx2 * y + rx2
+        
+        pixels = list(pixel_set)
+        return pixels
+    
+    def _draw_shape(self, pixels: list[tuple[int, int]], color_index: int) -> None:
+        """Draw a list of pixels with the given color."""
+        for x, y in pixels:
+            self._set_pixel(x, y, color_index)
+
+    def on_mouse_down(self, event) -> None:
+        """Handle mouse button press."""
+        if not self._tileset:
+            return
+        
+        # Convert terminal coordinates to pixel coordinates
+        pixel_pos = self._terminal_to_pixel(event.x, event.y)
+        if not pixel_pos:
+            return
+        
+        pixel_x, pixel_y = pixel_pos
+        
+        # Ctrl+Click to select tile
+        if event.ctrl:
+            tile_w = self._tileset.tile_width
+            tile_h = self._tileset.tile_height
+            tiles_per_row = self._tileset.tiles_per_row or 1
+            tile_col = pixel_x // tile_w
+            tile_row = pixel_y // tile_h
+            tile_idx = tile_row * tiles_per_row + tile_col
+            if 0 <= tile_idx < len(self._tileset.tiles):
+                self.scroll_to_tile(tile_idx)
+                self.app.notify(f"Selected tile {tile_idx:02X}", severity="information")
+            event.stop()
+            return
+        
+        if self.current_tool == "eyedropper":
+            # Sample color from canvas
+            color_idx = self._get_pixel_index(pixel_x, pixel_y)
+            self.current_color_index = color_idx
+            self.app.notify(f"Picked color {color_idx}", severity="information")
+            # Notify parent to update palette display
+            self.post_message(self.ColorPicked(color_idx))
+        
+        elif self.current_tool == "pencil":
+            # Only allow drawing in edit mode
+            if not self.edit_mode:
+                self.app.notify("Press 'd' to enter Edit mode for drawing", severity="warning")
+                return
+            
+            # Start drawing
+            self._is_drawing = True
+            self._save_undo_state()
+            self._set_pixel(pixel_x, pixel_y, self.current_color_index)
+            self._last_draw_pos = (pixel_x, pixel_y)
+            self.is_modified = True
+            self.refresh()
+        
+        elif self.current_tool == "fill":
+            # Flood fill
+            if not self.edit_mode:
+                self.app.notify("Press 'd' to enter Edit mode for drawing", severity="warning")
+                return
+            
+            self._save_undo_state()
+            self._flood_fill(pixel_x, pixel_y, self.current_color_index)
+            self.is_modified = True
+            self.refresh()
+            self.app.notify("Fill complete", severity="information")
+        
+        elif self.current_tool in ("line", "rect", "ellipse"):
+            # Start shape drawing
+            if not self.edit_mode:
+                self.app.notify("Press 'd' to enter Edit mode for drawing", severity="warning")
+                return
+            
+            self._shape_start = (pixel_x, pixel_y)
+            self._shape_preview = {(pixel_x, pixel_y)}
+            self._is_drawing = True
+            self.refresh()
+        
+        event.stop()
+    
+    def on_mouse_move(self, event) -> None:
+        """Handle mouse movement (for drag drawing and shape preview)."""
+        if not self._is_drawing or not self._tileset:
+            return
+        
+        pixel_pos = self._terminal_to_pixel(event.x, event.y)
+        if not pixel_pos:
+            return
+        
+        pixel_x, pixel_y = pixel_pos
+        
+        if self.current_tool == "pencil":
+            # Only draw if position changed
+            if (pixel_x, pixel_y) != self._last_draw_pos:
+                self._set_pixel(pixel_x, pixel_y, self.current_color_index)
+                self._last_draw_pos = (pixel_x, pixel_y)
+                self.refresh()
+        
+        elif self.current_tool in ("line", "rect", "ellipse") and self._shape_start:
+            # Update shape preview
+            x0, y0 = self._shape_start
+            if self.current_tool == "line":
+                self._shape_preview = set(self._get_line_pixels(x0, y0, pixel_x, pixel_y))
+            elif self.current_tool == "rect":
+                self._shape_preview = set(self._get_rect_pixels(x0, y0, pixel_x, pixel_y, filled=False))
+            elif self.current_tool == "ellipse":
+                self._shape_preview = set(self._get_ellipse_pixels(x0, y0, pixel_x, pixel_y, filled=False))
+            self.refresh()
+    
+    def on_mouse_up(self, event) -> None:
+        """Handle mouse button release."""
+        if self.current_tool in ("line", "rect", "ellipse") and self._shape_start and self._shape_preview:
+            # Draw the final shape
+            pixel_pos = self._terminal_to_pixel(event.x, event.y)
+            if pixel_pos:
+                x0, y0 = self._shape_start
+                pixel_x, pixel_y = pixel_pos
+                
+                self._save_undo_state()
+                
+                if self.current_tool == "line":
+                    pixels = self._get_line_pixels(x0, y0, pixel_x, pixel_y)
+                elif self.current_tool == "rect":
+                    pixels = self._get_rect_pixels(x0, y0, pixel_x, pixel_y, filled=False)
+                elif self.current_tool == "ellipse":
+                    pixels = self._get_ellipse_pixels(x0, y0, pixel_x, pixel_y, filled=False)
+                else:
+                    pixels = []
+                
+                self._draw_shape(pixels, self.current_color_index)
+                self.is_modified = True
+                self.refresh()
+        
+        self._is_drawing = False
+        self._last_draw_pos = None
+        self._shape_start = None
+        self._shape_preview = set()
+    
+    # Custom message for color picking
+    class ColorPicked(Message):
+        """Message sent when a color is picked from the canvas."""
+        def __init__(self, color_index: int):
+            super().__init__()
+            self.color_index = color_index
+
+
+class PaletteBar(Widget):
+    """Interactive palette bar for selecting colors.
+    
+    Displays palette colors as clickable swatches.
+    Click to select a color for drawing.
+    """
+    
+    DEFAULT_CSS = """
+    PaletteBar {
+        height: 3;
+        background: $panel;
+        padding: 0 1;
+    }
+    """
+    
+    selected_index: reactive[int] = reactive(1)
+    
+    def __init__(
+        self,
+        palette: SNESPalette | None = None,
+        name: str | None = None,
+        id: str | None = None,
+        classes: str | None = None,
+    ):
+        super().__init__(name=name, id=id, classes=classes)
+        self._palette = palette
+        self._swatch_width = 2  # Chars per color swatch
+    
+    @property
+    def palette(self) -> SNESPalette | None:
+        return self._palette
+    
+    @palette.setter
+    def palette(self, value: SNESPalette | None) -> None:
+        self._palette = value
+        self.refresh()
+    
+    def render(self) -> Text:
+        """Render the palette as colored swatches."""
+        if not self._palette:
+            return Text("[dim]No palette[/dim]")
+        
+        text = Text()
+        text.append("Palette: ")
+        
+        num_colors = min(16, self._palette.colors_per_palette)
+        for i in range(num_colors):
+            r, g, b = self._palette.get_color(0, i)
+            
+            if i == self.selected_index:
+                # Highlight selected with brackets and bold
+                text.append("[", style="bold white")
+                text.append(f"{i:X}", style=f"bold white on rgb({r},{g},{b})")
+                text.append("]", style="bold white")
+            else:
+                # Regular swatch - 2 chars wide
+                text.append("  ", style=f"on rgb({r},{g},{b})")
+        
+        return text
+    
+    def on_click(self, event: Click) -> None:
+        """Handle click to select a color."""
+        if not self._palette:
+            return
+        
+        # Calculate which swatch was clicked
+        # "Palette: " is 9 chars, then 2 chars per swatch (or 3 for selected with brackets)
+        x = event.x
+        prefix_len = 9  # "Palette: "
+        
+        if x < prefix_len:
+            return
+        
+        # Account for the variable width of selected swatch
+        click_pos = x - prefix_len
+        
+        # Calculate swatch index based on position
+        # Each swatch is 2 chars wide, except selected which is 3 (brackets + hex)
+        num_colors = min(16, self._palette.colors_per_palette)
+        
+        current_pos = 0
+        for i in range(num_colors):
+            if i == self.selected_index:
+                swatch_width = 3  # [X]
+            else:
+                swatch_width = 2  # "  "
+            
+            if current_pos <= click_pos < current_pos + swatch_width:
+                # Clicked on this swatch
+                self.selected_index = i
+                self.post_message(self.ColorSelected(i))
+                return
+            
+            current_pos += swatch_width
+    
+    class ColorSelected(Message):
+        """Message sent when a color is selected from the palette."""
+        def __init__(self, color_index: int):
+            super().__init__()
+            self.color_index = color_index
+
+
+class ToolSelector(Widget):
+    """Widget for selecting drawing tools.
+    
+    Displays tool buttons that can be clicked to select the active tool.
+    Each tool on its own line for clarity.
+    """
+    
+    DEFAULT_CSS = """
+    ToolSelector {
+        height: auto;
+        padding: 0 1;
+        background: $panel;
+    }
+    """
+    
+    # Available tools with their display info
+    TOOLS = [
+        ("pencil", "✏️", "Pencil", "P"),
+        ("eyedropper", "💉", "Eyedropper", "Y"),
+        ("fill", "🪣", "Fill", "B"),
+        ("line", "╱", "Line", "L"),
+        ("rect", "▭", "Rectangle", "T"),
+        ("ellipse", "◯", "Ellipse", "E"),
+    ]
+    
+    selected_tool: reactive[str] = reactive("pencil")
+    
+    def render(self) -> Text:
+        """Render the tool selector with each tool on its own line."""
+        text = Text()
+        
+        for i, (tool_id, icon, name, key) in enumerate(self.TOOLS):
+            if i > 0:
+                text.append("\n")
+            
+            if tool_id == self.selected_tool:
+                # Selected tool - highlighted
+                text.append(f" {icon} {name} ", style="bold reverse")
+                text.append(f" [{key}]", style="dim")
+            else:
+                text.append(f" {icon} {name} ", style="")
+                text.append(f" [{key}]", style="dim")
+        
+        return text
+    
+    def on_click(self, event: Click) -> None:
+        """Handle click to select a tool."""
+        # Each tool is on its own line
+        y = event.y
+        
+        if 0 <= y < len(self.TOOLS):
+            tool_id = self.TOOLS[y][0]
+            self.selected_tool = tool_id
+            self.post_message(self.ToolSelected(tool_id))
+            self.refresh()
+    
+    class ToolSelected(Message):
+        """Message sent when a tool is selected."""
+        def __init__(self, tool: str):
+            super().__init__()
+            self.tool = tool
+
+
+class TilesetPreview(Widget):
+    """Widget showing thumbnail previews of tiles in a tileset.
+    
+    Displays a grid of tile thumbnails that can be clicked to select.
+    Uses compact half-block rendering for tile display.
+    """
+    
+    DEFAULT_CSS = """
+    TilesetPreview {
+        height: auto;
+        min-height: 5;
+        max-height: 12;
+        padding: 0 1;
+        background: $panel;
+        overflow-y: auto;
+    }
+    """
+    
+    selected_tile: reactive[int] = reactive(0)
+    
+    def __init__(
+        self,
+        tileset: SNESTileset | None = None,
+        name: str | None = None,
+        id: str | None = None,
+        classes: str | None = None,
+    ):
+        super().__init__(name=name, id=id, classes=classes)
+        self._tileset = tileset
+        self._tiles_per_row = 8  # How many tile thumbnails per row
+    
+    @property
+    def tileset(self) -> SNESTileset | None:
+        return self._tileset
+    
+    @tileset.setter
+    def tileset(self, value: SNESTileset | None) -> None:
+        self._tileset = value
+        self.refresh()
+    
+    def render(self) -> Text:
+        """Render tile thumbnails as a grid."""
+        if not self._tileset or not self._tileset.tiles:
+            return Text("[dim]No tileset loaded[/dim]")
+        
+        text = Text()
+        text.append(f"Tiles: {len(self._tileset.tiles)}\n")
+        
+        # Render compact tile index display
+        # Each tile shown as its index in a colored square
+        tiles_per_row = self._tiles_per_row
+        for i, tile in enumerate(self._tileset.tiles):
+            if i > 0 and i % tiles_per_row == 0:
+                text.append("\n")
+            
+            # Get the dominant/average color of the tile for background
+            avg_color = self._get_tile_avg_color(tile)
+            r, g, b = avg_color
+            
+            # Show tile index
+            if i == self.selected_tile:
+                text.append(f"[{i:02X}]", style=f"bold white on rgb({r},{g},{b})")
+            else:
+                text.append(f" {i:02X} ", style=f"on rgb({r},{g},{b})")
+        
+        return text
+    
+    def _get_tile_avg_color(self, tile: SNESTile) -> Tuple[int, int, int]:
+        """Get average color of a tile for preview background.
+        
+        Averages ALL pixels in the tile for a mosaic-like thumbnail effect.
+        This gives a better visual representation of the tile content.
+        """
+        if not self._tileset:
+            return (64, 64, 64)
+        
+        palette = self._tileset.palette
+        r_sum, g_sum, b_sum = 0, 0, 0
+        count = 0
+        
+        # Average ALL pixels for accurate color representation
+        for y in range(tile.height):
+            for x in range(tile.width):
+                idx = tile.get_pixel(x, y)
+                r, g, b = palette.get_color(0, idx)
+                r_sum += r
+                g_sum += g
+                b_sum += b
+                count += 1
+        
+        if count == 0:
+            return (64, 64, 64)
+        
+        return (r_sum // count, g_sum // count, b_sum // count)
+    
+    def on_click(self, event: Click) -> None:
+        """Handle click to select a tile."""
+        if not self._tileset or not self._tileset.tiles:
+            return
+        
+        # Calculate which tile was clicked
+        # First line is "Tiles: N\n"
+        y = event.y
+        x = event.x
+        
+        if y == 0:  # Header line
+            return
+        
+        # Each tile is 4 chars wide ([XX] or " XX ")
+        tile_row = y - 1  # Account for header
+        tile_col = x // 4
+        
+        tile_idx = tile_row * self._tiles_per_row + tile_col
+        
+        if 0 <= tile_idx < len(self._tileset.tiles):
+            self.selected_tile = tile_idx
+            self.post_message(self.TileSelected(tile_idx))
+            self.refresh()
+    
+    class TileSelected(Message):
+        """Message sent when a tile is selected."""
+        def __init__(self, tile_index: int):
+            super().__init__()
+            self.tile_index = tile_index
+
+
+class TileEditorPanel(Static):
+    """Panel for displaying and editing SNES tile graphics.
+    
+    Contains the pixel canvas, palette display, and status information.
+    Similar structure to CodeViewer but for graphics.
+    """
+    
+    DEFAULT_CSS = """
+    TileEditorPanel {
+        width: 100%;
+        height: 100%;
+        background: $surface;
+    }
+    
+    TileEditorPanel > #pixel-canvas {
+        width: 100%;
+        height: 1fr;
+    }
+    
+    TileEditorPanel > #tile-palette-bar {
+        dock: bottom;
+        height: 1;
+        background: $panel;
+    }
+    
+    TileEditorPanel > #tile-status-bar {
+        dock: bottom;
+        height: 1;
+        background: $primary 30%;
+        padding: 0 1;
+    }
+    """
+    
+    file_path: reactive[Path | None] = reactive(None)
+    
+    def __init__(
+        self,
+        name: str | None = None,
+        id: str | None = None,
+        classes: str | None = None,
+    ):
+        super().__init__(name=name, id=id, classes=classes)
+        self._tileset: SNESTileset | None = None
+    
+    def compose(self) -> ComposeResult:
+        yield Label("", id="tile-status-bar")
+        yield PixelCanvas(id="pixel-canvas")
+        yield PaletteBar(id="tile-palette-bar")
+    
+    def watch_file_path(self, file_path: Path | None) -> None:
+        """Load and display image when path changes."""
+        status = self.query_one("#tile-status-bar", Label)
+        palette_bar = self.query_one("#tile-palette-bar", PaletteBar)
+        canvas = self.query_one("#pixel-canvas", PixelCanvas)
+        
+        if file_path is None:
+            status.update("[dim]Select an image file to edit[/dim]")
+            palette_bar.palette = None
+            canvas.tileset = None
+            return
+        
+        if not HAS_PIL:
+            status.update("[red]PIL/Pillow not installed - cannot load images[/red]")
+            return
+        
+        if not file_path.exists():
+            status.update(f"[red]File not found: {file_path}[/red]")
+            return
+        
+        # Load the image as a tileset
+        self._tileset = SNESTileset(tile_width=8, tile_height=8, bpp=4)
+        if self._tileset.load_from_path(file_path):
+            canvas.tileset = self._tileset
+            palette_bar.palette = self._tileset.palette
+            palette_bar.selected_index = canvas.current_color_index
+            
+            # Update status
+            tile_count = self._tileset.tile_count
+            w, h = self._tileset.image_width, self._tileset.image_height
+            status.update(
+                f"📄 {file_path.name} | {w}×{h}px | {tile_count} tiles | "
+                f"Zoom: {canvas.zoom}x | [dim]G=grid, +/-=zoom[/dim]"
+            )
+        else:
+            status.update(f"[red]Failed to load: {file_path}[/red]")
+            canvas.tileset = None
+            palette_bar.palette = None
+    
+    def on_palette_bar_color_selected(self, event: PaletteBar.ColorSelected) -> None:
+        """Handle color selection from palette bar."""
+        canvas = self.query_one("#pixel-canvas", PixelCanvas)
+        canvas.current_color_index = event.color_index
+        self._update_status()
+    
+    def on_pixel_canvas_color_picked(self, event: PixelCanvas.ColorPicked) -> None:
+        """Update palette bar when color is picked from canvas (eyedropper)."""
+        palette_bar = self.query_one("#tile-palette-bar", PaletteBar)
+        palette_bar.selected_index = event.color_index
+        self._update_status()
+    
+    def on_pixel_canvas_tile_navigated(self, event: PixelCanvas.TileNavigated) -> None:
+        """Update status bar when tile navigation occurs."""
+        self._update_status()
+    
+    def _update_status(self) -> None:
+        """Refresh the status bar display."""
+        canvas = self.query_one("#pixel-canvas", PixelCanvas)
+        status = self.query_one("#tile-status-bar", Label)
+        
+        if not self._tileset:
+            return
+        
+        tile_count = self._tileset.tile_count
+        w, h = self._tileset.image_width, self._tileset.image_height
+        modified = " [yellow]●[/yellow]" if canvas.is_modified else ""
+        
+        # Handle unsaved new tilesets
+        filename = self.file_path.name if self.file_path else "[New Tileset]"
+        
+        status.update(
+            f"📄 {filename}{modified} | {w}×{h}px | {tile_count} tiles | "
+            f"Zoom: {canvas.zoom}x | Tile: {canvas.current_tile_index:02X} | "
+            f"[dim]G=grid, Tab=next tile[/dim]"
+        )
+    
+    def save_image(self) -> bool:
+        """Save the current image back to disk.
+        
+        Returns:
+            True if save succeeded, False otherwise
+        """
+        if not HAS_PIL or not self._tileset or not self.file_path:
+            return False
+        
+        canvas = self.query_one("#pixel-canvas", PixelCanvas)
+        
+        # Reconstruct PIL Image from tiles
+        from PIL import Image
+        
+        w = self._tileset.image_width
+        h = self._tileset.image_height
+        tile_w = self._tileset.tile_width
+        tile_h = self._tileset.tile_height
+        tiles_per_row = self._tileset.tiles_per_row or 1
+        
+        # Create RGB image
+        img = Image.new("RGB", (w, h))
+        
+        for tile_idx, tile in enumerate(self._tileset.tiles):
+            tile_row = tile_idx // tiles_per_row
+            tile_col = tile_idx % tiles_per_row
+            
+            base_x = tile_col * tile_w
+            base_y = tile_row * tile_h
+            
+            for y in range(tile_h):
+                for x in range(tile_w):
+                    color_idx = tile.get_pixel(x, y)
+                    r, g, b = self._tileset.palette.get_color(0, color_idx)
+                    px_x = base_x + x
+                    px_y = base_y + y
+                    if px_x < w and px_y < h:
+                        img.putpixel((px_x, px_y), (r, g, b))
+        
+        # Save with same format as original
+        try:
+            img.save(self.file_path)
+            canvas.is_modified = False
+            self._update_status()
+            return True
+        except Exception as e:
+            self.app.notify(f"Save failed: {e}", severity="error")
+            return False
+
+
+class ProjectTree(DirectoryTree):
+    """Project file browser with filtering for relevant files."""
+    
+    DEFAULT_CSS = """
+    ProjectTree {
+        height: auto;
+        max-height: 20;
+        background: $panel;
+        scrollbar-gutter: stable;
+    }
+    """
+
+    # File extensions to show
+    SHOW_EXTENSIONS = {
+        ".c", ".h", ".cpp", ".hpp", ".cc", ".cxx",
+        ".asm", ".s", ".inc",
+        ".py", ".java", ".cs",
+        ".json", ".yaml", ".yml", ".toml",
+        ".md", ".rst", ".txt",
+        ".sh", ".bash", ".bat", ".cmd", ".ps1",
+        ".xml", ".html", ".css",
+        ".lua", ".rb", ".rs", ".go",
+        # Graphics files for tile editor
+        ".png", ".bmp", ".gif", ".jpg", ".jpeg",
+        # SNES-specific formats
+        ".pic", ".pal", ".map", ".chr",
+    }
+    
+    # Filenames to always show (case-insensitive)
+    SHOW_NAMES = {
+        "makefile", "gnumakefile", "cmakelists.txt", 
+        "readme", "license", "copying", "changelog",
+        ".gitignore", ".gitattributes",
+    }
+    
+    # Directories to hide
+    HIDE_DIRS = {
+        "__pycache__", ".git", ".svn", ".hg", 
+        "node_modules", ".venv", "venv", ".env",
+        "build", "dist", ".tox", ".pytest_cache",
+        ".mypy_cache", ".ruff_cache", "target",
+    }
+
+    def filter_paths(self, paths: list[Path]) -> list[Path]:
+        """Filter paths to show only relevant files."""
+        filtered = []
+        for path in paths:
+            name_lower = path.name.lower()
+            
+            if path.is_dir():
+                # Hide certain directories
+                if name_lower not in self.HIDE_DIRS:
+                    filtered.append(path)
+            else:
+                # Show files with relevant extensions or special names
+                if (path.suffix.lower() in self.SHOW_EXTENSIONS or 
+                    name_lower in self.SHOW_NAMES or
+                    any(name_lower.startswith(n) for n in self.SHOW_NAMES)):
+                    filtered.append(path)
+        
+        return sorted(filtered, key=lambda p: (not p.is_dir(), p.name.lower()))
+
+
+class Sidebar(Widget):
+    """Animated sidebar with collapsible sections for Tools and Project."""
+
+    DEFAULT_CSS = """
+    Sidebar {
+        width: 45;
+        layer: sidebar;
+        dock: left;
+        offset-x: -100%;
+        background: $panel;
+        border-right: tall $background;
+        transition: offset 200ms;
+        overflow-y: auto;
+        
+        &.-visible {
+            offset-x: 0;
+        }
+        
+        #sidebar-title {
+            dock: top;
+            padding: 1 2;
+            background: $accent;
+            color: $text;
+            text-style: bold;
+            text-align: center;
+        }
+        
+        Collapsible {
+            padding: 0;
+            border: none;
+            background: $panel;
+        }
+        
+        CollapsibleTitle {
+            padding: 0 1;
+            background: $primary 30%;
+        }
+        
+        CollapsibleTitle:hover {
+            background: $primary 50%;
+        }
+        
+        ListView {
+            height: auto;
+            max-height: 25;
+            background: $panel;
+        }
+        
+        ListItem {
+            padding: 0 2;
+        }
+        
+        ListItem:hover {
+            background: $boost;
+        }
+        
+        ListItem.-selected {
+            background: $accent 30%;
+        }
+        
+        #project-tree-container {
+            height: auto;
+            max-height: 20;
+            background: $panel;
+        }
+        
+        #project-content {
+            height: auto;
+            max-height: 25;
+            background: $panel;
+        }
+        
+        #project-tree {
+            height: auto;
+            max-height: 24;
+        }
+        
+        #no-project-label {
+            padding: 1 2;
+            color: $text-muted;
+        }
+    }
+    """
+    
+    project_path: reactive[Path | None] = reactive(None)
+
+    def compose(self) -> ComposeResult:
+        yield Label("⚡ SNES-IDE", id="sidebar-title")
+        with VerticalScroll():
+            with Collapsible(title="📁 Project", collapsed=False, id="project-section"):
+                with Vertical(id="project-content"):
+                    yield Label("[dim]No project open[/dim]", id="no-project-label")
+                    # ProjectTree will be added here dynamically
+            with Collapsible(title="✏️ Drawing", collapsed=True, id="drawing-section"):
+                with Vertical(id="drawing-content"):
+                    yield ToolSelector(id="tool-selector")
+                    yield TilesetPreview(id="tileset-preview")
+            with Collapsible(title="🛠 Tools", collapsed=False, id="tools-section"):
+                yield ListView(id="tool-list")
+    
+    def watch_project_path(self, project_path: Path | None) -> None:
+        """Update the project tree when path changes."""
+        project_content = self.query_one("#project-content", Vertical)
+        no_project_label = self.query_one("#no-project-label", Label)
+        
+        # Remove existing ProjectTree if any
+        for tree in self.query(ProjectTree):
+            tree.remove()
+        
+        if project_path and project_path.exists():
+            no_project_label.display = False
+            tree = ProjectTree(project_path, id="project-tree")
+            project_content.mount(tree)
+            # Expand the project section
+            self.query_one("#project-section", Collapsible).collapsed = False
+        else:
+            no_project_label.display = True
+            no_project_label.update("[dim]No project open[/dim]")
+    
+    def show_drawing_section(self, tileset: SNESTileset | None = None) -> None:
+        """Show the drawing section with optional tileset."""
+        drawing_section = self.query_one("#drawing-section", Collapsible)
+        drawing_section.collapsed = False
+        
+        # Update tileset preview if provided
+        if tileset:
+            preview = self.query_one("#tileset-preview", TilesetPreview)
+            preview.tileset = tileset
+    
+    def hide_drawing_section(self) -> None:
+        """Hide/collapse the drawing section."""
+        drawing_section = self.query_one("#drawing-section", Collapsible)
+        drawing_section.collapsed = True
+    
+    def update_selected_tool(self, tool: str) -> None:
+        """Update the selected tool in the tool selector."""
+        tool_selector = self.query_one("#tool-selector", ToolSelector)
+        tool_selector.selected_tool = tool
+        tool_selector.refresh()
+
+
+class ToolDetailPanel(Static):
+    """Panel showing details for the selected tool."""
+
+    DEFAULT_CSS = """
+    ToolDetailPanel {
+        padding: 2 4;
+        background: $surface;
+        height: 100%;
+        
+        .tool-title {
+            text-style: bold;
+            text-align: center;
+            padding: 1;
+            background: $primary;
+            margin-bottom: 1;
+        }
+        
+        .status-available {
+            color: $success;
+            text-style: bold;
+        }
+        
+        .status-missing {
+            color: $error;
+            text-style: bold;
+        }
+        
+        .section-title {
+            text-style: bold;
+            margin-top: 1;
+            color: $accent;
+        }
+        
+        .section-content {
+            margin-left: 2;
+            color: $text-muted;
+        }
+    }
+    """
+
+    tool_data: reactive[Dict[str, Any] | None] = reactive(None)
+
+    def compose(self) -> ComposeResult:
+        yield Label("Select a tool from the sidebar", id="detail-content")
+
+    def watch_tool_data(self, tool_data: Dict[str, Any] | None) -> None:
+        """Update the display when tool data changes."""
+        self.query_one("#detail-content", Label).update(self._render_tool())
+
+    def _render_tool(self) -> str:
+        """Render the tool details as rich text."""
+        if self.tool_data is None:
+            return "[dim italic]← Press [b]s[/b] to toggle sidebar, then select a tool[/dim italic]"
+
+        if not isinstance(self.tool_data, dict):
+            return "[dim]Invalid tool data[/dim]"
+
+        tool = self.tool_data
+        lines = []
+
+        # Tool name header
+        name = tool.get("name", "Unknown")
+        lines.append(f"[bold reverse] {name.upper()} [/bold reverse]")
+        lines.append("")
+
+        # Status
+        available = tool.get("available", False)
+        if available:
+            lines.append("[green bold]✓ INSTALLED[/green bold]")
+            if tool.get("path"):
+                lines.append(f"  [dim]{tool['path']}[/dim]")
+        else:
+            lines.append("[red bold]✗ NOT INSTALLED[/red bold]")
+        lines.append("")
+
+        # Description
+        if tool.get("description"):
+            lines.append("[cyan bold]Description[/cyan bold]")
+            lines.append(f"  {tool['description']}")
+            lines.append("")
+
+        # Category
+        if tool.get("category"):
+            lines.append("[cyan bold]Category[/cyan bold]")
+            lines.append(f"  {tool['category']}")
+            lines.append("")
+
+        # Priority
+        if tool.get("priority"):
+            priority = tool["priority"]
+            color = "yellow" if priority == "required" else "dim"
+            lines.append("[cyan bold]Priority[/cyan bold]")
+            lines.append(f"  [{color}]{priority.upper()}[/{color}]")
+            lines.append("")
+
+        # Source info
+        if tool.get("source"):
+            source = tool["source"]
+            if isinstance(source, dict):
+                lines.append("[cyan bold]Source[/cyan bold]")
+                source_type = source.get("type", "unknown")
+                lines.append(f"  Type: {source_type}")
+                if source.get("url"):
+                    url = source["url"]
+                    if isinstance(url, str):
+                        lines.append(f"  URL: [blue]{url}[/blue]")
+                lines.append("")
+
+        # Build commands (simplified)
+        if tool.get("build"):
+            build = tool["build"]
+            if isinstance(build, dict):
+                lines.append("[cyan bold]Build[/cyan bold]")
+                for platform in ["linux", "darwin", "win32"]:
+                    if platform in build:
+                        cmds = build[platform].get("commands", [])
+                        if cmds:
+                            lines.append(f"  [dim]{platform}:[/dim] {len(cmds)} step(s)")
+                lines.append("")
+
+        return "\n".join(lines)
+
+
+class ToolBrowser(App):
+    """SNES-IDE - Integrated Development Environment for SNES."""
+
+    TITLE = "SNES-IDE"
+    COMMANDS = {ToolCommandProvider}
+    
+    DEFAULT_CSS = """
+    Screen {
+        layers: sidebar;
+        background: $surface;
+    }
+    
+    #main-content {
+        width: 100%;
+        height: 100%;
+    }
+    
+    #content-switcher {
+        width: 100%;
+        height: 100%;
+    }
+    
+    #tool-panel {
+        width: 100%;
+        height: 100%;
+    }
+    
+    #code-panel {
+        width: 100%;
+        height: 100%;
+    }
+    
+    #graphics-panel {
+        width: 100%;
+        height: 100%;
+    }
+    
+    #file-path-bar {
+        dock: top;
+        height: 1;
+        padding: 0 1;
+        background: $primary 30%;
+        color: $text-muted;
+    }
+    """
+
+    BINDINGS = [
+        ("s", "toggle_sidebar", "Sidebar"),
+        ("f", "toggle_files", "Files"),
+        ("d", "toggle_graphics_mode", "Display/Edit Mode"),
+        ("g", "toggle_grid", "Grid"),
+        ("i", "install", "Install"),
+        ("n", "new_tileset", "New Tileset"),
+        ("c", "slice_image", "Slice Image"),
+        ("o", "open_project", "Open Project"),
+        ("q", "quit", "Quit"),
+        ("r", "refresh", "Refresh"),
+        ("escape", "show_tools", "Tools View"),
+        ("+", "zoom_in", "Zoom In"),
+        ("=", "zoom_in", "Zoom In"),
+        ("-", "zoom_out", "Zoom Out"),
+        # Graphics editor bindings
+        ("p", "set_pencil_tool", "Pencil"),
+        ("y", "set_eyedropper_tool", "Eyedropper"),
+        ("b", "set_fill_tool", "Fill"),
+        ("l", "set_line_tool", "Line"),
+        ("t", "set_rect_tool", "Rectangle"),
+        ("e", "set_ellipse_tool", "Ellipse"),
+        ("ctrl+s", "save_graphics", "Save"),
+        ("ctrl+z", "undo_graphics", "Undo"),
+        ("ctrl+y", "redo_graphics", "Redo"),
+    ]
+
+    show_sidebar = reactive(False)
+    current_view = reactive("tools")  # "tools", "code", or "graphics"
+    current_file: reactive[Path | None] = reactive(None)
+    project_path: reactive[Path | None] = reactive(None)
+
+    # Image file extensions to route to graphics editor
+    IMAGE_EXTENSIONS = {".png", ".bmp", ".gif", ".jpg", ".jpeg"}
+
+    def __init__(self, project_path: Path | None = None):
+        super().__init__()
+        self.tools_by_category: Dict[str, list] = {}
+        self.all_tools_map: Dict[str, Dict[str, Any]] = {}
+        self._initial_project_path = project_path
+        self.load_tools_from_json()
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        yield Sidebar()
+        with Container(id="main-content"):
+            # Tool detail view
+            with VerticalScroll(id="tool-panel"):
+                yield ToolDetailPanel()
+            # Code viewer
+            with Vertical(id="code-panel"):
+                yield Label("", id="file-path-bar")
+                yield CodeViewer()
+            # Graphics editor
+            with Vertical(id="graphics-panel"):
+                yield TileEditorPanel()
+        yield Footer()
+
+    def on_mount(self) -> None:
+        """Set up the UI on mount."""
+        self.populate_tool_list()
+        # Start with sidebar visible
+        self.show_sidebar = True
+        # Set initial project if provided
+        if self._initial_project_path:
+            self.project_path = self._initial_project_path
+        else:
+            # Default to current working directory
+            self.project_path = Path.cwd()
+        # Show tools panel by default
+        self.current_view = "tools"
+    
+    def watch_current_view(self, view: str) -> None:
+        """Switch between tool, code, and graphics views."""
+        tool_panel = self.query_one("#tool-panel")
+        code_panel = self.query_one("#code-panel")
+        graphics_panel = self.query_one("#graphics-panel")
+        
+        # Hide all panels first
+        tool_panel.display = False
+        code_panel.display = False
+        graphics_panel.display = False
+        
+        if view == "tools":
+            tool_panel.display = True
+            self.sub_title = "Tools"
+        elif view == "code":
+            code_panel.display = True
+            if self.current_file:
+                self.sub_title = str(self.current_file.name)
+        elif view == "graphics":
+            graphics_panel.display = True
+            if self.current_file:
+                self.sub_title = f"🎨 {self.current_file.name}"
+    
+    def watch_current_file(self, file_path: Path | None) -> None:
+        """Update the appropriate viewer when a file is selected."""
+        # Determine if this is an image file
+        is_image = file_path and file_path.suffix.lower() in self.IMAGE_EXTENSIONS
+        
+        if is_image:
+            # Route to graphics editor
+            tile_editor = self.query_one(TileEditorPanel)
+            tile_editor.file_path = file_path
+            
+            # Update sidebar drawing section with tileset
+            sidebar = self.query_one(Sidebar)
+            if tile_editor._tileset:
+                sidebar.show_drawing_section(tile_editor._tileset)
+        else:
+            # Route to code viewer
+            code_viewer = self.query_one(CodeViewer)
+            code_viewer.file_path = file_path
+            
+            # Hide drawing section when not viewing graphics
+            sidebar = self.query_one(Sidebar)
+            sidebar.hide_drawing_section()
+        
+        path_bar = self.query_one("#file-path-bar", Label)
+        if file_path:
+            # Show relative path if within project
+            if self.project_path and file_path.is_relative_to(self.project_path):
+                rel_path = file_path.relative_to(self.project_path)
+                path_bar.update(f"📄 {rel_path}")
+            else:
+                path_bar.update(f"📄 {file_path}")
+            self.sub_title = file_path.name
+        else:
+            path_bar.update("")
+    
+    def watch_project_path(self, project_path: Path | None) -> None:
+        """Update sidebar when project path changes."""
+        sidebar = self.query_one(Sidebar)
+        sidebar.project_path = project_path
+        if project_path:
+            self.notify(f"Opened project: {project_path.name}", severity="information")
+    
+    def on_directory_tree_file_selected(self, event: DirectoryTree.FileSelected) -> None:
+        """Handle file selection from the project tree."""
+        event.stop()
+        self.current_file = event.path
+        
+        # Route to appropriate view based on file type
+        if event.path.suffix.lower() in self.IMAGE_EXTENSIONS:
+            self.current_view = "graphics"
+        else:
+            self.current_view = "code"
+        
+        # Auto-hide sidebar after selection
+        self.show_sidebar = False
+    
+    def action_toggle_files(self) -> None:
+        """Toggle between tools and file views (code or graphics)."""
+        if self.current_view == "tools":
+            if self.current_file:
+                # Return to whichever file view was appropriate
+                if self.current_file.suffix.lower() in self.IMAGE_EXTENSIONS:
+                    self.current_view = "graphics"
+                else:
+                    self.current_view = "code"
+            elif self.project_path:
+                self.notify("Select a file from the Project tree", severity="information")
+                self.show_sidebar = True
+        else:
+            self.current_view = "tools"
+    
+    def action_show_tools(self) -> None:
+        """Show the tools panel."""
+        self.current_view = "tools"
+    
+    def action_zoom_in(self) -> None:
+        """Zoom in on the graphics canvas."""
+        if self.current_view == "graphics":
+            try:
+                canvas = self.query_one("#pixel-canvas", PixelCanvas)
+                canvas.action_zoom_in()
+                # Update status bar
+                tile_editor = self.query_one(TileEditorPanel)
+                if tile_editor.file_path:
+                    tile_editor.file_path = tile_editor.file_path  # Trigger refresh
+            except Exception:
+                pass
+    
+    def action_zoom_out(self) -> None:
+        """Zoom out on the graphics canvas."""
+        if self.current_view == "graphics":
+            try:
+                canvas = self.query_one("#pixel-canvas", PixelCanvas)
+                canvas.action_zoom_out()
+                tile_editor = self.query_one(TileEditorPanel)
+                if tile_editor.file_path:
+                    tile_editor.file_path = tile_editor.file_path  # Trigger refresh
+            except Exception:
+                pass
+    
+    def action_toggle_grid(self) -> None:
+        """Toggle grid display on the graphics canvas."""
+        if self.current_view == "graphics":
+            try:
+                canvas = self.query_one("#pixel-canvas", PixelCanvas)
+                canvas.action_toggle_grid()
+            except Exception:
+                pass
+    
+    def action_new_tileset(self) -> None:
+        """Open the New Tileset dialog."""
+        # Use project path or home directory as default
+        default_dir = self.project_path or Path.home()
+        
+        def on_new_tileset_result(result: dict | None) -> None:
+            if result is None:
+                return
+            
+            # Got a new tileset
+            tileset = result["tileset"]
+            file_path = result["file_path"]
+            
+            # Save the new tileset as a PNG file
+            if HAS_PIL:
+                try:
+                    from PIL import Image
+                    w = tileset.image_width
+                    h = tileset.image_height
+                    tile_w = tileset.tile_width
+                    tile_h = tileset.tile_height
+                    tiles_per_row = tileset.tiles_per_row
+                    
+                    img = Image.new("RGB", (w, h))
+                    for tile_idx, tile in enumerate(tileset.tiles):
+                        tile_row = tile_idx // tiles_per_row
+                        tile_col = tile_idx % tiles_per_row
+                        base_x = tile_col * tile_w
+                        base_y = tile_row * tile_h
+                        
+                        for y in range(tile_h):
+                            for x in range(tile_w):
+                                color_idx = tile.get_pixel(x, y)
+                                r, g, b = tileset.palette.get_color(0, color_idx)
+                                img.putpixel((base_x + x, base_y + y), (r, g, b))
+                    
+                    img.save(file_path)
+                except Exception as e:
+                    self.notify(f"Failed to save: {e}", severity="error")
+                    return
+            
+            # Update the graphics editor
+            try:
+                tile_editor = self.query_one(TileEditorPanel)
+                canvas = self.query_one("#pixel-canvas", PixelCanvas)
+                palette_bar = self.query_one("#tile-palette-bar", PaletteBar)
+                
+                # Set up the new tileset
+                tile_editor._tileset = tileset
+                tile_editor.file_path = file_path
+                canvas.tileset = tileset
+                palette_bar.palette = tileset.palette
+                
+                # Switch to graphics view
+                self.current_view = "graphics"
+                
+                # Update sidebar with new tileset
+                sidebar = self.query_one(Sidebar)
+                tileset_preview = sidebar.query_one(TilesetPreview)
+                tileset_preview.tileset = tileset
+                sidebar.show_drawing_section(tileset)
+                
+                self.notify(
+                    f"Created {file_path.name} ({result['width_tiles']}×{result['height_tiles']} tiles)",
+                    severity="information"
+                )
+            except Exception as e:
+                self.notify(f"Error creating tileset: {e}", severity="error")
+        
+        self.push_screen(NewTilesetScreen(default_dir), on_new_tileset_result)
+    
+    def action_slice_image(self) -> None:
+        """Open the Slice Image dialog for the current image."""
+        # Only works when viewing an image in graphics mode
+        if self.current_view != "graphics":
+            self.notify("Open an image first (click a PNG/BMP file)", severity="warning")
+            return
+        
+        try:
+            tile_editor = self.query_one(TileEditorPanel)
+            if not tile_editor.file_path:
+                self.notify("No image file loaded", severity="warning")
+                return
+            
+            image_path = tile_editor.file_path
+            
+            def on_slice_result(result: dict | None) -> None:
+                if result is None:
+                    return
+                
+                tileset = result["tileset"]
+                file_path = result["file_path"]
+                
+                try:
+                    canvas = self.query_one("#pixel-canvas", PixelCanvas)
+                    palette_bar = self.query_one("#tile-palette-bar", PaletteBar)
+                    
+                    tile_editor._tileset = tileset
+                    tile_editor.file_path = file_path
+                    canvas.tileset = tileset
+                    canvas.current_tile_index = 0
+                    palette_bar.palette = tileset.palette
+                    
+                    # Update sidebar
+                    sidebar = self.query_one(Sidebar)
+                    tileset_preview = sidebar.query_one(TilesetPreview)
+                    tileset_preview.tileset = tileset
+                    sidebar.show_drawing_section(tileset)
+                    
+                    tile_editor._update_status()
+                    
+                    self.notify(
+                        f"Sliced into {result['tiles_x']}×{result['tiles_y']} tiles "
+                        f"({result['tile_size']}×{result['tile_size']}px, {2**result['bpp']} colors)",
+                        severity="information"
+                    )
+                except Exception as e:
+                    self.notify(f"Error: {e}", severity="error")
+            
+            self.push_screen(SliceImageScreen(image_path), on_slice_result)
+            
+        except Exception as e:
+            self.notify(f"Error: {e}", severity="error")
+    
+    def action_toggle_graphics_mode(self) -> None:
+        """Toggle between edit and display mode for graphics canvas."""
+        if self.current_view == "graphics":
+            try:
+                canvas = self.query_one("#pixel-canvas", PixelCanvas)
+                canvas.action_toggle_edit_mode()
+            except Exception:
+                pass
+        else:
+            # For code view, open in external editor
+            self.action_open_in_editor()
+    
+    def action_set_pencil_tool(self) -> None:
+        """Set the pencil drawing tool."""
+        self._set_graphics_tool("pencil")
+    
+    def action_set_eyedropper_tool(self) -> None:
+        """Set the eyedropper (color picker) tool."""
+        self._set_graphics_tool("eyedropper")
+    
+    def on_tool_selector_tool_selected(self, event: ToolSelector.ToolSelected) -> None:
+        """Handle tool selection from sidebar tool selector."""
+        if self.current_view == "graphics":
+            try:
+                canvas = self.query_one("#pixel-canvas", PixelCanvas)
+                canvas.current_tool = event.tool
+            except Exception:
+                pass
+    
+    def on_tileset_preview_tile_selected(self, event: TilesetPreview.TileSelected) -> None:
+        """Handle tile selection from sidebar tileset preview."""
+        if self.current_view == "graphics":
+            try:
+                canvas = self.query_one("#pixel-canvas", PixelCanvas)
+                canvas.scroll_to_tile(event.tile_index)
+                self.notify(f"Tile {event.tile_index:02X} selected", severity="information")
+            except Exception:
+                self.notify(f"Tile {event.tile_index:02X} selected", severity="information")
+    
+    def on_pixel_canvas_tile_navigated(self, event: PixelCanvas.TileNavigated) -> None:
+        """Handle tile navigation from canvas (Tab/Shift+Tab)."""
+        try:
+            sidebar = self.query_one(Sidebar)
+            tileset_preview = sidebar.query_one(TilesetPreview)
+            tileset_preview.selected_tile = event.tile_index
+        except Exception:
+            pass
+    
+    def _set_graphics_tool(self, tool: str) -> None:
+        """Helper to set a graphics tool and update sidebar."""
+        if self.current_view == "graphics":
+            try:
+                canvas = self.query_one("#pixel-canvas", PixelCanvas)
+                canvas.current_tool = tool
+                sidebar = self.query_one(Sidebar)
+                sidebar.update_selected_tool(tool)
+            except Exception:
+                pass
+    
+    def action_set_fill_tool(self) -> None:
+        """Set the fill (flood fill) tool."""
+        self._set_graphics_tool("fill")
+    
+    def action_set_line_tool(self) -> None:
+        """Set the line drawing tool."""
+        self._set_graphics_tool("line")
+    
+    def action_set_rect_tool(self) -> None:
+        """Set the rectangle drawing tool."""
+        self._set_graphics_tool("rect")
+    
+    def action_set_ellipse_tool(self) -> None:
+        """Set the ellipse drawing tool."""
+        self._set_graphics_tool("ellipse")
+    
+    def action_save_graphics(self) -> None:
+        """Save the current graphics file."""
+        if self.current_view == "graphics":
+            try:
+                tile_editor = self.query_one(TileEditorPanel)
+                if tile_editor.save_image():
+                    self.notify("Image saved", severity="information")
+                else:
+                    self.notify("Nothing to save or save failed", severity="warning")
+            except Exception as e:
+                self.notify(f"Save failed: {e}", severity="error")
+    
+    def action_undo_graphics(self) -> None:
+        """Undo the last graphics edit."""
+        if self.current_view == "graphics":
+            try:
+                canvas = self.query_one("#pixel-canvas", PixelCanvas)
+                canvas.action_undo()
+                tile_editor = self.query_one(TileEditorPanel)
+                tile_editor._update_status()
+            except Exception:
+                pass
+    
+    def action_redo_graphics(self) -> None:
+        """Redo the last undone graphics edit."""
+        if self.current_view == "graphics":
+            try:
+                canvas = self.query_one("#pixel-canvas", PixelCanvas)
+                canvas.action_redo()
+                tile_editor = self.query_one(TileEditorPanel)
+                tile_editor._update_status()
+            except Exception:
+                pass
+    
+    def action_open_in_editor(self) -> None:
+        """Open current file in external editor."""
+        if not self.current_file:
+            self.notify("No file selected", severity="warning")
+            return
+        
+        if not self.current_file.exists():
+            self.notify(f"File not found: {self.current_file}", severity="error")
+            return
+        
+        # Get editor from environment or fallback to common editors
+        editor = os.environ.get("EDITOR") or os.environ.get("VISUAL")
+        if not editor:
+            # Try common editors
+            for fallback in ["nano", "vim", "vi", "code", "gedit", "kate"]:
+                if shutil.which(fallback):
+                    editor = fallback
+                    break
+        
+        if not editor:
+            self.notify("No editor found. Set $EDITOR environment variable.", severity="error")
+            return
+        
+        file_path = self.current_file
+        
+        # Suspend the TUI, run editor, then resume
+        with self.suspend():
+            try:
+                subprocess.run([editor, str(file_path)])
+            except Exception as e:
+                # Will show after resume
+                pass
+        
+        # Refresh the file view after editor closes
+        code_viewer = self.query_one(CodeViewer)
+        # Force a refresh by toggling the path
+        code_viewer.file_path = None
+        code_viewer.file_path = file_path
+        self.notify(f"Returned from {editor}", severity="information")
+    
+    def action_open_project(self) -> None:
+        """Open a project directory (placeholder - could show a dialog)."""
+        # For now, just use current directory
+        # In future, could integrate with a file picker
+        self.project_path = Path.cwd()
+        self.show_sidebar = True
+        # Expand project section
+        try:
+            project_section = self.query_one("#project-section", Collapsible)
+            project_section.collapsed = False
+        except Exception:
+            pass
+
+    def load_tools_from_json(self) -> None:
+        """Load tools from tools.json."""
+        # Try tools.json first, then tools_.json as fallback
+        tools_json_path = Path(__file__).parent / "tools.json"
+        if not tools_json_path.exists():
+            tools_json_path = Path(__file__).parent / "tools_.json"
+
+        if not tools_json_path.exists():
+            return
+
+        try:
+            with open(tools_json_path) as f:
+                data = json.load(f)
+        except json.JSONDecodeError:
+            return
+
+        tools = data.get("tools", [])
+
+        for tool_def in tools:
+            tool_name = tool_def.get("name")
+            if not tool_name:
+                continue
+
+            available = self._check_tool_available(tool_def)
+            tool_record = {
+                **tool_def,
+                "available": available,
+                "path": self._find_tool_path(tool_def) if available else None,
+            }
+
+            self.all_tools_map[tool_name] = tool_record
+
+            category = tool_def.get("category", "other")
+            if category not in self.tools_by_category:
+                self.tools_by_category[category] = []
+            self.tools_by_category[category].append(tool_record)
+
+    def _check_tool_available(self, tool_def: Dict[str, Any]) -> bool:
+        """Check if a tool is available in PATH."""
+        import shutil
+
+        # Check by tool name
+        tool_name = tool_def.get("name")
+        if tool_name and isinstance(tool_name, str) and shutil.which(tool_name):
+            return True
+
+        # Check binary_name
+        binary_name = tool_def.get("binary_name")
+        if binary_name:
+            if isinstance(binary_name, dict):
+                import platform
+                plat = "darwin" if platform.system() == "Darwin" else "linux" if platform.system() == "Linux" else "win32"
+                binary_name = binary_name.get(plat)
+            if binary_name and isinstance(binary_name, str) and shutil.which(binary_name):
+                return True
+
+        return False
+
+    def _find_tool_path(self, tool_def: Dict[str, Any]) -> str | None:
+        """Find the full path to a tool."""
+        import shutil
+
+        tool_name = tool_def.get("name")
+        if tool_name and isinstance(tool_name, str):
+            path = shutil.which(tool_name)
+            if path:
+                return path
+
+        binary_name = tool_def.get("binary_name")
+        if binary_name:
+            if isinstance(binary_name, dict):
+                import platform
+                plat = "darwin" if platform.system() == "Darwin" else "linux" if platform.system() == "Linux" else "win32"
+                binary_name = binary_name.get(plat)
+            if binary_name and isinstance(binary_name, str):
+                path = shutil.which(binary_name)
+                if path:
+                    return path
+
+        return None
+
+    def populate_tool_list(self) -> None:
+        """Populate the sidebar with tools."""
+        list_view = self.query_one("#tool-list", ListView)
+        list_view.clear()
+
+        for category in sorted(self.tools_by_category.keys()):
+            tools = self.tools_by_category[category]
+            
+            # Category header
+            available_count = sum(1 for t in tools if t.get("available"))
+            total_count = len(tools)
+            cat_label = f"━━ {category.upper()} ({available_count}/{total_count}) ━━"
+            list_view.append(ListItem(Label(f"[bold]{cat_label}[/bold]"), disabled=True))
+
+            # Tools in category
+            for tool in sorted(tools, key=lambda t: (not t.get("available"), t["name"])):
+                icon = "[green]●[/green]" if tool.get("available") else "[red]○[/red]"
+                item = ListItem(Label(f"{icon} {tool['name']}"))
+                item.data = tool["name"]  # Store tool name for lookup
+                list_view.append(item)
+
+    def on_list_view_selected(self, event: ListView.Selected) -> None:
+        """Handle tool selection from list."""
+        item = event.item
+        if hasattr(item, "data") and item.data:
+            tool_name = item.data
+            if tool_name in self.all_tools_map:
+                detail_panel = self.query_one(ToolDetailPanel)
+                detail_panel.tool_data = self.all_tools_map[tool_name]
+                # Auto-hide sidebar after selection
+                self.show_sidebar = False
+
+    def action_toggle_sidebar(self) -> None:
+        """Toggle sidebar visibility."""
+        self.show_sidebar = not self.show_sidebar
+
+    def watch_show_sidebar(self, show_sidebar: bool) -> None:
+        """Update sidebar visibility class."""
+        self.query_one(Sidebar).set_class(show_sidebar, "-visible")
+
+    def action_refresh(self) -> None:
+        """Refresh the tool list."""
+        self.tools_by_category.clear()
+        self.all_tools_map.clear()
+        self.load_tools_from_json()
+        self.populate_tool_list()
+
+    def action_install(self) -> None:
+        """Install the currently selected tool."""
+        detail_panel = self.query_one(ToolDetailPanel)
+        tool_data = detail_panel.tool_data
+        
+        if tool_data is None:
+            self.notify("No tool selected. Press 's' to open sidebar and select a tool.", severity="warning")
+            return
+        
+        if tool_data.get("available"):
+            self.notify(f"{tool_data.get('name')} is already installed.", severity="information")
+            return
+        
+        # Push the install screen
+        self.push_screen(InstallScreen(tool_data), self._on_install_complete)
+
+    def action_update(self) -> None:
+        """Update (re-install) the currently selected tool."""
+        detail_panel = self.query_one(ToolDetailPanel)
+        tool_data = detail_panel.tool_data
+        
+        if tool_data is None:
+            self.notify("No tool selected.", severity="warning")
+            return
+        
+        if not tool_data.get("available"):
+            self.notify(f"{tool_data.get('name')} is not installed. Use Install instead.", severity="warning")
+            return
+        
+        # Push the install screen (update = re-install)
+        self.push_screen(InstallScreen(tool_data, title_prefix="Updating"), self._on_install_complete)
+
+    def action_verify(self) -> None:
+        """Verify the currently selected tool's installation."""
+        detail_panel = self.query_one(ToolDetailPanel)
+        tool_data = detail_panel.tool_data
+        
+        if tool_data is None:
+            self.notify("No tool selected.", severity="warning")
+            return
+        
+        if not tool_data.get("available"):
+            self.notify(f"{tool_data.get('name')} is not installed.", severity="warning")
+            return
+        
+        verify_cmd = tool_data.get("verify_command", [])
+        if not verify_cmd:
+            self.notify(f"No verify command for {tool_data.get('name')}", severity="information")
+            return
+        
+        # Run verify command and show result
+        self.push_screen(VerifyScreen(tool_data), self._on_verify_complete)
+
+    def action_uninstall(self) -> None:
+        """Uninstall the currently selected tool."""
+        detail_panel = self.query_one(ToolDetailPanel)
+        tool_data = detail_panel.tool_data
+        
+        if tool_data is None:
+            self.notify("No tool selected.", severity="warning")
+            return
+        
+        if not tool_data.get("available"):
+            self.notify(f"{tool_data.get('name')} is not installed.", severity="information")
+            return
+        
+        # Push the uninstall screen
+        self.push_screen(UninstallScreen(tool_data), self._on_uninstall_complete)
+
+    def _on_install_complete(self, success: bool) -> None:
+        """Handle install completion."""
+        if success:
+            self.notify("Installation complete! Refreshing...", severity="information")
+            self.action_refresh()
+        else:
+            self.notify("Installation did not complete successfully.", severity="warning")
+
+    def _on_verify_complete(self, success: bool) -> None:
+        """Handle verify completion."""
+        if success:
+            self.notify("Verification passed!", severity="information")
+        else:
+            self.notify("Verification failed.", severity="warning")
+
+    def _on_uninstall_complete(self, success: bool) -> None:
+        """Handle uninstall completion."""
+        if success:
+            self.notify("Uninstall complete! Refreshing...", severity="information")
+            self.action_refresh()
+        else:
+            self.notify("Uninstall had errors.", severity="warning")
+
+
+if __name__ == "__main__":
+    # Accept optional project path as argument
+    project = Path(sys.argv[1]) if len(sys.argv) > 1 else None
+    ToolBrowser(project_path=project).run()

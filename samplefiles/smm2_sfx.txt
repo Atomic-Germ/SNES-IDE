@@ -1,0 +1,41 @@
+#amk 2
+#samples
+{
+"smm2/10-Coin.brr"
+"smm2/Bob-Omb.brr"
+"smm2/Bomb.brr"
+"smm2/Koopa Ball.brr"
+"smm2/Lemmy.brr"
+"smm2/Ludwig.brr"
+"smm2/Morton.brr"
+"smm2/Red Beach Koopa.brr"
+"smm2/Roy.brr"
+"smm2/Zappa Mechakoopa A.brr"
+"smm2/Zappa Mechakoopa B.brr"
+}
+#instruments
+{
+"smm2/10-Coin.brr" $FF $E0 $B8 $04 $00
+"smm2/Bob-Omb.brr" $8F $E0 $B8 $05 $00
+"smm2/Bomb.brr" $8F $E0 $B8 $03 $00
+"smm2/Koopa Ball.brr" $8F $E0 $B8 $03 $00
+"smm2/Lemmy.brr" $8F $E0 $B8 $03 $00
+"smm2/Ludwig.brr" $8F $E0 $B8 $02 $00
+"smm2/Morton.brr" $8F $E0 $B8 $03 $00
+"smm2/Red Beach Koopa.brr" $8F $E0 $B8 $03 $00
+"smm2/Roy.brr" $8F $E0 $B8 $03 $00
+"smm2/Zappa Mechakoopa A.brr" $8F $6A $B8 $06 $00
+"smm2/Zappa Mechakoopa B.brr" $8F $6A $B8 $06 $00
+}
+#0
+@30 [o4 c2] 
+@31 *
+@32 *
+@33 *
+@34 *
+@35 *
+@36 *
+@37 *
+@38 *
+@39 *
+@40 *

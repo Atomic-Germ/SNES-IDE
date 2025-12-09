@@ -1,0 +1,69 @@
+"1-up Mushroom.brr" $8F $6A $B8 $04 $00 $A4 $3E $3F
+"10-Coin.brr" $FF $E0 $B8 $04 $00 $A4 $3E $3F
+"Big Mushroom.brr" $8F $6A $B8 $06 $00 $A4 $3E $3F
+"Bill Blaster.brr" $8F $6A $B8 $04 $00 $A4 $3E $3F
+"Blasta Mechakoopa.brr" $8F $6A $B8 $04 $00 $A4 $3E $3F
+"Bob-Omb.brr" $8F $E0 $B8 $05 $00 $A4 $3E $3F
+"Bomb.brr" $8F $E0 $B8 $03 $00 $A4 $3E $3F
+"Bowser Jr..brr" $8F $6A $B8 $04 $00 $A4 $3E $3F
+"Bowser.brr" $8F $6A $B8 $04 $00 $A4 $3E $3F
+"Buzzy Beetle.brr" $8F $6A $B8 $04 $00 $A4 $3E $3F
+"Cannon.brr" $8F $E0 $B8 $06 $00 $A4 $3E $3F
+"Chain Chomp's Post.brr" $8F $E0 $B8 $06 $00 $A4 $3E $3F
+"Coin.brr" $8F $E0 $B8 $05 $00 $A4 $3E $3F
+"Dry Bones.brr" $8F $6A $B8 $04 $00 $A4 $3E $3F
+"Falling Icicle.brr" $8F $6A $B8 $06 $00 $A4 $3E $3F
+"Fire Flower.brr" $8F $6A $B8 $03 $00 $A4 $3E $3F
+"Fire Piranha Plant.brr" $8F $6A $B8 $04 $00 $A4 $3E $3F
+"Fire Rain.brr" $8F $6A $B8 $04 $00 $A4 $3E $3F
+"Gong.brr" $8F $6D $B8 $04 $00 $A4 $3E $3F
+"Goomba1.brr" $8F $6A $B8 $03 $00 $A4 $3E $3F
+"Goombrat.brr" $8F $6A $B8 $03 $00 $A4 $3E $3F
+"Green Koopa Troopa.brr" $8F $6A $B8 $06 $00 $A4 $3E $3F
+"Hammer Bro.brr" $8F $6A $B8 $04 $00 $A4 $3E $3F
+"Koopa Ball.brr" $8F $E0 $B8 $03 $00 $A4 $3E $3F
+"Koopa Clown Car.brr" $8F $6A $B8 $04 $00 $A4 $3E $3F
+"Lemmy.brr" $8F $E0 $B8 $03 $00 $A4 $3E $3F
+"Ludwig.brr" $8F $E0 $B8 $02 $00 $A4 $3E $3F
+"Magikoopa.brr" $8F $6A $B8 $03 $00 $A4 $3E $3F
+"Master Sword.brr" $8F $6A $B8 $06 $00 $A4 $3E $3F
+"Mechakoopa.brr" $8F $6A $B8 $03 $00 $A4 $3E $3F
+"Monty Mole.brr" $8F $6A $B8 $04 $00 $A4 $3E $3F
+"Morton.brr" $8F $E0 $B8 $03 $00 $A4 $3E $3F
+"Muncher.brr" $8F $6A $B8 $04 $00 $A4 $3E $3F
+"Mystery Mushroom.brr" $8F $6A $B8 $06 $00 $A4 $3E $3F
+"Piranha Plant.brr" $8F $6A $B8 $03 $00 $A4 $3E $3F
+"Player.brr" $8F $6A $B8 $03 $00 $A4 $3E $3F
+"Pokey1.brr" $8F $6A $B8 $04 $00 $A4 $3E $3F
+"POW Block.brr" $8F $E0 $B8 $06 $00 $A4 $3E $3F
+"P-Switch.brr" $8F $E0 $B8 $06 $00 $A4 $3E $3F
+"Red Beach Koopa.brr" $8F $E0 $B8 $03 $00 $A4 $3E $3F
+"Red Koopa Troopa.brr" $8F $6A $B8 $03 $00 $A4 $3E $3F
+"Red Spike Top.brr" $8F $6A $B8 $06 $00 $A4 $3E $3F
+"Rocky Wrenches.brr" $8F $6A $B8 $03 $00 $A4 $3E $3F
+"Rotten Mushroom.brr" $8F $6A $B8 $04 $00 $A4 $3E $3F
+"Roy.brr" $8F $E0 $B8 $03 $00 $A4 $3E $3F
+"Shoe Goomba2.brr" $8F $6A $B8 $04 $00 $A4 $3E $3F
+"Shoe Stilleto.brr" $8F $E0 $B8 $06 $00 $A4 $3E $3F
+"Sideways Trampoline.brr" $8F $71 $B8 $06 $00 $A4 $3E $3F
+"Sledge Bro.brr" $8F $6A $B8 $06 $00 $A4 $3E $3F
+"SMB2 Mushroom.brr" $8F $6A $B8 $03 $00 $A4 $3E $3F
+"Snow Pokey2.brr" $8F $6A $B8 $03 $00 $A4 $3E $3F
+"Snowball.brr" $8F $E0 $B8 $04 $00 $A4 $3E $3F
+"Spike Ball.brr" $8F $E0 $B8 $06 $00 $A4 $3E $3F
+"Spike.brr" $8F $6A $B8 $04 $00 $A4 $3E $3F
+"Spiny.brr" $8F $6A $B8 $03 $00 $A4 $3E $3F
+"Stiletto Goomba.brr" $8F $6A $B8 $04 $00 $A4 $3E $3F
+"Super Mushroom.brr" $8F $6A $B8 $03 $00 $A4 $3E $3F
+"Super Star.brr" $8F $6A $B8 $03 $00 $A4 $3E $3F
+"Thwomp.brr" $8F $6A $B8 $04 $00 $A4 $3E $3F
+"Trampoline.brr" $8F $6F $B8 $06 $00 $A4 $3E $3F
+"Unchained Chomp.brr" $8F $6A $B8 $04 $00 $A4 $3E $3F
+"Wiggler.brr" $8F $6F $B8 $03 $00 $A4 $3E $3F
+"Yoshi.brr" $8F $6A $B8 $03 $00 $A4 $3E $3F
+"Yoshi's Egg.brr" $8F $E0 $B8 $06 $00 $A4 $3E $3F
+"Zappa Mechakoopa A.brr" $8F $6A $B8 $06 $00 $A4 $3E $3F
+"Zappa Mechakoopa B.brr" $8F $6A $B8 $06 $00 $A4 $3E $3F
+
+
+

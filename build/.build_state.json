@@ -1,0 +1,8 @@
+{
+  "timestamp": 1765295835.1731708,
+  "asset_hashes": {
+    "test_asset": "3ee63778ad0d0ac85a691cb400411124feec7814b55ddbbbfed447154ca2361f"
+  },
+  "compile_hashes": {},
+  "final_rom_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

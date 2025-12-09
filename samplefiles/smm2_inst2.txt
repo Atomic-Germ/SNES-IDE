@@ -1,0 +1,60 @@
+#amk 2
+#samples
+{
+"smm2/Mechakoopa.brr"
+"smm2/Monty Mole.brr"
+"smm2/Muncher.brr"
+"smm2/Mystery Mushroom.brr"
+"smm2/Piranha Plant.brr"
+"smm2/Player.brr"
+"smm2/Pokey1.brr"
+"smm2/Red Koopa Troopa.brr"
+"smm2/Red Spike Top.brr"
+"smm2/Rocky Wrenches.brr"
+"smm2/Rotten Mushroom.brr"
+"smm2/Shoe Goomba2.brr"
+"smm2/Sledge Bro.brr"
+"smm2/SMB2 Mushroom.brr" 
+"smm2/Snow Pokey2.brr"
+"smm2/Spike.brr"
+"smm2/Spiny.brr"
+}
+#instruments
+{
+"smm2/Mechakoopa.brr" $8F $6A $B8 $03 $00
+"smm2/Monty Mole.brr" $8F $6A $B8 $04 $00
+"smm2/Muncher.brr" $8F $6A $B8 $04 $00
+"smm2/Mystery Mushroom.brr" $8F $6A $B8 $06 $00
+"smm2/Piranha Plant.brr" $8F $6A $B8 $03 $00
+"smm2/Player.brr" $8F $6A $B8 $03 $00
+"smm2/Pokey1.brr" $8F $6A $B8 $04 $00
+"smm2/Red Koopa Troopa.brr" $8F $6A $B8 $03 $00
+"smm2/Red Spike Top.brr" $8F $6A $B8 $06 $00
+"smm2/Rocky Wrenches.brr" $8F $6A $B8 $03 $00
+"smm2/Rotten Mushroom.brr" $8F $6A $B8 $04 $00
+"smm2/Shoe Goomba2.brr" $8F $6A $B8 $04 $00
+"smm2/Sledge Bro.brr" $8F $6A $B8 $06 $00
+"smm2/SMB2 Mushroom.brr" $8F $6A $B8 $03 $00
+"smm2/Snow Pokey2.brr" $8F $6A $B8 $03 $00
+"smm2/Spike.brr" $8F $6A $B8 $04 $00
+"smm2/Spiny.brr" $8F $6A $B8 $03 $00
+
+}
+#0 t60
+@30 [o2 c4 o3 c4 o4 c4 o5 c4]
+@31 *
+@32 *
+@33 *
+@34 *
+@35 *
+@36 *
+@37 *
+@38 *
+@39 *
+@40 *
+@41 *
+@42 *
+@43 *
+@44 *
+@45 *
+@46 *

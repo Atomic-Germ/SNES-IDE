@@ -1,0 +1,24 @@
+name: MCPs
+version: 0.0.1
+schema: v1
+mcpServers:
+  - name: mcp-bridge
+    command: node
+    args:
+      - "/home/casey/Documents/MCP-GITS/mcp-bridge"
+    env: { "OLLAMA_BASE_URL": "http://localhost:11434","MEMORY_DIR": "/home/casey/Documents/mcp-creative-memory" }
+  - name: mcp-ollama-consult
+    command: node
+    args:
+      - "/home/casey/Documents/MCP-GITS/mcp-consult"
+    env: { "OLLAMA_BASE_URL": "http://localhost:11434","MEMORY_DIR": "/home/casey/Documents/mcp-creative-memory" }
+  - name: mcp-creative
+    command: node
+    args:
+      - "/home/casey/Documents/MCP-GITS/mcp-creative"
+    env: { "OLLAMA_BASE_URL": "http://localhost:11434","MEMORY_DIR": "/home/casey/Documents/mcp-creative-memory" }
+  - name: mcp-dream-weaver
+    command: node
+    args:
+      - "/home/casey/Documents/MCP-GITS/mcp-dream-weaver"
+    env: { "OLLAMA_BASE_URL": "http://localhost:11434","MEMORY_DIR": "/home/casey/Documents/mcp-creative-memory" }
